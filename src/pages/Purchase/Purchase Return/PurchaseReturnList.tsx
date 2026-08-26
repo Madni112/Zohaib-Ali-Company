@@ -4,9 +4,11 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
-import { MdEdit, MdDelete, MdEvent, MdStore, MdPerson } from 'react-icons/md';
+import { useAuth } from '../../../Context/Auth';
+import { MdStore, MdPerson, MdReceipt, MdEvent, MdAdd } from 'react-icons/md';
 
 const PurchaseReturnList = () => {
+  const { tenantId } = useAuth();
   const navigate = useNavigate();
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,6 +17,17 @@ const PurchaseReturnList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  const formatMoney = (val: number | string | undefined | null): string => {
+    const num = Number(val) || 0;
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('en-US');
+    }
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
 
   const fetchReturnLogs = async () => {
     try {
@@ -57,6 +70,7 @@ const PurchaseReturnList = () => {
     if (!window.confirm('Are you certain you want to permanently delete this return record note?')) return;
 
     try {
+      setLoading(true);
       const { data: targetRecord } = await supabase.from('purchase_returns').select('items, source_warehouse').eq('id', id).single();
       if (targetRecord?.items) {
         for (const item of targetRecord.items) {
@@ -84,16 +98,19 @@ const PurchaseReturnList = () => {
       }
       const { error } = await supabase.from('purchase_returns').delete().eq('id', id);
       if (error) throw error;
-      toast.success('Return note dropped safely!');
+      toast.success('Return note removed and inventory restored cleanly!');
       fetchReturnLogs();
     } catch (err: any) {
       toast.error(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const filteredReturns = returns.filter(r =>
     (r.return_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (r.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (r.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.source_warehouse || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const totalEntries = filteredReturns.length;
@@ -105,28 +122,48 @@ const PurchaseReturnList = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, pageSize]);
+
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-black dark:text-white">Vendor Purchase Returns Registry (Debit Notes)</h2>
-          <p className="text-xs text-gray-400">Trace outbound product returns and warehouse shelf offsets</p>
+          <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
+            <MdReceipt className="text-rose-600" size={24} />
+            Vendor Purchase Returns Registry (Debit Notes)
+          </h2>
+          <p className="text-xs text-gray-400">Trace outbound product returns, debit notes, and warehouse shelf offsets</p>
         </div>
-        <button type="button" onClick={() => navigate('/Purchase/Purchase-Return/Add')} className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm cursor-pointer">+ Log New Return</button>
+        <button
+          type="button"
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Add`)}
+          className="flex items-center gap-1.5 justify-center rounded-xl bg-rose-600 hover:bg-rose-700 py-2.5 px-4 text-xs font-bold text-white shadow-sm transition cursor-pointer"
+        >
+          <MdAdd size={16} /> Log New Return Note
+        </button>
       </div>
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+      <div className="rounded-2xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <span>Show</span>
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded border border-stroke py-1 px-2 bg-transparent dark:border-strokedark outline-none text-black dark:text-white font-bold">
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-lg border border-stroke py-1 px-2 bg-transparent dark:border-strokedark outline-none text-black dark:text-white font-bold"
+            >
               {[10, 25, 50, 100].map((size) => <option key={size} value={size} className="dark:bg-boxdark">{size}</option>)}
             </select>
             <span>entries</span>
           </div>
-          <div className="flex items-center gap-2 text-sm w-full sm:w-auto text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-2 text-xs w-full sm:w-auto text-gray-500 dark:text-gray-400">
             <span>Search:</span>
-            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by note..." className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by return #, vendor, warehouse..."
+              className="w-full sm:w-64 rounded-lg border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold"
+            />
           </div>
         </div>
 
@@ -134,13 +171,13 @@ const PurchaseReturnList = () => {
           <table className="w-full table-auto border-collapse">
             <thead>
               <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                <th className="py-4 px-4 font-semibold w-16">S#</th>
-                <th className="py-4 px-4 font-semibold">Return No</th>
-                <th className="py-4 px-4 font-semibold">Vendor Profile</th>
+                <th className="py-4 px-4 font-semibold w-16 text-center">S#</th>
+                <th className="py-4 px-4 font-semibold">Debit Note #</th>
+                <th className="py-4 px-4 font-semibold">Wholesale Vendor</th>
                 <th className="py-4 px-4 font-semibold">Source Warehouse</th>
-                <th className="py-4 px-4 text-center font-semibold">Entry Date</th>
-                <th className="py-4 px-4 text-center font-semibold">Return Status</th>
-                <th className="py-4 px-4 text-right pr-6 font-semibold">Total Offset</th>
+                <th className="py-4 px-4 text-center font-semibold">Return Date</th>
+                <th className="py-4 px-4 text-center font-semibold">Reimbursement Status</th>
+                <th className="py-4 px-4 text-right pr-6 font-semibold">Gross Return</th>
                 <th className="py-4 px-4 w-24 text-center font-semibold">Actions</th>
               </tr>
             </thead>
@@ -157,36 +194,44 @@ const PurchaseReturnList = () => {
                   const subsequentCollected = subsequentReceiptsMap[(rtn.return_no || '').toUpperCase().trim()] || 0;
                   const aggregatedPaidValue = upfrontPaid + subsequentCollected;
 
-                  let returnStatusText = 'Unpaid';
-                  let returnStatusColor = 'bg-danger/10 text-danger border-danger/20';
+                  let returnStatusText = 'On Credit (Debit Note)';
+                  let returnStatusColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60';
 
                   if (aggregatedPaidValue >= totalAmt - 1 && totalAmt > 0) {
-                    returnStatusText = 'Paid';
-                    returnStatusColor = 'bg-success/10 text-success border-success/20';
+                    returnStatusText = 'Full Cash Refund';
+                    returnStatusColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60';
                   } else if (aggregatedPaidValue > 0 && aggregatedPaidValue < totalAmt) {
-                    returnStatusText = 'On Credit';
-                    returnStatusColor = 'bg-purple-50 text-purple-600 border-purple-200';
+                    returnStatusText = 'Partial Refund';
+                    returnStatusColor = 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60';
                   }
 
                   return (
                     <tr key={rtn.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
-                      <td className="py-3.5 px-4 text-gray-400">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono font-black text-primary">{rtn.return_no}</td>
+                      <td className="py-3.5 px-4 text-center text-gray-400">{serialNumber}</td>
+                      <td className="py-3.5 px-4 font-mono font-black text-rose-600 dark:text-rose-400">{rtn.return_no}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5"><MdPerson className="text-gray-400" size={16} />{rtn.vendor_name}</td>
-                      <td className="py-3.5 px-4"><span className="bg-purple-50 dark:bg-meta-4 text-purple-600 dark:text-white px-2.5 py-1 rounded-sm text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1"><MdStore size={12} />{rtn.source_warehouse}</span></td>
-                      <td className="py-3.5 px-4 text-center text-gray-500"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{rtn.return_date}</span></td>
+                      <td className="py-3.5 px-4">
+                        <span className="bg-slate-100 dark:bg-meta-4 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1">
+                          <MdStore size={12} className="text-rose-600" />{rtn.source_warehouse}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-center text-gray-500">
+                        <span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{rtn.return_date}</span>
+                      </td>
                       <td className="py-3.5 px-4 text-center">
                         <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border ${returnStatusColor}`}>
                           {returnStatusText}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-black text-success pr-6">Rs. {totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3.5 px-4 text-right font-mono font-black text-rose-600 dark:text-rose-400 pr-6">
+                        Rs. {formatMoney(totalAmt)}
+                      </td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
-                          onEdit={() => navigate('/Purchase/Purchase-Return/Add', { state: { returnRecord: rtn } })}
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Add`, { state: { returnRecord: rtn } })}
                           onDelete={() => handleDeleteReturnRecord(rtn.id)}
-                          editTitle="Edit Return"
-                          deleteTitle="Delete Return"
+                          editTitle="Edit Return Note"
+                          deleteTitle="Delete Return Note"
                         />
                       </td>
                     </tr>
@@ -198,7 +243,7 @@ const PurchaseReturnList = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
-          <div className="text-sm text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Previous</button>
