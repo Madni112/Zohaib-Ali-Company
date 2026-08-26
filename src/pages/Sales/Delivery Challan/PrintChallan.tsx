@@ -16,13 +16,19 @@ interface ChallanItem {
 
 interface ChallanData {
   id: number;
+  challan_no?: string;
+  invoice_no?: string;
   customer_name: string;
-  transportation: string;
-  po_no: string;
-  po_date: string;
-  dc_date: string;
-  vehicle_no: string;
-  remarks: string;
+  transport_name?: string;
+  transportation?: string;
+  po_no?: string;
+  po_date?: string;
+  dc_date?: string;
+  vehicle_no?: string;
+  driver_name?: string;
+  dispatch_warehouse?: string;
+  remarks?: string;
+  status?: string;
   items: ChallanItem[];
   created_at: string;
 }
@@ -68,7 +74,7 @@ const PrintChallan = () => {
 
   if (!challan) return null;
 
-  const formatPrintDate = (dateString: string) => {
+  const formatPrintDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -76,6 +82,8 @@ const PrintChallan = () => {
       year: 'numeric'
     });
   };
+
+  const challanTitle = challan.challan_no || `DC-${String(challan.id).padStart(4, '0')}`;
 
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-8 bg-white text-black font-sans min-h-screen relative">
@@ -132,57 +140,71 @@ const PrintChallan = () => {
 
       <div className="no-print flex justify-between items-center mb-6 bg-slate-50 p-4 rounded border border-stroke">
         <button
-          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/List`)}
+          onClick={() => navigate('/Delivery-Challan/List')}
           className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-black transition"
         >
           ← Return to History
         </button>
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 rounded bg-primary py-2 px-5 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm"
+          className="flex items-center gap-2 rounded bg-emerald-600 py-2 px-5 text-sm font-bold text-white hover:bg-emerald-700 transition shadow-sm cursor-pointer"
         >
-          Print Document
+          🖨️ Print Gate Pass Document
         </button>
       </div>
 
-      <div className="print-voucher bg-white">
+      <div className="print-voucher bg-white border border-gray-300 p-8 rounded shadow-sm">
         <div>
+          {/* Official Document Banner */}
+          <div className="border-b-2 border-black pb-4 mb-6 flex justify-between items-end">
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-black">ZOHAIB ALI & COMPANY</h1>
+              <p className="text-xs text-gray-600 font-semibold uppercase tracking-wider">Goods Transit & Warehouse Gate Pass Voucher</p>
+            </div>
+            <div className="text-right">
+              <span className="inline-block bg-black text-white text-xs font-mono font-black uppercase px-3 py-1 rounded">
+                Official Gate Pass
+              </span>
+              <p className="text-sm font-mono font-bold mt-1 text-black">{challanTitle}</p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-b border-gray-300 pb-4 mb-6 text-xs uppercase tracking-wider font-semibold">
             <div>
-              <span className="text-gray-500 block mb-0.5">Challan No:</span>
-              <strong className="text-sm font-black text-black">
-                {`DC-${String(challan.id).padStart(4, '0')}`}
+              <span className="text-gray-500 block mb-0.5">Challan / Gate Pass #:</span>
+              <strong className="text-sm font-black text-black font-mono">
+                {challanTitle}
               </strong>
             </div>
             <div>
-              <span className="text-gray-500 block mb-0.5">Challan Date:</span>
+              <span className="text-gray-500 block mb-0.5">Linked Sales Invoice:</span>
+              <span className="text-red-600 text-sm font-mono font-black">{challan.invoice_no || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 block mb-0.5">Dispatch Date:</span>
               <span className="text-black text-sm font-bold">{formatPrintDate(challan.dc_date || challan.created_at)}</span>
             </div>
             <div>
-              <span className="text-gray-500 block mb-0.5">P.O. Number:</span>
-              <span className="text-black text-sm font-bold">{challan.po_no || 'N/A'}</span>
-            </div>
-            <div>
-              <span className="text-gray-500 block mb-0.5">Vehicle Number:</span>
-              <strong className="text-black text-sm font-bold">{challan.vehicle_no || 'N/A'}</strong>
+              <span className="text-gray-500 block mb-0.5">Vehicle / Truck Plate:</span>
+              <strong className="text-black text-sm font-bold">{challan.vehicle_no || 'Direct Handover'}</strong>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-b border-gray-300 pb-6 mb-6 text-xs">
             <div>
-              <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Supplier Details:</h4>
+              <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Dispatch Warehouse Source:</h4>
               <div className="space-y-1 text-black font-medium">
-                <p className="text-sm font-extrabold text-primary">{businessName ? businessName.toUpperCase() : 'NOOR HORIZON TECHNOLOGIES ERP'}</p>
-                <p>Enterprise Logistics & Delivery Dispatch</p>
+                <p className="text-sm font-extrabold text-emerald-800">{challan.dispatch_warehouse || 'Main Warehouse'}</p>
+                <p className="text-gray-600">Carrier / Driver: <span className="font-bold text-black">{challan.driver_name || 'Counter Delivery'}</span></p>
+                <p className="italic text-gray-600">Transit Method: {challan.transport_name || challan.transportation || 'By Road Delivery'}</p>
               </div>
             </div>
 
             <div>
-              <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Consignee / Consigned To:</h4>
+              <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Consignee / Customer:</h4>
               <div className="space-y-1 text-black font-medium">
                 <p className="text-sm font-extrabold text-black">{challan.customer_name}</p>
-                <p className="italic text-gray-600">Transit Method: {challan.transportation || 'By Road Delivery'}</p>
-                {challan.remarks && <p className="mt-2 text-gray-700 bg-gray-50 p-2 rounded">Remarks: {challan.remarks}</p>}
+                {challan.remarks && <p className="mt-2 text-gray-700 bg-gray-100 p-2 rounded text-[11px] font-sans">Remarks: {challan.remarks}</p>}
               </div>
             </div>
           </div>
@@ -193,27 +215,45 @@ const PrintChallan = () => {
                 <tr className="bg-gray-100 text-black font-bold uppercase tracking-wider border-b border-gray-300 text-center">
                   <th className="border border-gray-300 p-2.5 w-12">S#</th>
                   <th className="border border-gray-300 p-2.5 text-left">Product Details / Item Descriptions</th>
-                  <th className="border border-gray-300 p-2.5 w-24">Location</th>
-                  <th className="border border-gray-300 p-2.5 w-24">Quantity</th>
+                  <th className="border border-gray-300 p-2.5 w-24">Warehouse</th>
+                  <th className="border border-gray-300 p-2.5 w-20">Ordered</th>
+                  <th className="border border-gray-300 p-2.5 w-24 bg-gray-200">Dispatched</th>
+                  <th className="border border-gray-300 p-2.5 w-20">On Hold</th>
                 </tr>
               </thead>
               <tbody>
-                {challan.items && challan.items.map((item, idx) => (
-                  <tr key={idx} className="font-medium">
-                    <td className="border border-gray-300 p-2.5 text-center bg-gray-50/50">{idx + 1}</td>
-                    <td className="border border-gray-300 p-2.5 text-black font-semibold text-left">{item.pDescription}</td>
-                    <td className="border border-gray-300 p-2.5 text-center text-gray-600">{item.location || 'Main WH'}</td>
-                    <td className="border border-gray-300 p-2.5 text-center font-bold text-sm text-black">
-                      {Number(item.qty).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-gray-50 font-bold border-t-2 border-gray-400">
+                {challan.items && challan.items.map((item, idx) => {
+                  const orderQty = Number(item.orderQty ?? item.qty ?? 0);
+                  const dispatchedQty = Number(item.dispatchedQty ?? item.qty ?? 0);
+                  const holdQty = Number(item.holdQty ?? Math.max(0, orderQty - dispatchedQty));
+
+                  return (
+                    <tr key={idx} className="font-medium text-center">
+                      <td className="border border-gray-300 p-2 text-center bg-gray-50/50">{idx + 1}</td>
+                      <td className="border border-gray-300 p-2 text-black font-semibold text-left">{item.pDescription}</td>
+                      <td className="border border-gray-300 p-2 text-center text-gray-600">{item.location || 'Main WH'}</td>
+                      <td className="border border-gray-300 p-2 text-center text-gray-700 font-mono">{orderQty}</td>
+                      <td className="border border-gray-300 p-2 text-center font-black text-sm text-black bg-gray-100 font-mono">
+                        {dispatchedQty}
+                      </td>
+                      <td className="border border-gray-300 p-2 text-center text-gray-600 font-mono">
+                        {holdQty > 0 ? `${holdQty} Hold` : '0'}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="bg-gray-50 font-bold border-t-2 border-gray-400 text-center">
                   <td colSpan={3} className="border border-gray-300 p-2.5 text-right uppercase tracking-wider text-gray-600">
-                    Total Dispatched Quantity:
+                    Totals:
                   </td>
-                  <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-100">
-                    {challan.items?.reduce((sum, item) => sum + (Number(item.qty) || 0), 0).toLocaleString()}
+                  <td className="border border-gray-300 p-2.5 text-center font-bold text-gray-700">
+                    {challan.items?.reduce((sum, item) => sum + (Number(item.orderQty ?? item.qty) || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-200">
+                    {challan.items?.reduce((sum, item) => sum + (Number(item.dispatchedQty ?? item.qty) || 0), 0).toLocaleString()}
+                  </td>
+                  <td className="border border-gray-300 p-2.5 text-center font-bold text-gray-700">
+                    {challan.items?.reduce((sum, item) => sum + (Number(item.holdQty ?? Math.max(0, Number(item.orderQty ?? item.qty ?? 0) - Number(item.dispatchedQty ?? item.qty ?? 0))) || 0), 0).toLocaleString()}
                   </td>
                 </tr>
               </tbody>

@@ -1,16 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import Barcode from 'react-barcode';
-import FbrLogo from '../../../images/logo/fbr-logo.png';
 import { useAuth } from '../../../Context/Auth';
-
+import { FiPrinter, FiArrowLeft, FiPhone, FiMapPin, FiCheckCircle } from 'react-icons/fi';
 
 interface InvoiceItem {
   itemName?: string;
   product_name?: string;
+  skuCode?: string;
   qty?: number;
   quantity?: number;
   rp?: number;
@@ -21,6 +20,8 @@ interface InvoiceItem {
   gst_rate?: number;
   fTaxPer?: number;
   f_tax_per?: number;
+  discountPer?: number;
+  discountAmt?: number;
   discount?: number;
   location?: string;
 }
@@ -32,17 +33,22 @@ interface InvoiceData {
   sale_date?: string;
   payment_term?: string;
   dispatch_warehouse?: string;
-  dc_no?: string;
-  quotation_id?: string;
-  fbr_fiscal_number?: string;
-  fbr_qr_code?: string;
+  transport_name?: string;
+  transport_charges?: number;
+  selected_bank?: string;
+  bank_amount?: number;
   cash_amount_paid?: number;
   total_amount?: number;
   total_gst_amount?: number;
   total_net_amount?: number;
+  receipt_status?: string;
+  scenario_type?: string;
+  dc_no?: string;
+  quotation_id?: string;
   remarks?: string;
   seller_name?: string;
   seller_address?: string;
+  seller_ntn?: string;
   items: InvoiceItem[];
   created_at: string;
 }
@@ -50,15 +56,14 @@ interface InvoiceData {
 const PrintInvoice = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { businessName, tenantId } = useAuth();
+  const { tenantId } = useAuth();
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
-
   const [customerInfo, setCustomerInfo] = useState<any>(null);
+  const [productsCatalog, setProductsCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const barcodeContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchInvoice = async () => {
+    const fetchInvoiceData = async () => {
       try {
         setLoading(true);
         const { data, error } = await supabase
@@ -69,11 +74,17 @@ const PrintInvoice = () => {
         if (error) throw error;
         setInvoice(data);
 
+        // Fetch products to know tile packings & units
+        const { data: prods } = await supabase
+          .from('products')
+          .select('product_name, item_sr_no, category, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description');
+        if (prods) setProductsCatalog(prods);
+
         // Fetch customer info dynamically
         if (data.customer_name) {
           const { data: custData } = await supabase
             .from('customers')
-            .select('ntnNo, cnicNo, primaryPhone, address')
+            .select('ntnNo, cnicNo, primaryPhone, address, company')
             .eq('customerName', data.customer_name)
             .maybeSingle();
           if (custData) {
@@ -86,50 +97,123 @@ const PrintInvoice = () => {
         setLoading(false);
       }
     };
-    fetchInvoice();
+    fetchInvoiceData();
   }, [id]);
 
   if (loading) return <div className="flex justify-center items-center h-screen"><Spinner /></div>;
-  if (!invoice) return <div className="text-center py-20 text-gray-500">Invoice not found.</div>;
+  if (!invoice) return <div className="text-center py-20 text-gray-500 font-bold">Invoice record not found.</div>;
 
   // ── Compute line items ──────────────────────────────────────────────────────
   const items = Array.isArray(invoice.items) ? invoice.items : [];
 
-  let computedTotalBase = 0;
+  let computedTotalGross = 0;
+  let computedTotalDiscount = 0;
   let computedTotalGst = 0;
+  let computedTotalFTax = 0;
   let computedTotalNet = 0;
 
   const processedItems = items.map((item) => {
+    const pName = item.itemName ?? item.product_name ?? 'N/A';
+    const prodMeta = productsCatalog.find(p => p.product_name === pName);
+
+    const isTile = Boolean(
+      prodMeta && (
+        String(prodMeta.category || '').toLowerCase().includes('tile') ||
+        String(prodMeta.uom || '').toLowerCase().includes('box')
+      )
+    );
+    const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
+    const pcsPerBox = rawPcs > 1 ? rawPcs : 6;
+
     const qty = Number(item.qty ?? item.quantity ?? 0);
-    const basePrice = Number(item.rp ?? item.mrp ?? item.rate ?? item.price ?? 0);
+    const rate = Number(item.rp ?? item.mrp ?? item.rate ?? item.price ?? 0);
+    const grossAmount = rate * qty;
+
+    const discountPer = Number(item.discountPer ?? item.discount ?? 0);
+    const discountAmt = Number(item.discountAmt ?? ((grossAmount * discountPer) / 100));
+    const afterDiscount = Math.max(0, grossAmount - discountAmt);
+
     const gstRate = Number(item.gstRate ?? item.gst_rate ?? 0);
     const fTaxPer = Number(item.fTaxPer ?? item.f_tax_per ?? 0);
-    const discount = Number(item.discount ?? 0);
-
-    const baseAmount = basePrice * qty;
-    const discountAmt = (baseAmount * discount) / 100;
-    const afterDiscount = baseAmount - discountAmt;
     const gstAmount = (afterDiscount * gstRate) / 100;
     const fTaxAmount = (afterDiscount * fTaxPer) / 100;
-    const netRowAmount = afterDiscount + gstAmount + fTaxAmount;
-    const pName = item.itemName ?? item.product_name ?? 'N/A';
+    const netTotal = afterDiscount + gstAmount + fTaxAmount;
 
-    computedTotalBase += afterDiscount;
+    // Quantity display string and Sq.Mtr calculations (e.g. 5 Boxes + 5 Pcs | Total: 7.20 sq.m)
+    let qtyDisplay = `${qty}`;
+    let perBoxSqm = 0;
+    let perPieceSqm = 0;
+    let totalLineSqm = 0;
+
+    if (isTile) {
+      const boxes = Math.floor(qty);
+      const loose = Math.round((qty - boxes) * pcsPerBox);
+
+      let tileWidthCm = 60;
+      let tileHeightCm = 60;
+      const desc = prodMeta?.product_description || '';
+      const sku = prodMeta?.item_sr_no || item.skuCode || '';
+      const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
+                        sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+      if (sizeMatch) {
+        tileHeightCm = Number(sizeMatch[1]) || 60;
+        tileWidthCm = Number(sizeMatch[2]) || 60;
+      }
+      perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
+      perBoxSqm = perPieceSqm * pcsPerBox;
+      totalLineSqm = (boxes * perBoxSqm) + (loose * perPieceSqm);
+
+      if (boxes > 0 && loose > 0) {
+        qtyDisplay = `${boxes} Box + ${loose} Pcs`;
+      } else if (boxes > 0) {
+        qtyDisplay = `${boxes} Box${boxes > 1 ? 'es' : ''}`;
+      } else if (loose > 0) {
+        qtyDisplay = `${loose} Pcs`;
+      } else {
+        qtyDisplay = `0 Box`;
+      }
+    } else if (prodMeta?.uom) {
+      qtyDisplay = `${qty} ${prodMeta.uom}`;
+    }
+
+    computedTotalGross += grossAmount;
+    computedTotalDiscount += discountAmt;
     computedTotalGst += gstAmount;
-    computedTotalNet += netRowAmount;
+    computedTotalFTax += fTaxAmount;
+    computedTotalNet += netTotal;
 
-    return { pName, qty, basePrice, gstRate, gstAmount, discount, discountAmt, netRowAmount };
+    return {
+      pName,
+      skuCode: item.skuCode || prodMeta?.item_sr_no || '-',
+      qty,
+      qtyDisplay,
+      isTile,
+      perBoxSqm,
+      perPieceSqm,
+      totalLineSqm,
+      rate,
+      grossAmount,
+      discountPer,
+      discountAmt,
+      gstRate,
+      gstAmount,
+      fTaxPer,
+      fTaxAmount,
+      netTotal
+    };
   });
 
-  const finalTotalGoods = computedTotalBase > 0 ? computedTotalBase : Number(invoice.total_amount || 0);
-  const finalTotalGst = computedTotalGst > 0 ? computedTotalGst : Number(invoice.total_gst_amount || 0);
-  const finalTotalNet = computedTotalNet > 0 ? computedTotalNet : Number(invoice.total_net_amount || invoice.total_amount || 0);
-  const amountPaid = Number(invoice.cash_amount_paid || 0);
-  const balance = finalTotalNet - amountPaid;
+  const freightCharges = Number(invoice.transport_charges || 0);
+  const grandTotal = computedTotalNet + freightCharges;
+  const cashPaid = Number(invoice.cash_amount_paid || 0);
+  const bankPaid = Number(invoice.bank_amount || 0);
+  const totalPaid = (cashPaid > 0 && bankPaid > 0) ? (cashPaid + bankPaid) : (cashPaid > 0 ? cashPaid : (bankPaid > 0 ? bankPaid : Number(invoice.cash_amount_paid || invoice.bank_amount || 0)));
+  const remainingDebt = Math.max(0, grandTotal - totalPaid);
 
   const invoiceNo = `INV-${String(invoice.id).padStart(4, '0')}`;
-  const fbrCode = invoice.fbr_fiscal_number || '';
-  const saleDate = invoice.sale_date || new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const saleDateFormatted = invoice.sale_date 
+    ? new Date(invoice.sale_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
   // ── Number to Words Helper ───────────────────────────────────────────────
   const numberToWords = (num: number): string => {
@@ -139,23 +223,23 @@ const PrintInvoice = () => {
     const n = ('000000000' + num).slice(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
     if (!n) return '';
     let str = '';
-    str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0] as any] + ' ' + a[n[1][1] as any]) + 'Crore ' : '';
-    str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0] as any] + ' ' + a[n[2][1] as any]) + 'Lakh ' : '';
-    str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0] as any] + ' ' + a[n[3][1] as any]) + 'Thousand ' : '';
-    str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0] as any] + ' ' + a[n[4][1] as any]) + 'Hundred ' : '';
-    str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0] as any] + ' ' + a[n[5][1] as any]) : '';
+    str += (Number(n[1]) !== 0) ? (a[Number(n[1])] || b[n[1][0] as any] + ' ' + a[n[1][1] as any]) + 'Crore ' : '';
+    str += (Number(n[2]) !== 0) ? (a[Number(n[2])] || b[n[2][0] as any] + ' ' + a[n[2][1] as any]) + 'Lakh ' : '';
+    str += (Number(n[3]) !== 0) ? (a[Number(n[3])] || b[n[3][0] as any] + ' ' + a[n[3][1] as any]) + 'Thousand ' : '';
+    str += (Number(n[4]) !== 0) ? (a[Number(n[4])] || b[n[4][0] as any] + ' ' + a[n[4][1] as any]) + 'Hundred ' : '';
+    str += (Number(n[5]) !== 0) ? ((str !== '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0] as any] + ' ' + a[n[5][1] as any]) : '';
     return str.trim() + ' Rupees Only';
   };
 
-  const amountInWords = numberToWords(Math.round(finalTotalNet));
+  const amountInWords = numberToWords(Math.round(grandTotal));
 
   return (
-    <div className="mx-auto max-w-4xl p-4 md:p-8 bg-white text-black font-sans min-h-screen relative">
+    <div className="mx-auto max-w-4xl p-3 sm:p-6 md:p-8 bg-white text-slate-900 font-sans min-h-screen relative">
       <style>{`
         @media print {
           @page {
-            size: landscape;
-            margin: 10mm 15mm;
+            size: A4 portrait;
+            margin: 8mm 10mm;
           }
           aside, nav, header, .no-print, button {
             display: none !important;
@@ -164,7 +248,7 @@ const PrintInvoice = () => {
           }
           body {
             background: white !important;
-            color: black !important;
+            color: #0f172a !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -172,173 +256,275 @@ const PrintInvoice = () => {
       `}</style>
 
       {/* ── No-print toolbar ─────────────────────────────────────────────── */}
-      <div className="no-print flex justify-between items-center mb-6 bg-slate-50 p-4 rounded border border-stroke">
+      <div className="no-print flex justify-between items-center mb-6 bg-slate-900 text-white p-4 rounded-xl shadow-md">
         <button
           onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/list`)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-black transition cursor-pointer"
+          className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
         >
-          ← Back to List
+          <FiArrowLeft size={16} /> Back to Invoices List
         </button>
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 rounded bg-primary py-2 px-5 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
+          className="flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 py-2 px-5 text-xs font-bold text-white transition shadow-sm cursor-pointer"
         >
-          🖨 Print Invoice
+          <FiPrinter size={16} /> Print Commercial Invoice
         </button>
       </div>
 
-      {/* ── Printable Invoice Layout matching PDF ─────────────────────────────────────────────── */}
-      <div className="bg-white text-black text-[12px] leading-relaxed w-full">
+      {/* ── Printable Invoice Document ─────────────────────────────────────────────── */}
+      <div className="border border-slate-300 rounded-2xl p-6 sm:p-8 bg-white shadow-sm print:border-none print:p-0">
 
-        {/* ── Header Top ─────────────────────────────────────────────────────── */}
-        <div className="flex justify-between items-start mb-6">
-          <div className="w-1/2 pt-4">
-            <h1 className="text-xl font-bold uppercase tracking-wide text-gray-900">
-              {invoice?.seller_name || (businessName ? businessName.toUpperCase() : 'NOOR HORIZON TECHNOLOGIES ERP')}
-            </h1>
+        {/* ── Top Header Brand ────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-slate-900 pb-5 mb-5 gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="h-4 w-4 bg-emerald-600 rounded-sm"></span>
+              <h1 className="text-2xl font-black tracking-tight text-slate-950 uppercase">
+                ZOHAIB ALI & COMPANY
+              </h1>
+            </div>
+            <p className="text-[11px] font-semibold text-slate-500 tracking-wider uppercase mt-0.5">
+              Tiles, Sanitary Ware & Building Material Specialists
+            </p>
+            <div className="flex items-center gap-4 text-[11px] text-slate-600 mt-2 font-medium">
+              <span className="flex items-center gap-1"><FiMapPin size={12} className="text-emerald-600" /> Main Showroom & Warehouse, Pakistan</span>
+              <span className="flex items-center gap-1"><FiPhone size={12} className="text-emerald-600" /> 0312-8039911</span>
+            </div>
           </div>
 
-          <div className="w-1/2 flex flex-col items-end">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-[80px] flex items-center justify-center">
-                <img src={FbrLogo} alt="FBR Logo" className="w-full h-auto object-contain" />
+          {/* Invoice Voucher Tag */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 min-w-[220px] text-right font-mono">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Commercial Voucher</div>
+            <div className="text-xl font-black text-slate-950 tracking-tight">{invoiceNo}</div>
+            <div className="text-[11px] text-slate-600 font-sans mt-1">
+              Date: <b className="text-slate-900 font-mono">{saleDateFormatted}</b>
+            </div>
+            <div className="mt-1">
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${invoice.payment_term === 'Cash' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                Payment Mode: {invoice.payment_term || 'Cash'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Client & Dispatch Details ───────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          {/* Customer Profile Box */}
+          <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3.5 text-xs">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1">
+              <FiCheckCircle className="text-emerald-600" /> Billed Customer Profile
+            </div>
+            <div className="font-bold text-slate-900 text-sm">{invoice.customer_name}</div>
+            {customerInfo?.company && (
+              <div className="text-slate-600 text-[11px]">{customerInfo.company}</div>
+            )}
+            <div className="mt-1 text-slate-600 text-[11px]">
+              Phone / Contact: <b className="text-slate-800 font-mono">{customerInfo?.primaryPhone || 'Walk-in Customer'}</b>
+            </div>
+            {customerInfo?.address && (
+              <div className="text-slate-500 text-[11px]">Address: {customerInfo.address}</div>
+            )}
+          </div>
+
+          {/* Logistics & Dispatch Box */}
+          <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3.5 text-xs">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+              Dispatch & Representative
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <span className="text-slate-500 block">Warehouse Bin:</span>
+                <b className="text-slate-900">{invoice.dispatch_warehouse || 'Main Warehouse'}</b>
               </div>
-              <div className="w-[70px] h-[70px] border border-gray-300 p-0.5">
-                {fbrCode ? (
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(fbrCode)}&margin=0`} alt="FBR QR" className="w-full h-full object-contain" />
-                ) : (
-                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-[8px] text-gray-400 text-center">No QR</div>
-                )}
+              <div>
+                <span className="text-slate-500 block">Sales Officer:</span>
+                <b className="text-slate-900">{invoice.salesman || 'Direct Counter'}</b>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Transport Carrier:</span>
+                <b className="text-slate-900">{invoice.transport_name || 'Customer Transport'}</b>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Delivery Challan:</span>
+                <b className="text-slate-900 font-mono">{invoice.dc_no || 'Direct Dispatch'}</b>
               </div>
             </div>
-            <div className="text-right text-[10px] font-semibold">
-              <p>FBR Invoice No</p>
-              <p className="font-mono">{fbrCode || 'N/A'}</p>
-            </div>
           </div>
         </div>
 
-        {/* ── Title Box ──────────────────────────────────────────────────────── */}
-        <div className="border border-gray-300 rounded-md text-center py-2 mb-3">
-          <h2 className="text-[13px] font-bold tracking-widest uppercase">SALES TAX INVOICE</h2>
-        </div>
-
-        {/* ── Meta Info ──────────────────────────────────────────────────────── */}
-        <div className="flex justify-between items-center mb-4 font-bold text-[12px]">
-          <div>Serial No: #{invoice.id}</div>
-          <div>Date: {saleDate}</div>
-        </div>
-
-        {/* ── Company & Customer Boxes ───────────────────────────────────────── */}
-        <div className="flex gap-4 mb-4">
-          {/* Company Info */}
-          <div className="flex-1 border border-gray-300 rounded-md">
-            <div className="bg-white border-b border-gray-300 px-3 py-2 font-bold text-[12px] rounded-t-md">
-              Company Information
-            </div>
-            <div className="p-3">
-              <table className="w-full text-[11px]">
-                <tbody>
-                  <tr><td className="w-24 pb-1">Name:</td><td className="font-semibold pb-1">{invoice.seller_name || 'NOOR HORIZON TECHNOLOGIES'}</td></tr>
-                  <tr><td className="w-24 pb-1 align-top">Address:</td><td className="pb-1">{invoice.seller_address || 'Karachi, Pakistan'}</td></tr>
-                  <tr><td className="w-24 pb-1">NTN:</td><td className="pb-1">{invoice.seller_ntn || '4130686580237'}</td></tr>
-                  <tr><td className="w-24 pb-1">Phone No:</td><td className="pb-1">-</td></tr>
-                  <tr><td className="w-24 pb-1">Email:</td><td className="pb-1">-</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Customer Info */}
-          <div className="flex-1 border border-gray-300 rounded-md">
-            <div className="bg-white border-b border-gray-300 px-3 py-2 font-bold text-[12px] rounded-t-md">
-              Customer Information
-            </div>
-            <div className="p-3">
-              <table className="w-full text-[11px]">
-                <tbody>
-                  <tr>
-                    <td className="w-24 pb-1">Name:</td>
-                    <td className="font-semibold pb-1 flex items-center gap-1">
-                      <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                      {invoice.customer_name}
-                    </td>
-                  </tr>
-                  <tr><td className="w-24 pb-1 align-top">Address:</td><td className="pb-1">{customerInfo?.address || '-'}</td></tr>
-                  <tr><td className="w-24 pb-1">NTN/CNIC:</td><td className="pb-1">{customerInfo?.ntnNo || customerInfo?.cnicNo || '-'}</td></tr>
-                  <tr><td className="w-24 pb-1">Phone No:</td><td className="pb-1">{customerInfo?.primaryPhone || '-'}</td></tr>
-                  <tr><td className="w-24 pb-1">Email:</td><td className="pb-1">-</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Items Table ────────────────────────────────────────────────────── */}
-        <div className="border border-gray-300 rounded-md overflow-hidden mb-4">
-          <table className="w-full text-[11px] text-center border-collapse">
+        {/* ── Line Items Table ───────────────────────────────────────────────── */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden mb-5">
+          <table className="w-full text-xs text-left border-collapse">
             <thead>
-              <tr className="border-b border-gray-300 bg-white">
-                <th className="py-2 px-2 font-normal text-left w-8">#</th>
-                <th className="py-2 px-2 font-normal text-left">Item Name</th>
-                <th className="py-2 px-2 font-normal">Qty</th>
-                <th className="py-2 px-2 font-normal">Rate</th>
-                <th className="py-2 px-2 font-normal">Exclusive<br />Amount</th>
-                <th className="py-2 px-2 font-normal">Disc.<br />%</th>
-                <th className="py-2 px-2 font-normal">Disc.<br />Amount</th>
-                <th className="py-2 px-2 font-normal">S. Tax<br />%</th>
-                <th className="py-2 px-2 font-normal">S. Tax<br />Amount</th>
-                <th className="py-2 px-2 font-normal text-right pr-3">Inclusive<br />Amount</th>
+              <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
+                <th className="py-2.5 px-3 w-10 text-center">S#</th>
+                <th className="py-2.5 px-3 w-24 font-mono">SKU</th>
+                <th className="py-2.5 px-3">Item Description</th>
+                <th className="py-2.5 px-3 text-center w-36">Quantity</th>
+                <th className="py-2.5 px-3 text-right w-24">Unit Rate</th>
+                {computedTotalDiscount > 0 && (
+                  <th className="py-2.5 px-3 text-right w-20 text-amber-300">Discount</th>
+                )}
+                {computedTotalGst > 0 && (
+                  <th className="py-2.5 px-3 text-right w-20 text-emerald-300">GST (18%)</th>
+                )}
+                <th className="py-2.5 px-3 text-right pr-4 w-28 font-black">Net Total</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 font-medium">
               {processedItems.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="py-2 px-2 text-left">{idx + 1}</td>
-                  <td className="py-2 px-2 text-left max-w-[150px] uppercase">{item.pName}</td>
-                  <td className="py-2 px-2">{item.qty.toFixed(2)}</td>
-                  <td className="py-2 px-2">Rs {item.basePrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td className="py-2 px-2">Rs {(item.qty * item.basePrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td className="py-2 px-2">{item.discount.toFixed(2)}%</td>
-                  <td className="py-2 px-2">Rs {item.discountAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td className="py-2 px-2">{item.gstRate}%</td>
-                  <td className="py-2 px-2">Rs {item.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td className="py-2 px-2 text-right pr-3">Rs {item.netRowAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <tr key={idx} className="hover:bg-slate-50/50">
+                  <td className="py-2.5 px-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-slate-700">{item.skuCode}</td>
+                  <td className="py-2.5 px-3">
+                    <span className="font-bold text-slate-900 block">{item.pName}</span>
+                  </td>
+                  <td className="py-2.5 px-3 text-center bg-slate-50/40">
+                    <div className="font-mono font-black text-slate-900 text-[11px]">{item.qtyDisplay}</div>
+                    {item.isTile && item.totalLineSqm > 0 && (
+                      <div className="mt-0.5 space-y-0.5 font-mono">
+                        <div className="text-[9px] text-teal-800 font-bold bg-teal-50 px-1 py-0.2 rounded border border-teal-200/60 inline-block">
+                          {item.totalLineSqm.toFixed(2)} sq.m
+                        </div>
+                        <div className="text-[8px] text-slate-400">
+                          (Box: {item.perBoxSqm.toFixed(2)}m² | Pc: {item.perPieceSqm.toFixed(3)}m²)
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono">
+                    Rs. {item.rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  {computedTotalDiscount > 0 && (
+                    <td className="py-2.5 px-3 text-right font-mono text-amber-700">
+                      {item.discountAmt > 0 ? `Rs. ${item.discountAmt.toLocaleString()}` : '-'}
+                    </td>
+                  )}
+                  {computedTotalGst > 0 && (
+                    <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                      {item.gstAmount > 0 ? `Rs. ${item.gstAmount.toLocaleString()}` : '-'}
+                    </td>
+                  )}
+                  <td className="py-2.5 px-3 text-right pr-4 font-mono font-black text-slate-950">
+                    Rs. {item.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
                 </tr>
               ))}
-
-              {/* Totals Row */}
-              <tr className="border-t border-gray-300 font-bold bg-white">
-                <td colSpan={2} className="py-3 px-2 text-center text-[12px]">Totals</td>
-                <td className="py-3 px-2">{processedItems.reduce((sum, item) => sum + item.qty, 0).toFixed(2)}</td>
-                <td className="py-3 px-2"></td>
-                <td className="py-3 px-2">Rs {computedTotalBase.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td className="py-3 px-2"></td>
-                <td className="py-3 px-2">Rs {processedItems.reduce((sum, item) => sum + item.discountAmt, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td className="py-3 px-2"></td>
-                <td className="py-3 px-2">Rs {computedTotalGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                <td className="py-3 px-2 text-right pr-3">Rs {finalTotalNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-              </tr>
             </tbody>
           </table>
         </div>
 
-        {/* ── Amount in Words ────────────────────────────────────────────────── */}
-        <div className="border border-gray-300 rounded-md px-3 py-2.5 mb-6 text-[11px] font-bold">
-          AMOUNT: <span className="italic font-normal ml-1">{amountInWords}</span>
+        {/* ── Summary & Settlement Breakdown ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          {/* Amount in words */}
+          <div className="flex flex-col justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Amount Chargeable (in words):
+              </span>
+              <span className="font-bold text-slate-900 italic leading-relaxed">
+                {amountInWords}
+              </span>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-200 text-[10px] text-slate-500 space-y-1">
+              <div>
+                • Payment Received Via:{' '}
+                <b>
+                  {cashPaid > 0 && bankPaid > 0
+                    ? `Split Payment (Cash: Rs. ${cashPaid.toLocaleString()} + Bank: Rs. ${bankPaid.toLocaleString()}${invoice.selected_bank ? ` via ${invoice.selected_bank}` : ''})`
+                    : invoice.selected_bank || bankPaid > 0
+                    ? `Bank Online (${invoice.selected_bank || 'Direct Wire'})`
+                    : 'Counter Cash'}
+                </b>
+              </div>
+              <div>• Status: <b>{invoice.receipt_status || (remainingDebt <= 0 ? 'Full Paid' : 'Credit Balance')}</b></div>
+            </div>
+          </div>
+
+          {/* Numeric Settlement Totals */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-mono space-y-1.5">
+            <div className="flex justify-between text-slate-600">
+              <span>Gross Product Total:</span>
+              <span className="font-bold text-slate-900">Rs. {computedTotalGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+
+            {computedTotalDiscount > 0 && (
+              <div className="flex justify-between text-amber-700 font-semibold">
+                <span>Total Discount Allowed:</span>
+                <span>- Rs. {computedTotalDiscount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+
+            {freightCharges > 0 && (
+              <div className="flex justify-between text-slate-600">
+                <span>Freight / Delivery Charges:</span>
+                <span className="font-bold text-slate-900">Rs. {freightCharges.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+
+            {computedTotalGst > 0 && (
+              <div className="flex justify-between text-emerald-700 font-semibold">
+                <span>Sales Tax (GST / FBR):</span>
+                <span>Rs. {computedTotalGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between border-t border-b py-1.5 border-slate-300 text-sm font-black text-slate-950">
+              <span className="font-sans">Grand Invoice Total:</span>
+              <span>Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+
+            {cashPaid > 0 && bankPaid > 0 ? (
+              <>
+                <div className="flex justify-between text-emerald-700 font-semibold pt-1">
+                  <span>Received Cash:</span>
+                  <span>Rs. {cashPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-primary font-semibold">
+                  <span>Received Bank Wire:</span>
+                  <span>Rs. {bankPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-emerald-800 font-black border-t border-slate-200 pt-1">
+                  <span>Total Paid:</span>
+                  <span>Rs. {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between text-emerald-700 font-bold pt-1">
+                <span>Received Payment:</span>
+                <span>Rs. {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between pt-1 border-t border-slate-200 font-black">
+              <span className="font-sans text-[11px]">Unpaid Remaining Balance:</span>
+              <span className={`text-xs ${remainingDebt > 0 ? 'text-rose-600 font-black' : 'text-emerald-600 font-black'}`}>
+                Rs. {remainingDebt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* ── Terms and Footer ───────────────────────────────────────────────── */}
-        <div className="text-[10px]">
-          <h4 className="font-bold mb-1">TERMS AND CONDITIONS:</h4>
-          <ol className="list-decimal list-inside text-gray-700 space-y-1 mb-8">
-            <li>Make the cheque payable to {invoice.seller_name || 'NOOR HORIZON TECHNOLOGIES'}.<br />
-              <span className="ml-3">Account/IBAN Number: PK73MEZN0017810106376510 Meezan Bank</span></li>
-          </ol>
-
-          <div className="text-center font-bold text-gray-800 mt-12 border-t border-transparent pt-4">
-            *This is a system generated invoice and does not require any signature.
+        {/* ── Signatures & Authorization ─────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-6 pt-28 mt-12 border-t border-slate-200 text-center text-[11px] font-bold text-slate-600">
+          <div className="flex flex-col items-center">
+            <div className="border-t-2 border-dashed border-slate-400 w-48 mb-3.5"></div>
+            <span>Prepared By</span>
           </div>
+          <div className="flex flex-col items-center">
+            <div className="border-t-2 border-dashed border-slate-400 w-48 mb-3.5"></div>
+            <span>Customer Signature & Stamp</span>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="border-t-2 border-dashed border-slate-400 w-48 mb-3.5"></div>
+            <span>Authorized Signature</span>
+          </div>
+        </div>
+
+        {/* ── Bottom Terms Note ──────────────────────────────────────────────── */}
+        <div className="mt-12 pt-4 border-t border-slate-100 text-center text-[10px] text-slate-400 font-medium">
+          Computer generated official commercial sales bill • Goods once sold are subject to company return policies.
         </div>
 
       </div>
@@ -347,3 +533,4 @@ const PrintInvoice = () => {
 };
 
 export default PrintInvoice;
+

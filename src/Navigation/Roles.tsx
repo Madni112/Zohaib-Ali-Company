@@ -1,4 +1,5 @@
-import { MdDashboard, MdReceipt, MdPeople, MdAdminPanelSettings, MdEmojiTransportation, MdEdit, MdInventory2, MdClass, MdAccountBox, MdCategory, MdStraighten, MdDomain, MdInventory, MdBadge, MdShoppingCart, MdLocationOn, MdLocalShipping, MdCompareArrows, MdFormatListBulleted, MdAccountTree, MdReceiptLong, MdAccountBalance, MdLaptop, MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview, MdSpaceDashboard, MdOutlineLaptop } from 'react-icons/md';
+import { MdDashboard, MdReceipt, MdPeople, MdAdminPanelSettings, MdEmojiTransportation, MdEdit, MdInventory2, MdClass, MdAccountBox, MdCategory, MdStraighten, MdDomain, MdInventory, MdBadge, MdShoppingCart, MdLocationOn, MdLocalShipping, MdCompareArrows, MdFormatListBulleted, MdAccountTree, MdReceiptLong, MdAccountBalance, MdLaptop, MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview, MdSpaceDashboard, MdOutlineLaptop, MdTexture } from 'react-icons/md';
+import Brands from '../pages/Administration/Brands';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NewInvoice from '../pages/Sales/Invoice/NewInvoice';
 import SalesHistory from '../pages/Sales/Invoice/SalesHistory';
@@ -18,10 +19,7 @@ import ProductList from '../pages/Administration/Products/ProductList';
 import AddProduct from '../pages/Administration/Products/AddProduct';
 import Categories from '../pages/Administration/Categories';
 import UomManager from '../pages/Administration/UomManager';
-import Brands from '../pages/Administration/Brands';
-import Designations from '../pages/Administration/Designations';
-import EmployeeList from '../pages/Administration/Employees/EmployeeList';
-import AddEmployee from '../pages/Administration/Employees/AddEmployee';
+import SurfaceFinish from '../pages/Administration/SurfaceFinish';
 import LocationList from '../pages/Administration/Location/LocationList';
 import AddLocation from '../pages/Administration/Location/AddLocation';
 import TransportationList from '../pages/Administration/Transportation/TransportationList';
@@ -39,6 +37,7 @@ import OpeningStockList from '../pages/Registration/Opening Stock/OpeningStockLi
 import { Children, Component } from 'react';
 import AddInvoiceReceipt from '../pages/Registration/Invoice Receipt/AddInvoiceReceipt';
 import InvoiceReceiptList from '../pages/Registration/Invoice Receipt/InvoiceReceiptList';
+import PrintInvoiceReceipt from '../pages/Registration/Invoice Receipt/PrintInvoiceReceipt';
 import AddMultiInvoiceReceipt from '../pages/Registration/Multi Invoice Receipt/AddMultiInvoiceReceipt';
 import AddPurchases from '../pages/Purchase/Purchase/AddPurchases';
 import PurchaseList from '../pages/Purchase/Purchase/PurchaseList';
@@ -81,6 +80,12 @@ export const adminRoutes = [
         icon: MdCategory
       },
       {
+        path: '/Administration/Surface-Finish',
+        component: <SurfaceFinish />,
+        label: 'Surface Finish',
+        icon: MdTexture
+      },
+      {
         path: '/Administration/UOM/List',
         component: <UomManager />,
         label: 'UOM',
@@ -97,18 +102,6 @@ export const adminRoutes = [
         icon: MdDashboard,
         path: '/Administration/Products/List',
         component: <ProductList />,
-      },
-      {
-        path: '/Administration/Designations/List',
-        component: <Designations />,
-        label: 'Designations',
-        icon: MdBadge
-      },
-      {
-        path: '/Administration/Employees/List',
-        component: <EmployeeList />,
-        label: 'Employees',
-        icon: MdPeople
       },
       {
         path: '/Administration/Locations/List',
@@ -300,12 +293,6 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
-    path: '/Administration/Employees/Add',
-    component: <AddEmployee />,
-    label: 'Add Employee',
-    hideFromSidebar: true
-  },
-  {
     path: '/Administration/Locations/Add',
     component: <AddLocation />,
     label: 'Add Location',
@@ -447,6 +434,11 @@ export const adminRoutes = [
   {
     path: '/Reports/Account-Report/Print',
     component: <AccountReportPrint/>,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Registration/InvoiceReceipt/Print/:id',
+    component: <PrintInvoiceReceipt />,
     hideFromSidebar: true
   }
 ];

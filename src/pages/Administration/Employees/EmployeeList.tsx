@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdBadge } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
+import { MdAdd, MdBadge } from 'react-icons/md';
 
 const EmployeeList = () => {
   const navigate = useNavigate();
@@ -146,7 +147,7 @@ const EmployeeList = () => {
                       <td className="py-3.5 px-4 font-medium">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-bold text-black dark:text-white uppercase tracking-tight">{emp.name}</td>
                       <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 bg-blue-50 dark:bg-meta-4 text-primary dark:text-blue-400 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px]">
+                        <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px]">
                           <MdBadge size={12} /> {emp.designation || 'General Staff'}
                         </span>
                       </td>
@@ -155,25 +156,13 @@ const EmployeeList = () => {
                       <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-medium">{emp.phone || '-'}</td>
                       <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-mono">{emp.cnic || '-'}</td>
                       
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center justify-center space-x-3.5">
-                          <button 
-                            type="button"
-                            onClick={() => navigate('/Administration/Employees/Add', { state: { employee: emp } })} 
-                            className="text-gray-500 hover:text-primary transition p-0.5" 
-                            title="Modify Employee Profile"
-                          >
-                            <MdEdit size={18} />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleDeleteEmployee(emp.id)} 
-                            className="text-gray-500 hover:text-danger transition p-0.5" 
-                            title="Delete Worker Record"
-                          >
-                            <MdDelete size={18} />
-                          </button>
-                        </div>
+                      <td className="py-3.5 px-4 text-center">
+                        <TableActions
+                          onEdit={() => navigate('/Administration/Employees/Add', { state: { employee: emp } })}
+                          onDelete={() => handleDeleteEmployee(emp.id)}
+                          editTitle="Edit Employee"
+                          deleteTitle="Delete Employee"
+                        />
                       </td>
                     </tr>
                   );

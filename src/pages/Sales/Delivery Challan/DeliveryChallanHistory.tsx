@@ -3,15 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdPrint } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
+import { FiCheckCircle, FiTruck, FiX, FiClock, FiPlusCircle, FiAlertCircle } from 'react-icons/fi';
 
 const DeliveryChallanHistory = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
   const [challans, setChallans] = useState<any[]>([]);
-
   const [loading, setLoading] = useState(true);
+
+  // Modal State for Warehouse Dispatch Approval
+  const [selectedChallanForApproval, setSelectedChallanForApproval] = useState<any | null>(null);
+  const [approvalItems, setApprovalItems] = useState<any[]>([]);
+  const [transportList, setTransportList] = useState<any[]>([]);
+  const [approvalTransportName, setApprovalTransportName] = useState('Customer\'s Own Transport');
+  const [approvalTransportSearch, setApprovalTransportSearch] = useState('');
+  const [isTransportDropdownOpen, setIsTransportDropdownOpen] = useState(false);
+  const [approvalFreightCharges, setApprovalFreightCharges] = useState<number | string>(0);
+  const [approvalVehicle, setApprovalVehicle] = useState('');
+  const [approvalDriver, setApprovalDriver] = useState('');
+  const [approvalRemarks, setApprovalRemarks] = useState('');
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   // Datatable layout state controllers
   const [searchTerm, setSearchTerm] = useState('');
@@ -20,7 +33,15 @@ const DeliveryChallanHistory = () => {
 
   useEffect(() => {
     fetchChallans();
+    fetchTransportList();
   }, []);
+
+  const fetchTransportList = async () => {
+    try {
+      const { data } = await supabase.from('logistics_transportation').select('*').order('name');
+      setTransportList(data || []);
+    } catch (_) {}
+  };
 
   const fetchChallans = async () => {
     setLoading(true);
@@ -52,30 +73,578 @@ const DeliveryChallanHistory = () => {
     }
   };
 
+  // Open the Approval Popup Modal
+  const openApprovalModal = (challan: any) => {
+    setSelectedChallanForApproval(challan);
+    const parsedItems = (challan.items || []).map((item: any) => {
+      const orderQty = Number(item.orderQty ?? item.qty ?? 0);
+      const prevDispatched = Number(item.dispatchedQty ?? 0);
+      const availableToDispatch = orderQty - prevDispatched;
+      const initialSend = availableToDispatch > 0 ? availableToDispatch : orderQty;
+
+      return {
+        ...item,
+        orderQty: orderQty,
+        dispatchedQty: initialSend,
+        holdQty: Math.max(0, orderQty - initialSend),
+        rate: Number(item.rate || 0)
+      };
+    });
+
+    setApprovalItems(parsedItems);
+    setApprovalTransportName(challan.transport_name || challan.transportation || 'Customer\'s Own Transport');
+    setApprovalTransportSearch('');
+    setIsTransportDropdownOpen(false);
+    setApprovalFreightCharges(challan.freight_charges !== undefined && challan.freight_charges !== null ? Number(challan.freight_charges) : 0);
+    setApprovalVehicle(challan.vehicle_no && challan.vehicle_no !== 'Pending Dispatch' ? challan.vehicle_no : '');
+    setApprovalDriver(challan.driver_name || '');
+    setApprovalRemarks(challan.remarks || '');
+  };
+
+  // Handle Qty change inside the Approval modal (supports blank, 0, and fractional)
+  const handleItemDispatchedChange = (index: number, rawVal: string) => {
+    setApprovalItems(prev => {
+      const updated = [...prev];
+      const item = updated[index];
+      const orderQty = Number(item.orderQty || 0);
+
+      if (rawVal === '') {
+        updated[index] = {
+          ...item,
+          dispatchedQty: '',
+          holdQty: orderQty
+        };
+        return updated;
+      }
+
+      const numVal = parseFloat(rawVal);
+      if (isNaN(numVal) || numVal < 0) {
+        updated[index] = {
+          ...item,
+          dispatchedQty: 0,
+          holdQty: orderQty
+        };
+        return updated;
+      }
+
+      const cappedSend = Math.min(numVal, orderQty > 0 ? orderQty : numVal);
+      const hold = Math.max(0, orderQty - cappedSend);
+
+      updated[index] = {
+        ...item,
+        dispatchedQty: cappedSend,
+        holdQty: hold
+      };
+      return updated;
+    });
+  };
+
+  const handleBlurDispatched = (index: number) => {
+    setApprovalItems(prev => {
+      const updated = [...prev];
+      const item = updated[index];
+      const orderQty = Number(item.orderQty || 0);
+      if (item.dispatchedQty === '' || item.dispatchedQty === undefined || isNaN(Number(item.dispatchedQty))) {
+        updated[index] = {
+          ...item,
+          dispatchedQty: 0,
+          holdQty: orderQty
+        };
+      }
+      return updated;
+    });
+  };
+
+  // Quick Action Buttons
+  const setAllItemsToSend = () => {
+    setApprovalItems(prev => prev.map(item => ({
+      ...item,
+      dispatchedQty: Number(item.orderQty || 0),
+      holdQty: 0
+    })));
+  };
+
+  const setAllItemsToHold = () => {
+    setApprovalItems(prev => prev.map(item => ({
+      ...item,
+      dispatchedQty: 0,
+      holdQty: Number(item.orderQty || 0)
+    })));
+  };
+
+  // Save the Warehouse Approval
+  const submitWarehouseApproval = async () => {
+    if (!selectedChallanForApproval) return;
+
+    const totalDispatchedQty = approvalItems.reduce((sum, i) => sum + (Number(i.dispatchedQty) || 0), 0);
+    if (totalDispatchedQty <= 0) {
+      toast.error('Cannot confirm dispatch with 0 quantity. Please specify at least 1 item in "Sending Now" to approve dispatch.', {
+        duration: 4000,
+        icon: '⚠️'
+      });
+      return;
+    }
+
+    setIsSubmittingApproval(true);
+
+    try {
+      const totalOrderQty = approvalItems.reduce((sum, i) => sum + Number(i.orderQty || 0), 0);
+      const totalHoldQty = approvalItems.reduce((sum, i) => sum + (Number(i.holdQty) || 0), 0);
+
+      const baseAmount = approvalItems.reduce((acc, i) => acc + (Number(i.rate || 0) * (Number(i.dispatchedQty) || 0)), 0);
+      const totalDisc = approvalItems.reduce((acc, i) => acc + (Number(i.disAmt || 0)), 0);
+      const netAmount = baseAmount - totalDisc;
+
+      let finalStatus = 'Dispatched';
+      if (totalHoldQty > 0 || totalDispatchedQty < totalOrderQty) {
+        finalStatus = 'Partially Dispatched';
+      } else {
+        finalStatus = 'Dispatched';
+      }
+
+      const processedItems = approvalItems.map(i => ({
+        ...i,
+        qty: Number(i.dispatchedQty || 0),
+        dispatchedQty: Number(i.dispatchedQty || 0),
+        orderQty: Number(i.orderQty || 0),
+        holdQty: Number(i.holdQty || 0)
+      }));
+
+      const freightNum = Number(approvalFreightCharges) || 0;
+
+      const { error } = await supabase
+        .from('delivery_challans')
+        .update({
+          transport_name: approvalTransportName,
+          transportation: approvalTransportName,
+          freight_charges: freightNum,
+          freight_payment_status: freightNum > 0 ? 'Pending Approval' : 'Free / Direct',
+          vehicle_no: approvalVehicle.trim() || 'Counter Delivery',
+          driver_name: approvalDriver.trim() || 'Direct Handover',
+          remarks: approvalRemarks.trim() || `Approved by Warehouse Manager (${finalStatus})`,
+          total_quantity: totalDispatchedQty,
+          total_amount: baseAmount,
+          total_discount: totalDisc,
+          total_net_amount: netAmount,
+          status: finalStatus,
+          items: processedItems
+        })
+        .eq('id', selectedChallanForApproval.id);
+
+      if (error) throw error;
+
+      toast.success(`Challan #${selectedChallanForApproval.challan_no || selectedChallanForApproval.id} approved: ${finalStatus}`);
+      setSelectedChallanForApproval(null);
+      fetchChallans();
+    } catch (err: any) {
+      toast.error('Approval failed: ' + err.message);
+    } finally {
+      setIsSubmittingApproval(false);
+    }
+  };
+
+  // Create a separate DC for remaining Hold items
+  const createSubsequentHoldChallan = async (parentChallan: any) => {
+    const holdItems = (parentChallan.items || [])
+      .filter((i: any) => Number(i.holdQty || 0) > 0)
+      .map((i: any) => ({
+        ...i,
+        orderQty: Number(i.holdQty),
+        dispatchedQty: Number(i.holdQty),
+        holdQty: 0,
+        qty: Number(i.holdQty)
+      }));
+
+    if (holdItems.length === 0) {
+      toast.error('No items on hold for this challan.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Calculate dynamic next sequence suffix (DC-0005-B, DC-0005-C, etc.)
+      const baseCode = (parentChallan.challan_no || `DC-${String(parentChallan.id).padStart(4, '0')}`).replace(/-[A-Z]$/, '');
+      const existingSubCount = challans.filter(c => (c.challan_no || '').startsWith(baseCode)).length;
+      const nextLetter = String.fromCharCode(65 + existingSubCount); // 1 existing -> B, 2 existing -> C, etc.
+      const subChallanNo = `${baseCode}-${nextLetter}`;
+
+      const whQty = holdItems.reduce((acc: number, i: any) => acc + Number(i.orderQty || 0), 0);
+      const whBaseAmt = holdItems.reduce((acc: number, i: any) => acc + (Number(i.rate || 0) * Number(i.orderQty || 0)), 0);
+
+      const { data: newDc, error } = await supabase.from('delivery_challans').insert([{
+        challan_no: subChallanNo,
+        invoice_no: parentChallan.invoice_no,
+        customer_name: parentChallan.customer_name,
+        challan_date: new Date().toISOString().split('T')[0],
+        dispatch_warehouse: parentChallan.dispatch_warehouse,
+        transport_name: parentChallan.transport_name || 'By Road Transport',
+        transportation: parentChallan.transportation || 'By Road Transport',
+        po_no: parentChallan.po_no || '',
+        vehicle_no: 'Pending Dispatch',
+        remarks: `Remaining hold items from ${parentChallan.challan_no || parentChallan.id}`,
+        total_quantity: whQty,
+        total_amount: whBaseAmt,
+        total_discount: 0,
+        total_net_amount: whBaseAmt,
+        status: 'Pending Approval',
+        items: holdItems
+      }]).select().single();
+
+      if (error) throw error;
+
+      // Update parent challan: mark hold items as transferred to new sub-challan
+      const updatedParentItems = (parentChallan.items || []).map((i: any) => ({
+        ...i,
+        holdQty: 0
+      }));
+
+      await supabase.from('delivery_challans').update({
+        items: updatedParentItems,
+        remarks: `${parentChallan.remarks || ''} (Remaining hold items moved to ${subChallanNo})`
+      }).eq('id', parentChallan.id);
+
+      toast.success(`New Delivery Challan ${subChallanNo} created for remaining ${whQty} hold items!`);
+      await fetchChallans();
+      if (newDc) openApprovalModal(newDc);
+    } catch (err: any) {
+      toast.error('Failed to create subsequent challan: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Live filter query rule logic
   const filteredChallans = challans.filter(c =>
     c.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.challan_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.vehicle_no?.toLowerCase().includes(searchTerm.toLowerCase())
+    c.invoice_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.vehicle_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.dispatch_warehouse?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Pagination bounds vector calculation math
-  const totalEntries = filteredChallans.length;
+  // Group Challans by Linked Invoice
+  const groupedInvoices = React.useMemo(() => {
+    const groups: Record<string, {
+      invoice_no: string;
+      customer_name: string;
+      dispatch_warehouse: string;
+      challans: any[];
+      totalOrdered: number;
+      totalDispatched: number;
+      totalHold: number;
+    }> = {};
+
+    filteredChallans.forEach(c => {
+      const invKey = c.invoice_no || `MANUAL-${c.id}`;
+      if (!groups[invKey]) {
+        groups[invKey] = {
+          invoice_no: c.invoice_no || 'Direct DC',
+          customer_name: c.customer_name || 'Walk-in',
+          dispatch_warehouse: c.dispatch_warehouse || 'Main Warehouse',
+          challans: [],
+          totalOrdered: 0,
+          totalDispatched: 0,
+          totalHold: 0
+        };
+      }
+      groups[invKey].challans.push(c);
+    });
+
+    // Compute totals per invoice group
+    Object.values(groups).forEach(g => {
+      g.challans.forEach(c => {
+        (c.items || []).forEach((item: any) => {
+          g.totalOrdered += Number(item.orderQty ?? item.qty ?? 0);
+          g.totalDispatched += Number(item.dispatchedQty ?? (c.status === 'Dispatched' ? item.qty : 0) ?? 0);
+          g.totalHold += Number(item.holdQty ?? 0);
+        });
+      });
+    });
+
+    return Object.values(groups);
+  }, [filteredChallans]);
+
+  // Pagination bounds based on grouped invoices
+  const totalEntries = groupedInvoices.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
-  const paginatedChallans = filteredChallans.slice(startIndex, startIndex + pageSize);
+  const paginatedInvoices = groupedInvoices.slice(startIndex, startIndex + pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, pageSize]);
 
   return (
-    <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5">
+    <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-6 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 relative">
       
+      {/* ── POPUP MODAL: WAREHOUSE MANAGER DISPATCH APPROVAL ── */}
+      {selectedChallanForApproval && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-boxdark w-full max-w-3xl rounded-2xl shadow-2xl border border-stroke dark:border-strokedark overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center bg-slate-900 text-white p-5 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl font-bold">
+                  <FiTruck />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold flex items-center gap-2">
+                    Warehouse Dispatch Approval
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-500 text-white font-black">
+                      {selectedChallanForApproval.challan_no || `DC-${selectedChallanForApproval.id}`}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Customer: <span className="text-white font-bold">{selectedChallanForApproval.customer_name}</span> • Warehouse: <span className="text-emerald-400 font-bold">{selectedChallanForApproval.dispatch_warehouse}</span>
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedChallanForApproval(null)} className="text-slate-400 hover:text-white text-xl">
+                <FiX />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6 text-xs">
+              
+              {/* Instructions Banner */}
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-3.5 flex items-start gap-3">
+                <FiCheckCircle className="text-emerald-600 dark:text-emerald-400 text-base shrink-0 mt-0.5" />
+                <div className="text-slate-700 dark:text-slate-300">
+                  <p className="font-bold text-emerald-800 dark:text-emerald-300">Warehouse Verification Mode</p>
+                  <p className="text-[11px] mt-0.5">
+                    Enter how many units are being loaded onto the truck right now in <strong className="text-emerald-700 dark:text-emerald-400">Sending Now</strong>. Any difference will automatically be marked <strong className="text-amber-700 dark:text-amber-400">On Hold</strong> for later dispatch.
+                  </p>
+                </div>
+              </div>
+
+              {/* Items Verification Table */}
+              <div className="border border-stroke dark:border-strokedark rounded-xl overflow-hidden shadow-xs">
+                <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 flex justify-between items-center border-b border-stroke dark:border-strokedark">
+                  <span className="font-bold text-[11px] uppercase tracking-wide text-slate-700 dark:text-slate-300">Items Fulfillment List</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={setAllItemsToSend}
+                      className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-[10px] hover:opacity-80 transition"
+                    >
+                      ✓ Send All Items (100%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={setAllItemsToHold}
+                      className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold text-[10px] hover:opacity-80 transition"
+                    >
+                      ⏸ Hold All (0 Sent)
+                    </button>
+                  </div>
+                </div>
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
+                      <th className="p-3 w-8 text-center">S#</th>
+                      <th className="p-3">Product Description</th>
+                      <th className="p-3 w-24 text-center">Ordered Qty</th>
+                      <th className="p-3 w-32 text-center bg-emerald-100/60 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">Sending Now</th>
+                      <th className="p-3 w-28 text-center bg-amber-100/60 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">Holding (Rest)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
+                    {approvalItems.map((item, idx) => {
+                      const orderQty = Number(item.orderQty || 0);
+                      const sendQty = item.dispatchedQty;
+                      const holdQty = Number(item.holdQty || 0);
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
+                          <td className="p-3">
+                            <p className="font-bold text-black dark:text-white">{item.pDescription}</p>
+                            {item.skuCode && <p className="font-mono text-[10px] text-gray-500">{item.skuCode}</p>}
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 text-sm">
+                            {orderQty}
+                          </td>
+                          <td className="p-3 text-center bg-emerald-50/40 dark:bg-emerald-950/20">
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max={orderQty}
+                                value={sendQty === undefined ? '' : sendQty}
+                                onChange={(e) => handleItemDispatchedChange(idx, e.target.value)}
+                                onBlur={() => handleBlurDispatched(idx)}
+                                placeholder="0"
+                                className="w-20 text-center font-black font-mono text-sm text-emerald-600 dark:text-emerald-400 bg-white dark:bg-boxdark border-2 border-emerald-400 rounded-lg p-1.5 shadow-sm outline-none focus:ring-2 focus:ring-emerald-400"
+                              />
+                            </div>
+                          </td>
+                          <td className="p-3 text-center bg-amber-50/40 dark:bg-amber-950/20 font-mono">
+                            {holdQty > 0 ? (
+                              <span className="inline-flex px-2.5 py-1 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-bold border border-amber-300 dark:border-amber-700">
+                                {holdQty} Hold
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">0 (All Sent)</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Transit Logistics & Freight Settlement Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-meta-4/10 p-3.5 rounded-xl border border-stroke dark:border-strokedark">
+                
+                {/* Searchable Transportation Carrier Dropdown */}
+                <div className="relative">
+                  <label className="block font-bold text-black dark:text-white mb-1">
+                    Logistics / Transportation Service:
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={isTransportDropdownOpen ? approvalTransportSearch : approvalTransportName}
+                      onFocus={() => {
+                        setIsTransportDropdownOpen(true);
+                        setApprovalTransportSearch('');
+                      }}
+                      onChange={(e) => {
+                        setApprovalTransportSearch(e.target.value);
+                        setApprovalTransportName(e.target.value);
+                      }}
+                      placeholder="Search Carrier (e.g. TCS, Leopards, Customer Truck)..."
+                      className="w-full p-2.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark font-bold text-xs outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    {isTransportDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 divide-y divide-stroke dark:divide-strokedark">
+                        {['No Transport (Handover)', 'Customer\'s Own Transport', ...transportList.map(t => t.name)]
+                          .filter((name, i, arr) => arr.indexOf(name) === i)
+                          .filter(name => name.toLowerCase().includes(approvalTransportSearch.toLowerCase()))
+                          .map((name, tIdx) => {
+                            const match = transportList.find(t => t.name === name);
+                            return (
+                              <div
+                                key={tIdx}
+                                onMouseDown={() => {
+                                  setApprovalTransportName(name);
+                                  if (match) {
+                                    if (match.vehicle_number) setApprovalVehicle(match.vehicle_number);
+                                    if (match.driver_name) setApprovalDriver(match.driver_name);
+                                    if (match.base_charges) setApprovalFreightCharges(Number(match.base_charges));
+                                  } else {
+                                    setApprovalFreightCharges(0);
+                                  }
+                                  setIsTransportDropdownOpen(false);
+                                }}
+                                className="p-2 hover:bg-emerald-50 dark:hover:bg-meta-4/20 cursor-pointer flex justify-between items-center text-xs"
+                              >
+                                <span className="font-bold text-black dark:text-white">{name}</span>
+                                {match && match.base_charges ? (
+                                  <span className="font-mono text-[10px] text-emerald-600 font-black">Base: Rs. {Number(match.base_charges).toLocaleString()}</span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400">Direct Handover</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Freight Charges Amount (Submitted for Cashier/Salesman Approval) */}
+                <div>
+                  <label className="block font-bold text-black dark:text-white mb-1">
+                    Freight / Bilty Charges (PKR):
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={approvalFreightCharges}
+                    onChange={(e) => setApprovalFreightCharges(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                    onBlur={() => {
+                      if (approvalFreightCharges === '' || isNaN(Number(approvalFreightCharges))) {
+                        setApprovalFreightCharges(0);
+                      }
+                    }}
+                    placeholder="0"
+                    className="w-full p-2.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark font-black font-mono text-emerald-600 text-xs outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Submitted for Admin/Salesman verification & settlement approval</p>
+                </div>
+
+              </div>
+
+              {/* Transit & Vehicle Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-black dark:text-white mb-1">Vehicle No / Truck Plate #</label>
+                  <input
+                    type="text"
+                    value={approvalVehicle}
+                    onChange={(e) => setApprovalVehicle(e.target.value)}
+                    placeholder="e.g. LES-1122 or By Hand"
+                    className="w-full p-2.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark font-bold text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-black dark:text-white mb-1">Driver Name / Carrier Contact</label>
+                  <input
+                    type="text"
+                    value={approvalDriver}
+                    onChange={(e) => setApprovalDriver(e.target.value)}
+                    placeholder="e.g. Muhammad Ali / 0300-1234567"
+                    className="w-full p-2.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark font-bold text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-black dark:text-white mb-1">Dispatch Annotations / Gate Remarks</label>
+                <input
+                  type="text"
+                  value={approvalRemarks}
+                  onChange={(e) => setApprovalRemarks(e.target.value)}
+                  placeholder="e.g. 5 boxes loaded on truck, 5 boxes to follow tomorrow."
+                  className="w-full p-2.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark font-medium text-xs"
+                />
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center p-5 bg-slate-50 dark:bg-slate-800/80 border-t border-stroke dark:border-strokedark">
+              <button
+                onClick={() => setSelectedChallanForApproval(null)}
+                className="px-5 py-2.5 rounded-lg border border-stroke font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitWarehouseApproval}
+                disabled={isSubmittingApproval}
+                className="px-6 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition cursor-pointer"
+              >
+                {isSubmittingApproval ? <Spinner /> : <><FiCheckCircle /> Confirm & Approve Dispatch</>}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Top Header Controls row */}
       <div className="flex justify-between items-center mb-6">
-        <h4 className="text-xl font-semibold text-black dark:text-white">Delivery Challan / Gate Pass Registry</h4>
+        <div>
+          <h4 className="text-xl font-semibold text-black dark:text-white">Delivery Challan / Gate Pass Registry</h4>
+          <p className="text-xs text-gray-500 mt-0.5">Authorize, dispatch, and track warehouse goods gate-pass fulfillment</p>
+        </div>
         <button
           onClick={() => navigate('/Delivery-Challan/Details')}
           className="bg-primary text-white py-2 px-4 rounded text-sm font-medium hover:bg-opacity-90 transition shadow-sm"
@@ -97,7 +666,7 @@ const DeliveryChallanHistory = () => {
               <option key={size} value={size} className="dark:bg-boxdark">{size}</option>
             ))}
           </select>
-          <span>entries</span>
+          <span>invoices</span>
         </div>
 
         <div className="flex items-center gap-2 text-sm w-full sm:w-auto text-gray-500 dark:text-gray-400">
@@ -106,86 +675,198 @@ const DeliveryChallanHistory = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search challans, vehicle..."
+            placeholder="Search invoice, customer, challan..."
             className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none focus:border-primary text-sm text-black dark:text-white"
           />
         </div>
       </div>
 
-      {/* Core Table Layout Grid context */}
-      <div className="max-w-full overflow-x-auto">
-        <table className="w-full table-auto border-collapse">
-          <thead>
-            <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm w-16">S#</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm">Challan / Date</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm">Customer</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm">Vehicle / Driver</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm">Status</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm text-center w-36">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="py-12 text-center"><Spinner /></td></tr>
-            ) : paginatedChallans.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400">No matching transit record entries found.</td></tr>
-            ) : (
-              paginatedChallans.map((c, idx) => {
-                const serialNumber = startIndex + idx + 1;
-
-                return (
-                  <tr key={c.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150">
-                    <td className="py-3.5 px-4 text-sm text-black dark:text-white">{serialNumber}</td>
-                    <td className="py-3.5 px-4 text-sm">
-                      <p className="font-bold text-primary dark:text-white">{c.challan_no || `DC-${c.id}`}</p>
-                      <p className="text-xs text-gray-500">{new Date(c.created_at).toLocaleDateString()}</p>
-                    </td>
-                    <td className="py-3.5 px-4 text-sm font-medium text-black dark:text-white">
-                      {c.customer_name}
-                    </td>
-                    <td className="py-3.5 px-4 text-sm">
-                      <p className="text-black dark:text-white font-medium">{c.vehicle_no || 'N/A'}</p>
-                      <p className="text-xs text-gray-500">{c.driver_name || 'No Driver Set'}</p>
-                    </td>
-                    <td className="py-3.5 px-4 text-sm">
-                      <span className={`inline-flex rounded-full py-1 px-3 text-xs font-semibold ${
-                        c.status === 'Dispatched' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
-                      }`}>
-                        {c.status || 'Draft'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-sm">
-                      <div className="flex items-center justify-center space-x-3">
-                        <button
-                          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/Print/${c.id}`)}
-                          className="text-gray-500 hover:text-secondary transition p-0.5"
-                          title="Print Gate Pass Receipt"
-                        >
-                          <MdPrint size={18} />
-                        </button>
-                        <button
-                          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/Details`, { state: { challan: c } })}
-                          className="text-gray-500 hover:text-primary transition p-0.5"
-                          title="Edit Document"
-                        >
-                          <MdEdit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(c.id)}
-                          className="text-gray-500 hover:text-danger transition p-0.5"
-                          title="Delete Record"
-                        >
-                          <MdDelete size={18} />
-                        </button>
+      {/* Core Table Layout: Grouped by Invoice with Nested Sub-Challan Entries */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="py-12 text-center bg-white dark:bg-boxdark rounded-xl border border-stroke"><Spinner /></div>
+        ) : paginatedInvoices.length === 0 ? (
+          <div className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-boxdark rounded-xl border border-stroke">No matching transit record entries found.</div>
+        ) : (
+          paginatedInvoices.map((group, groupIdx) => {
+            return (
+              <div key={groupIdx} className="border border-stroke dark:border-strokedark rounded-xl overflow-hidden shadow-xs bg-white dark:bg-boxdark">
+                
+                {/* ── PARENT HEADER ENTRY: INVOICE & CUSTOMER METADATA ── */}
+                <div className="bg-slate-50 dark:bg-meta-4/30 p-4 border-b border-stroke dark:border-strokedark flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                      {startIndex + groupIdx + 1}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-black text-rose-600 dark:text-rose-400">
+                          {group.invoice_no}
+                        </span>
+                        <span className="text-xs text-gray-400">•</span>
+                        <span className="text-sm font-bold text-black dark:text-white">
+                          {group.customer_name}
+                        </span>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Dispatch Source: <span className="font-semibold text-slate-700 dark:text-slate-300">{group.dispatch_warehouse}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Summary Badges */}
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 font-mono text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700">
+                      Total Order: {group.totalOrdered}
+                    </span>
+                    <span className="px-2.5 py-1 rounded bg-emerald-50 dark:bg-emerald-950/40 font-mono text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
+                      Dispatched: {group.totalDispatched}
+                    </span>
+                    {group.totalHold > 0 && (
+                      <span className="px-2.5 py-1 rounded bg-amber-50 dark:bg-amber-950/40 font-mono text-amber-700 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800">
+                        Remaining Hold: {group.totalHold}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── SUB-ENTRIES: ALL DELIVERY CHALLANS LINKED TO THIS INVOICE ── */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100/70 dark:bg-meta-4/10 text-[10px] font-black uppercase tracking-wider text-slate-500 border-b border-stroke dark:border-strokedark">
+                        <th className="py-2.5 px-4 w-32">Challan / Gate Pass #</th>
+                        <th className="py-2.5 px-4">Vehicle / Driver Details</th>
+                        <th className="py-2.5 px-4">Items / Breakdown</th>
+                        <th className="py-2.5 px-4 text-center w-28">Status</th>
+                        <th className="py-2.5 px-4 text-right pr-6 w-56">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                      {group.challans.map((c: any) => {
+                        const challanCode = c.challan_no || `DC-${String(c.id).padStart(4, '0')}`;
+                        const totalHoldUnits = (c.items || []).reduce((acc: number, item: any) => acc + (Number(item.holdQty) || 0), 0);
+                        const totalDispatchedUnits = (c.items || []).reduce((acc: number, item: any) => acc + (Number(item.dispatchedQty) || 0), 0);
+                        
+                        const isPending = c.status === 'Pending Approval';
+                        const isPartial = c.status === 'Partially Dispatched';
+                        const isDispatched = c.status === 'Dispatched' || c.status === 'Fully Dispatched';
+
+                        // "Send Rest" only appears IF the challan was actually approved & has hold units
+                        const canSendRest = isPartial && totalHoldUnits > 0 && !isPending;
+
+                        return (
+                          <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+                            <td className="py-3 px-4 font-mono">
+                              <p className="font-bold text-primary dark:text-primary text-xs">{challanCode}</p>
+                              <p className="text-[10px] text-gray-500">{c.challan_date || (c.created_at ? new Date(c.created_at).toLocaleDateString() : '-')}</p>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <p className="font-bold text-black dark:text-white">{c.vehicle_no || 'Pending Dispatch'}</p>
+                              <p className="text-[10px] text-gray-500">{c.driver_name ? `Driver: ${c.driver_name}` : (c.transportation || 'By Road Transport')}</p>
+                            </td>
+
+                            <td className="py-3 px-4">
+                              <div className="space-y-1">
+                                {(c.items || []).map((i: any, itemIdx: number) => {
+                                  const ord = Number(i.orderQty ?? i.qty ?? 0);
+                                  const disp = Number(i.dispatchedQty ?? 0);
+                                  const hld = Number(i.holdQty ?? 0);
+
+                                  return (
+                                    <div key={itemIdx} className="flex items-center gap-2">
+                                      <span className="font-medium text-slate-800 dark:text-slate-200">{i.pDescription}:</span>
+                                      {isPending ? (
+                                        <span className="font-mono text-gray-500">{ord} Ordered (Pending Inspection)</span>
+                                      ) : (
+                                        <span className="font-mono text-xs">
+                                          <strong className="text-emerald-600 dark:text-emerald-400">{disp} Sent</strong>
+                                          {hld > 0 && <span className="text-amber-600 dark:text-amber-400 ml-1.5">({hld} on Hold)</span>}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4 text-center">
+                              {isPending && (
+                                <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800">
+                                  <FiClock /> Pending
+                                </span>
+                              )}
+                              {isPartial && (
+                                <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
+                                  <FiAlertCircle /> Partial ({totalHoldUnits} Hold)
+                                </span>
+                              )}
+                              {isDispatched && (
+                                <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                                  <FiCheckCircle /> Dispatched
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 text-right pr-6">
+                              <div className="flex items-center justify-end gap-2">
+                                {/* APPROVE BUTTON */}
+                                <button
+                                  type="button"
+                                  onClick={() => openApprovalModal(c)}
+                                  className={`inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold text-white shadow-xs transition duration-150 cursor-pointer ${
+                                    isPending ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800'
+                                  }`}
+                                >
+                                  <FiTruck size={12} /> {isPending ? 'Approve Items' : 'Edit Dispatch'}
+                                </button>
+
+                                {/* SEND REST BUTTON (Only shown when partially dispatched with remaining hold items) */}
+                                {canSendRest && (
+                                  <button
+                                    type="button"
+                                    onClick={() => createSubsequentHoldChallan(c)}
+                                    title={`Create new DC for remaining ${totalHoldUnits} hold items`}
+                                    className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition duration-150 cursor-pointer"
+                                  >
+                                    <FiPlusCircle size={12} /> Send Rest ({totalHoldUnits})
+                                  </button>
+                                )}
+
+                                {/* PRINT GATE PASS */}
+                                {isPending ? (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600 border border-slate-200 dark:border-slate-800 cursor-not-allowed opacity-60"
+                                    title="Approve items first to enable printing of Official Gate Pass"
+                                  >
+                                    🔒 Print Locked
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/Print/${c.id}`)}
+                                    className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 transition shadow-xs cursor-pointer"
+                                    title="Print Official Gate Pass / Delivery Voucher"
+                                  >
+                                    🖨️ Print Gate Pass
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Footer statistics logic pagination arrays mapping */}
@@ -224,7 +905,6 @@ const DeliveryChallanHistory = () => {
           </div>
         )}
       </div>
-
     </div>
   );
 };

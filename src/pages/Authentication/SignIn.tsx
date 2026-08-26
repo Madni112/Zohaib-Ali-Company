@@ -55,17 +55,21 @@ const SignIn: React.FC = () => {
   });
 
   return (
-    <div className="rounded-sm dark:border-strokedark dark:bg-boxdark h-screen flex flex-col font-sans">
-      {/* Navbar */}
-      <header className="w-full bg-white dark:bg-boxdark drop-shadow-1">
-        <div className="flex items-center justify-between px-4 py-4 md:px-6 2xl:px-11">
-          <div className="flex items-center gap-4">
-            <img className="hidden dark:block h-10 w-auto object-contain" src={IconDark} alt="NHT Logo" />
-            <img className="block dark:hidden h-10 w-auto object-contain" src={IconLight} alt="NHT Logo" />
-            <div className="flex items-center gap-1">
-              <h1 className="text-lg font-extrabold text-blue-600"> NOOR <span className="text-black dark:text-gray-300">HORIZON</span></h1>
-              <span className="text-sm text-blue-600 font-bold"> <span className="text-black dark:text-gray-300">TECHNOLOGIES</span></span>
-              <span className="text-xs text-blue-600 font-bold">ERP</span>
+    <div className="bg-[#F8FAFC] dark:bg-[#070A10] min-h-screen flex flex-col font-sans selection:bg-emerald-600 selection:text-white relative overflow-hidden">
+      {/* Ambient background light meshes */}
+      <div className="pointer-events-none absolute top-[-10%] left-[20%] w-[500px] h-[400px] bg-emerald-500/10 dark:bg-emerald-600/15 rounded-full blur-[130px]" />
+      <div className="pointer-events-none absolute bottom-[-10%] right-[15%] w-[450px] h-[350px] bg-teal-500/10 dark:bg-teal-600/10 rounded-full blur-[120px]" />
+
+      {/* Header Bar */}
+      <header className="w-full backdrop-blur-md bg-white/90 dark:bg-[#0B0F17]/90 border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-50">
+        <div className="flex items-center justify-between px-4 py-3.5 md:px-6 2xl:px-11 max-w-7xl mx-auto w-full">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-black text-sm shadow-md shadow-emerald-600/20 border border-emerald-400/30">
+              Z
+            </div>
+            <div className="flex items-center gap-1.5 leading-tight">
+              <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">ZOHAIB ALI</span>
+              <span className="text-base font-extrabold text-slate-800 dark:text-slate-100">& COMPANY</span>
             </div>
           </div>
           <ul className="flex items-center gap-2 m-0 list-none">
@@ -75,26 +79,21 @@ const SignIn: React.FC = () => {
       </header>
 
       {/* Main Content: Direct Sign In Form */}
-      <div className="flex flex-1 justify-center items-center bg-gray-50 dark:bg-boxdark-2 p-4">
-        <div className="w-full max-w-md bg-white dark:bg-boxdark rounded-2xl shadow-default dark:border-strokedark border border-stroke p-8 sm:p-10">
+      <div className="flex flex-1 justify-center items-center p-4 sm:p-6 relative z-10">
+        <div className="w-full max-w-md bg-white dark:bg-[#0F1622] rounded-3xl shadow-xl border border-slate-200/80 dark:border-slate-800 p-8 sm:p-10 backdrop-blur-md">
           
-          <div className="text-center mb-6">
-            {activeTenantSlug && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-meta-4/40 text-primary text-xs font-bold rounded-full mb-3 border border-blue-200 dark:border-strokedark">
-                <MdLockOutline /> Protected Portal: <span className="uppercase text-blue-700 dark:text-blue-300">{activeTenantSlug}</span>
-              </div>
-            )}
-            <h2 className="text-2xl font-bold text-black dark:text-white">
-              Sign In
+          <div className="text-center mb-7">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              Sign In to Your Account
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Enter your authorized email and password to access the ERP.
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+              Enterprise Employee Business Management System
             </p>
           </div>
 
           {/* Display Auth Errors */}
           {authError && (
-            <div className="mb-5 p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-medium text-center">
+            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold text-center">
               {authError}
             </div>
           )}
@@ -102,57 +101,61 @@ const SignIn: React.FC = () => {
           <form onSubmit={formik.handleSubmit} className="space-y-4">
             {/* Email Input */}
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-black dark:text-white">Email Address</label>
+              <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">Email Address</label>
               <input
                 type="email"
                 id="email"
                 name="email"
                 required
-                placeholder="Enter your email"
-                className={`w-full rounded-lg border bg-transparent py-3 px-4 text-sm text-black outline-none focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white ${
-                  formik.touched.email && formik.errors.email ? 'border-red-500' : 'border-stroke'
+                placeholder="e.g. admin@company.com"
+                className={`w-full rounded-xl border bg-slate-50/50 dark:bg-slate-900/80 py-3 px-4 text-xs text-slate-800 dark:text-slate-100 outline-none transition duration-150 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 ${
+                  formik.touched.email && formik.errors.email ? 'border-rose-500' : 'border-slate-200'
                 }`}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
                 value={formik.values.email}
               />
               {formik.touched.email && formik.errors.email && (
-                <p className="text-red-500 text-xs mt-1">{formik.errors.email}</p>
+                <p className="text-rose-500 text-xs mt-1 font-medium">{formik.errors.email}</p>
               )}
             </div>
 
             {/* Password Input */}
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-black dark:text-white">Password</label>
+              <label className="mb-1.5 block text-xs font-bold text-slate-700 dark:text-slate-200">Password</label>
               <input
                 id="password"
                 name="password"
                 type="password"
                 required
-                placeholder="Enter your password"
-                className={`w-full rounded-lg border bg-transparent py-3 px-4 text-sm text-black outline-none focus:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white ${
-                  formik.touched.password && formik.errors.password ? 'border-red-500' : 'border-stroke'
+                placeholder="Enter password"
+                className={`w-full rounded-xl border bg-slate-50/50 dark:bg-slate-900/80 py-3 px-4 text-xs text-slate-800 dark:text-slate-100 outline-none transition duration-150 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 ${
+                  formik.touched.password && formik.errors.password ? 'border-rose-500' : 'border-slate-200'
                 }`}
                 onChange={formik.handleChange}
                 onBlur={formik.handleBlur}
                 value={formik.values.password}
               />
               {formik.touched.password && formik.errors.password && (
-                <p className="text-red-500 text-xs mt-1">{formik.errors.password}</p>
+                <p className="text-rose-500 text-xs mt-1 font-medium">{formik.errors.password}</p>
               )}
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              className={`w-full cursor-pointer rounded-lg border p-3.5 text-sm font-bold text-white transition hover:bg-opacity-90 mt-2 ${
-                loading ? 'bg-primary/80 border-primary/80 cursor-not-allowed' : 'bg-primary border-primary'
+              className={`w-full cursor-pointer rounded-xl p-3.5 text-xs font-extrabold text-white transition-all duration-200 shadow-md hover:shadow-lg mt-3 flex items-center justify-center ${
+                loading ? 'bg-emerald-600/70 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
               }`}
               disabled={loading}
             >
               {loading ? <Spinner /> : 'Sign In'}
             </button>
           </form>
+
+          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] text-slate-400">
+            Encrypted End-to-End Enterprise Session
+          </div>
         </div>
       </div>
     </div>

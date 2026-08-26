@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdInventory } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
+import { MdInventory } from 'react-icons/md';
 
 const OpeningStockList = () => {
   const [stocks, setStocks] = useState<any[]>([]);
@@ -96,8 +97,8 @@ const OpeningStockList = () => {
               <th className="py-4 px-4 font-medium text-black dark:text-white">Item Details</th>
               <th className="py-4 px-4 font-medium text-black dark:text-white">Batch & Location</th>
               <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Qty</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-right">R.P / MRP</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-right">Total Amount</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white text-right">Unit Cost (PKR)</th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white text-right">Total Valuation</th>
               <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Opening Date</th>
               <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Expiry Date</th>
               <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Actions</th>
@@ -112,14 +113,15 @@ const OpeningStockList = () => {
               stocks.map((stock) => (
                 <tr key={stock.id} className="border-b border-[#eee] dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4/10 transition-colors">
                   <td className="py-5 px-4 font-mono text-xs font-bold text-textColor dark:text-white">
-                    {stock.stockNo || 'N/A'}
+                    {stock.stockNo || stock.stock_no || 'N/A'}
                   </td>
                   
                   <td className="py-5 px-4 font-medium text-black dark:text-white">
-                    {stock.itemName}
+                    <p className="font-semibold">{stock.itemName || stock.product_name}</p>
+                    {stock.skuCode && <p className="text-[11px] font-mono text-primary font-bold">{stock.skuCode}</p>}
                   </td>
                   <td className="py-5 px-4">
-                    <p className="font-mono text-xs text-gray-600 dark:text-bodydark">Batch: {stock.batchNumber}</p>
+                    <p className="font-mono text-xs text-gray-600 dark:text-bodydark">Batch: {stock.batchNumber || stock.batch_number || 'N/A'}</p>
                     <p className="text-xs text-primary font-semibold">Loc: {stock.location}</p>
                   </td>
                   
@@ -127,38 +129,27 @@ const OpeningStockList = () => {
                     {stock.qty || stock.quantity}
                   </td>
                   
-                  <td className="py-5 px-4 text-right">
-                    <p className="text-xs">RP: <span className="font-semibold text-gray-700 dark:text-white">Rs. {Number(stock.rp || 0).toFixed(2)}</span></p>
-                    <p className="text-xs">MRP: <span className="font-semibold text-gray-400">Rs. {Number(stock.mrp || 0).toFixed(2)}</span></p>
+                  <td className="py-5 px-4 text-right font-mono font-bold text-black dark:text-white">
+                    Rs. {Number(stock.purchase_price || stock.rate || stock.rp || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   
-                  <td className="py-5 px-4 text-right font-extrabold text-success whitespace-nowrap">
-                    Rs. {Number(stock.amount || ((stock.qty || stock.quantity || 0) * (stock.rp || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <td className="py-5 px-4 text-right font-extrabold text-emerald-600 dark:text-emerald-400 font-mono whitespace-nowrap">
+                    Rs. {Number(stock.amount || stock.total_amount || ((stock.qty || stock.quantity || 0) * (stock.purchase_price || stock.rate || stock.rp || 0))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   <td className="py-5 px-4 text-center text-xs font-mono whitespace-nowrap text-gray-700 dark:text-bodydark">
-                    {stock.openingDate || 'N/A'}
+                    {stock.openingDate || stock.opening_date || 'N/A'}
                   </td>
                   <td className="py-5 px-4 text-center text-xs font-mono whitespace-nowrap text-danger font-medium">
-                    {stock.expiryDate || 'N/A'}
+                    {stock.expiryDate || stock.expiry_date || 'N/A'}
                   </td>
                   
-                  <td className="py-5 px-4">
-                    <div className="flex items-center justify-center space-x-3.5">
-                      <button 
-                        onClick={() => navigate('/Inventory/OpeningStock/Add', { state: { stock } })}
-                        className="hover:text-primary transition-colors text-gray-600 dark:text-bodydark"
-                        title="Modify Stock Values"
-                      >
-                        <MdEdit size={20} />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(stock.id)}
-                        className="hover:text-danger transition-colors text-gray-600 dark:text-bodydark"
-                        title="Remove Record"
-                      >
-                        <MdDelete size={20} />
-                      </button>
-                    </div>
+                  <td className="py-5 px-4 text-center">
+                    <TableActions
+                      onEdit={() => navigate('/Inventory/OpeningStock/Add', { state: { stock } })}
+                      onDelete={() => handleDelete(stock.id)}
+                      editTitle="Modify Stock Values"
+                      deleteTitle="Remove Record"
+                    />
                   </td>
                 </tr>
               ))

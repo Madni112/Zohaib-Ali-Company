@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
-import { MdDelete, MdAdd, MdEdit, MdClose } from 'react-icons/md';
+import TableActions from '../../ui/TableActions';
+import { MdAdd, MdEdit, MdDelete, MdClose } from 'react-icons/md';
 
 const Designations = () => {
   const [designations, setDesignations] = useState<any[]>([]);
@@ -139,9 +140,8 @@ const Designations = () => {
         </h2>
       </div>
 
-      {/* TOP ROW HORIZONTAL INPUT REGISTRATION FORM BLOCK */}
-      <div className={`rounded-sm border shadow-default p-5 transition duration-150
-        ${editingId ? 'border-primary bg-blue-50/10 dark:bg-meta-4/10' : 'border-stroke bg-white dark:border-strokedark dark:bg-boxdark'}`}>
+      <div className={`rounded-xl border shadow-xs p-5 transition duration-150
+        ${editingId ? 'border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-slate-200/80 bg-white dark:border-slate-800 dark:bg-boxdark'}`}>
         <form onSubmit={handleFormSubmit} className="flex flex-col md:flex-row items-end gap-4 text-xs">
           <div className="flex-1 w-full">
             <label className="block text-gray-500 mb-1.5 font-medium">
@@ -161,7 +161,7 @@ const Designations = () => {
               <button 
                 type="button" 
                 onClick={handleCancelEdit}
-                className="flex items-center justify-center gap-1 rounded bg-danger py-3 px-5 font-medium text-white hover:bg-opacity-90 transition text-xs shadow-sm h-[38px]"
+                className="flex items-center justify-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2.5 px-5 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer h-[38px]"
               >
                 <MdClose size={16} /> Cancel
               </button>
@@ -169,8 +169,7 @@ const Designations = () => {
             <button 
               type="submit" 
               disabled={submitting} 
-              className={`w-full md:w-auto flex items-center justify-center gap-1.5 rounded py-3 px-8 font-medium text-white hover:bg-opacity-90 transition text-xs shadow-sm h-[38px]
-                ${editingId ? 'bg-success' : 'bg-primary'}`}
+              className="w-full md:w-auto flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 px-8 font-bold text-white transition shadow-md text-xs cursor-pointer h-[38px] disabled:opacity-50"
             >
               {submitting ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -243,30 +242,17 @@ const Designations = () => {
 
                   return (
                     <tr key={item.id} className={`border-b duration-150 text-xs
-                      ${isCurrentRowEditing ? 'bg-blue-200/20 dark:bg-meta-4/80 font-bold border-primary' : 'border-stroke dark:border-strokedark'}`}>
+                      ${isCurrentRowEditing ? 'bg-emerald-50/30 dark:bg-emerald-950/30 font-bold border-emerald-500' : 'border-stroke dark:border-strokedark'}`}>
                       <td className="py-3.5 px-4 text-black dark:text-white font-medium">{serialNumber}</td>
                       <td className="py-3.5 px-4 text-black dark:text-white uppercase tracking-tight">{item.title}</td>
                       
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center justify-center space-x-4">
-                          <button 
-                            type="button"
-                            onClick={() => handleTriggerEdit(item)} 
-                            className="text-gray-500 hover:text-primary transition p-0.5" 
-                            title="Edit Record Title"
-                            disabled={isCurrentRowEditing}
-                          >
-                            <MdEdit size={18} />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleDeleteDesignation(item.id)} 
-                            className="text-gray-500 hover:text-danger transition p-0.5" 
-                            title="Delete Record"
-                          >
-                            <MdDelete size={18} />
-                          </button>
-                        </div>
+                      <td className="py-3.5 px-4 text-center">
+                        <TableActions
+                          onEdit={() => handleTriggerEdit(item)}
+                          onDelete={() => handleDeleteDesignation(item.id)}
+                          editTitle="Edit Designation"
+                          deleteTitle="Delete Designation"
+                        />
                       </td>
                     </tr>
                   );

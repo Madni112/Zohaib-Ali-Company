@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { MdEdit, MdDelete, MdEvent, MdPerson } from 'react-icons/md';
 
 const PurchaseReceiptList = () => {
@@ -140,31 +141,19 @@ const PurchaseReceiptList = () => {
                       <td className="py-3.5 px-4 font-mono font-black text-primary">{rcpt.voucher_no}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5"><MdPerson className="text-gray-400" size={16} />{venName}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${rcpt.voucher_type === 'Cash Payment Voucher' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${rcpt.voucher_type === 'Cash Payment Voucher' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60'}`}>
                           {vType}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center text-gray-500"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{rcpt.voucher_date}</span></td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-success pr-6" >Rs. {Number(rcpt.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-3.5">
-                          <button
-                            type="button"
-                            onClick={() => navigate('/Purchase/Purchase-Receipt/Add', { state: { receiptRecord: rcpt } })}
-                            className="text-gray-500 hover:text-primary transition duration-150 cursor-pointer"
-                            title="Edit Record"
-                          >
-                            <MdEdit size={18} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteReceiptRecord(rcpt.id)}
-                            className="text-gray-500 hover:text-danger transition duration-150 cursor-pointer"
-                            title="Delete Voucher"
-                          >
-                            <MdDelete size={18} />
-                          </button>
-                        </div>
+                        <TableActions
+                          onEdit={() => navigate('/Purchase/Purchase-Receipt/Add', { state: { receiptRecord: rcpt } })}
+                          onDelete={() => handleDeleteReceiptRecord(rcpt.id)}
+                          editTitle="Edit Payment Record"
+                          deleteTitle="Delete Voucher"
+                        />
                       </td>
                     </tr>
                   );

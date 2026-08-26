@@ -25,11 +25,16 @@ function AddPurchaseReceipt() {
     const fetchPaymentMetadata = async () => {
       try {
         setMetadataLoading(true);
-        const { data: vData } = await supabase.from('vendors').select('id, vendor_name').order('vendor_name', { ascending: true });
+        const { data: vData } = await supabase.from('vendors').select('*');
+        const normalizedVendors = (vData || []).map((v: any) => ({
+          id: v.id,
+          vendor_name: v.vendor_name || v.name || 'Unnamed Vendor'
+        })).sort((a: any, b: any) => a.vendor_name.localeCompare(b.vendor_name));
+
         const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
         const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
 
-        if (vData) setVendorOptions(vData);
+        setVendorOptions(normalizedVendors);
         if (bankData) setBankAccounts(bankData);
         if (coaData) setCoaAccounts(coaData);
 
@@ -275,20 +280,20 @@ function AddPurchaseReceipt() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t border-stroke dark:border-strokedark">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
                   <button 
                     type="button" 
                     onClick={() => navigate('/Purchase/Purchase-Receipt/List')} 
-                    className="rounded bg-[#cb3c53] py-2 px-8 font-semibold text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 min-w-32 cursor-pointer"
+                    className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit" 
                     disabled={loading || !localVendor} 
-                    className="rounded bg-primary py-2.5 px-10 font-bold text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 min-w-32 cursor-pointer font-semibold"
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                   >
-                    {loading ? <Spinner /> : isEditMode ? 'Update Receipt' : 'Record Receipt'}
+                    {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Receipt' : 'Record Receipt'}</span>}
                   </button>
                 </div>
               </Form>

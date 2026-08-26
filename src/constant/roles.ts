@@ -1,0 +1,147 @@
+export interface RolePreset {
+  name: string;
+  roleKey: string;
+  description: string;
+  icon: string;
+  modules: string[];
+}
+
+export const ROLE_PRESETS: Record<string, RolePreset> = {
+  'Super Admin': {
+    name: 'Super Admin / Owner',
+    roleKey: 'Super Admin',
+    description: 'Full unrestricted system access to all business modules, financial data, and controls.',
+    icon: '👑',
+    modules: [
+      'dashboard',
+      '/Administration/Categories/List',
+      '/Administration/Surface-Finish',
+      '/Administration/UOM/List',
+      '/Administration/Brands',
+      '/Administration/Products/List',
+      '/Administration/Locations/List',
+      '/Administration/Transportation/List',
+      '/Administration/StockTransfer/List',
+      '/company',
+      '/Registration/Chart-of-Account/List',
+      '/Registration/Vouchers/List',
+      '/Registration/Bank-Account/BankAccountList',
+      '/Inventory/OpeningStock/List',
+      '/sales/invoice/list',
+      '/Registration/InvoiceReceipt/List',
+      '/Sales-Return/Debit-Notes/List',
+      '/sales/sales-return-receipt/list',
+      '/Customers/list',
+      '/Salesman/list',
+      '/Delivery-Challan/List',
+      '/Purchase/Purchases/List',
+      '/Purchase/Purchase-Receipt/List',
+      '/Purchase/Purchase-Return/List',
+      '/Purchase/Purchase-Return-Receipt/List',
+      '/Purchase/Vendor/List',
+      '/Reports/Reports-Dashboard',
+      '/Reports/Sales-Report',
+      '/Reports/Purchase-Report',
+      '/Reports/Stock-Report',
+      '/Reports/Account-Report',
+      '/Reports/Balance-Sheet',
+    ],
+  },
+  'Warehouse Manager': {
+    name: 'Warehouse / Inventory Manager',
+    roleKey: 'Warehouse Manager',
+    description: 'Manages products, stock transfers, locations, opening stock, delivery challans, and stock reports.',
+    icon: '📦',
+    modules: [
+      'dashboard',
+      '/Administration/Categories/List',
+      '/Administration/Surface-Finish',
+      '/Administration/UOM/List',
+      '/Administration/Brands',
+      '/Administration/Products/List',
+      '/Administration/Locations/List',
+      '/Administration/Transportation/List',
+      '/Administration/StockTransfer/List',
+      '/Inventory/OpeningStock/List',
+      '/Delivery-Challan/List',
+      '/Reports/Reports-Dashboard',
+      '/Reports/Stock-Report',
+    ],
+  },
+  'Accountant': {
+    name: 'Accountant / Financial Officer',
+    roleKey: 'Accountant',
+    description: 'Manages chart of accounts, financial vouchers, bank accounts, receipts, balance sheet, and financial reports.',
+    icon: '📊',
+    modules: [
+      'dashboard',
+      '/Registration/Chart-of-Account/List',
+      '/Registration/Vouchers/List',
+      '/Registration/Bank-Account/BankAccountList',
+      '/Registration/InvoiceReceipt/List',
+      '/sales/sales-return-receipt/list',
+      '/Purchase/Purchase-Receipt/List',
+      '/Purchase/Purchase-Return-Receipt/List',
+      '/Reports/Reports-Dashboard',
+      '/Reports/Account-Report',
+      '/Reports/Balance-Sheet',
+    ],
+  },
+  'Cashier': {
+    name: 'Cashier / POS Operator',
+    roleKey: 'Cashier',
+    description: 'Handles day-to-day sales invoices, cash receipts, and customer payments.',
+    icon: '💵',
+    modules: [
+      'dashboard',
+      '/sales/invoice/list',
+      '/Registration/InvoiceReceipt/List',
+      '/Customers/list',
+      '/Registration/Vouchers/List',
+      '/Reports/Sales-Report',
+    ],
+  },
+  'Sales Manager': {
+    name: 'Sales Executive / Manager',
+    roleKey: 'Sales Manager',
+    description: 'Oversees sales invoicing, delivery challans, sales returns, customers, and salesmen performance.',
+    icon: '🤝',
+    modules: [
+      'dashboard',
+      '/sales/invoice/list',
+      '/Registration/InvoiceReceipt/List',
+      '/Sales-Return/Debit-Notes/List',
+      '/sales/sales-return-receipt/list',
+      '/Customers/list',
+      '/Salesman/list',
+      '/Delivery-Challan/List',
+      '/Reports/Reports-Dashboard',
+      '/Reports/Sales-Report',
+    ],
+  },
+  'Purchase Manager': {
+    name: 'Purchase Officer / Manager',
+    roleKey: 'Purchase Manager',
+    description: 'Handles purchase orders, vendor registrations, purchase returns, and supplier receipts.',
+    icon: '🛒',
+    modules: [
+      'dashboard',
+      '/Purchase/Purchases/List',
+      '/Purchase/Purchase-Receipt/List',
+      '/Purchase/Purchase-Return/List',
+      '/Purchase/Purchase-Return-Receipt/List',
+      '/Purchase/Vendor/List',
+      '/Reports/Reports-Dashboard',
+      '/Reports/Purchase-Report',
+    ],
+  },
+};
+
+export const getModulesForRole = (role: string): string[] => {
+  const preset = ROLE_PRESETS[role];
+  if (preset) return preset.modules;
+  if (role && role.toLowerCase().includes('admin')) {
+    return ROLE_PRESETS['Super Admin'].modules;
+  }
+  return ROLE_PRESETS['Super Admin'].modules;
+};

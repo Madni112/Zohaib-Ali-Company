@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdDelete, MdEdit } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
 import { recalculateInvoiceSettlementStatus } from '../../../service/financialCalculations';
 
@@ -160,7 +160,7 @@ function InvoiceReceiptList() {
                       <td className="py-3.5 px-4 font-mono font-bold text-primary tracking-wide">{r.voucher_no}</td>
                       <td className="py-3.5 px-4 font-bold text-gray-600 dark:text-gray-400">{r.original_invoice_no ? `INV-${String(r.original_invoice_no).padStart(4, '0')}` : '-'}</td>
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex px-2 py-0.5 rounded font-bold uppercase text-[10px] ${r.voucher_type === 'Cash Receipt Voucher' ? 'bg-success/10 text-success' : 'bg-blue-50 dark:bg-blue-950/40 text-primary'}`}>
+                        <span className={`inline-flex px-2 py-0.5 rounded font-bold uppercase text-[10px] ${r.voucher_type === 'Cash Receipt Voucher' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60' : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60'}`}>
                           {r.voucher_type === 'Cash Receipt Voucher' ? 'Cash Box' : 'Bank Wire'}
                         </span>
                       </td>
@@ -168,15 +168,14 @@ function InvoiceReceiptList() {
                       <td className="py-3.5 px-4 text-right font-bold text-success font-mono">Rs. {Number(r.total_amount || 0).toFixed(2)}</td>
                       <td className="py-3.5 px-4 text-center text-gray-500 font-medium whitespace-nowrap">{r.voucher_date}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-3">
-                          <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/Add`, { state: { receipt: r } })} className="text-gray-500 hover:text-primary transition p-0.5 cursor-pointer" title="Modify Receipt Details" >
-                            <MdEdit size={16} />
-                          </button>
-                          <button type="button" onClick={() => handleDeleteReceipt(r.id)} className="text-gray-500 hover:text-danger transition p-0.5 cursor-pointer" title="Delete Receipt Record" >
-                            <MdDelete size={16} />
-                          </button>
-                        </div>
-
+                        <TableActions
+                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/Print/${r.id}`)}
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/Add`, { state: { receipt: r } })}
+                          onDelete={() => handleDeleteReceipt(r.id)}
+                          printTitle="Print Receipt Voucher"
+                          editTitle="Modify Receipt"
+                          deleteTitle="Delete Receipt"
+                        />
                       </td>
                     </tr>
                   );

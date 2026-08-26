@@ -26,14 +26,14 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath }: any) 
         onMouseEnter={() => setShowSubFlyout(true)}
         onMouseLeave={() => setShowSubFlyout(false)}
       >
-        <div className="flex items-center justify-between gap-2 rounded px-3 py-1.5 text-xs font-medium duration-150 hover:bg-gray-100 dark:hover:bg-meta-4 text-textColor dark:text-white cursor-pointer pr-6">
+        <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs font-medium duration-150 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer pr-4">
           <span className="truncate">{item.label}</span>
-          <AiOutlineRight size={10} className="shrink-0 text-gray-400" />
+          <AiOutlineRight size={10} className="shrink-0 text-slate-400" />
         </div>
 
         {showSubFlyout && (
           <div
-            className="absolute left-full top-0 -ml-1.5 z-99999 w-52 rounded border border-stroke bg-white p-2 shadow-xl dark:border-strokedark dark:bg-boxdark"
+            className="absolute left-full top-0 -ml-1.5 z-99999 w-52 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 p-2 shadow-2xl backdrop-blur-md"
             style={{ animation: 'sidebarFlyoutFadeIn 0.15s ease-out forwards' }}
           >
             <div className="absolute top-0 -left-3 w-3 h-full bg-transparent" />
@@ -55,14 +55,17 @@ const FlyoutSubMenu = ({ item, pathname, handleLinkClick, getTenantPath }: any) 
   }
 
   const destination = (item.path && getTenantPath ? getTenantPath(item.path) : item.path) || '#';
+  const isActive = pathname === destination || pathname === item.path;
 
   return (
     <li>
       <NavLink
         to={destination}
         onClick={handleLinkClick}
-        className={`flex items-center gap-2 rounded px-3 py-1.5 text-xs font-medium duration-150 hover:bg-gray-100 dark:hover:bg-meta-4 ${
-          pathname === destination || pathname === item.path ? 'text-primary bg-gray-50' : 'text-textColor dark:text-white'
+        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium duration-150 ${
+          isActive
+            ? 'text-emerald-600 bg-emerald-50/80 dark:bg-emerald-500/15 dark:text-emerald-400 font-semibold'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
         }`}
       >
         {item.label}
@@ -101,11 +104,8 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
     });
   };
 
-
   const itemDestination = item?.path && getTenantPath ? getTenantPath(item.path) : (item?.path || '');
   const isChildActive = checkHasActiveChild(item) || Boolean(item?.path && (pathname === item.path || pathname === itemDestination));
-
-
 
   // Local toggle state initializes accurately based on the active path to support hard refreshes
   const [open, setOpen] = useState(isChildActive);
@@ -116,7 +116,7 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // FIXED: Sync active route ONLY when pathname changes, breaking the infinite looping crash
+  // Sync active route ONLY when pathname changes
   useEffect(() => {
     if (isChildActive) {
       setOpen(true);
@@ -124,7 +124,7 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
     }
   }, [pathname, isChildActive, depth, menuUniqueKey, setOpenMenuId]);
 
-  // FIXED: Closes other parent groups if a completely different parent node section is selected
+  // Closes other parent groups if a completely different parent node section is selected
   useEffect(() => {
     if (depth === 0 && openMenuId !== menuUniqueKey && !isChildActive) {
       setOpen(false);
@@ -150,21 +150,6 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
     }
   };
 
-  const checkIsItemLinkHighlighted = () => {
-    if (pathname === item.path) return true;
-
-    if (item.path && item.path.includes('/')) {
-      const segments = item.path.split('/');
-      if (segments.length >= 3) {
-        const baseFolder = segments[2].toLowerCase();
-        return pathname.toLowerCase().includes(`/${baseFolder}/`);
-      }
-    }
-    return false;
-  };
-
-  const isHighlighted = checkIsItemLinkHighlighted();
-
   if (item.children) {
     return (
       <div
@@ -178,13 +163,14 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
             <>
               <NavLink
                 to="#"
-                className={`group relative flex items-center rounded-sm py-2.5 font-medium duration-300 ease-in-out hover:bg-gray-100 dark:hover:bg-meta-4 ${isChildActive && shouldShowLabels ? 'text-blue-800 dark:text-primary bg-gray-50 dark:bg-transparent' : 'text-textColor dark:text-white'
-                  } ${shouldShowLabels ? 'px-4 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
-                style={{ paddingLeft: shouldShowLabels ? `${(depth + 1) * 1}rem` : undefined }}
+                className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${
+                  isChildActive && shouldShowLabels
+                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-500/15 font-semibold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
+                } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
+                style={{ paddingLeft: shouldShowLabels ? `${(depth + 1) * 0.85}rem` : undefined }}
                 onClick={(e) => {
                   e.preventDefault();
-
-                  // Gives back full, immediate manual toggle control to the user's mouse clicks!
                   const nextState = !open;
                   setOpen(nextState);
                   if (nextState && depth === 0) {
@@ -192,27 +178,26 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
                   } else if (!nextState && depth === 0 && openMenuId === menuUniqueKey) {
                     setOpenMenuId(null);
                   }
-
                   handleClick();
                 }}
               >
-                {item.icon && <item.icon className="text-xl shrink-0" />}
+                {item.icon && <item.icon className={`text-lg shrink-0 ${isChildActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`} />}
                 {shouldShowLabels && (
                   <>
-                    <span className="text-xs font-semibold uppercase tracking-wide ml-2 whitespace-nowrap overflow-hidden text-ellipsis flex flex-col gap-1">
+                    <span className="text-xs font-medium ml-2.5 whitespace-nowrap overflow-hidden text-ellipsis flex flex-col gap-1 tracking-wide">
                       {item.label}
                     </span>
-                    <span className="ml-auto">
-                      {open ? <AiOutlineUp size={12} /> : <AiOutlineDown size={12} />}
+                    <span className="ml-auto text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-transform duration-200">
+                      {open ? <AiOutlineUp size={11} /> : <AiOutlineDown size={11} />}
                     </span>
                   </>
                 )}
               </NavLink>
 
-              {/* SMOOTH ANIMATION COLLAPSE DRAWER */}
+              {/* Collapsible Sub-item Drawer */}
               {shouldShowLabels && (
                 <div
-                  className="transition-all duration-300 ease-in-out overflow-hidden transform"
+                  className="transition-all duration-300 ease-in-out overflow-hidden transform pl-3 ml-2 border-l border-slate-200/80 dark:border-slate-800"
                   style={{
                     maxHeight: open ? '1000px' : '0px',
                     opacity: open ? '100' : '0',
@@ -221,7 +206,7 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
                     pointerEvents: open ? 'auto' : 'none'
                   }}
                 >
-                  <ul className="flex flex-col gap-1">
+                  <ul className="flex flex-col gap-1 py-1">
                     {item.children.map((child: any, idx: number) => (
                       <SidebarItem
                         key={idx}
@@ -246,7 +231,7 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
 
         {!sidebarOpen && showFlyout && !isMobile && (
           <div
-            className="fixed left-[56px] z-99999 w-52 rounded border border-stroke bg-white p-2 shadow-xl dark:border-strokedark dark:bg-boxdark"
+            className="fixed left-[56px] z-99999 w-56 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-[#1E293B]/95 p-2.5 shadow-2xl backdrop-blur-md"
             style={{
               top: `${flyoutTop}px`,
               animation: 'sidebarFlyoutFadeIn 0.18s ease-out forwards'
@@ -258,7 +243,7 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
                 to { opacity: 1; transform: translateX(0); }
               }
             `}</style>
-            <div className="px-3 py-1 mb-1 border-b border-stroke dark:border-strokedark font-bold text-[10px] text-primary uppercase tracking-wider text-left">
+            <div className="px-3 py-1.5 mb-1.5 border-b border-slate-100 dark:border-slate-800 font-bold text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider text-left">
               {item.label}
             </div>
             <ul className="flex flex-col gap-1">
@@ -273,18 +258,21 @@ const SidebarItem = ({ item, pathname, depth = 0, sidebarOpen, setSidebarOpen, h
   }
 
   const singleDestination = (item.path && getTenantPath ? getTenantPath(item.path) : item.path) || '#';
+  const isDirectActive = item.path && (pathname === singleDestination || pathname === item.path);
 
   return (
     <li onClick={handleLinkClick} className="w-full" title={!shouldShowLabels ? item.label : undefined}>
       <NavLink
         to={singleDestination}
-        className={`group relative flex items-center rounded-sm py-2.5 font-medium duration-300 ease-in-out hover:bg-[#E0E5F2] dark:text-white dark:hover:bg-meta-4 ${
-          (item.path && (pathname === singleDestination || pathname === item.path)) ? 'text-blue-800 dark:text-primary bg-[#E0E5F2]/40 font-bold' : 'text-textColor'
-        } ${shouldShowLabels ? 'px-4 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
-        style={{ paddingLeft: shouldShowLabels ? `${(depth + 1) * 1.2}rem` : undefined }}
+        className={`group relative flex items-center rounded-xl py-2.5 font-medium duration-200 ease-in-out ${
+          isDirectActive
+            ? 'text-emerald-600 bg-emerald-50/80 dark:bg-emerald-500/15 dark:text-emerald-400 font-semibold shadow-xs'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
+        } ${shouldShowLabels ? 'px-3.5 justify-start' : 'justify-center mx-auto w-10 h-10 px-0'}`}
+        style={{ paddingLeft: shouldShowLabels ? `${(depth + 1) * 0.85}rem` : undefined }}
       >
-        {item.icon && <item.icon className="text-xl shrink-0" />}
-        {shouldShowLabels && <span className="text-sm ml-2 whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>}
+        {item.icon && <item.icon className={`text-lg shrink-0 ${isDirectActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`} />}
+        {shouldShowLabels && <span className="text-xs font-medium ml-2.5 whitespace-nowrap overflow-hidden text-ellipsis tracking-wide">{item.label}</span>}
       </NavLink>
     </li>
   );
@@ -311,9 +299,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
     return `${cleanPrefix}${cleanSub}`;
   };
 
-
-
-
   // Master tracking ID to determine which global branch header is clicked open
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -328,53 +313,59 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   return (
     <>
       {isMobile && sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-9999 backdrop-blur-xs transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-slate-900/60 z-9999 backdrop-blur-xs transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside ref={sidebar} className={`fixed left-0 top-0 z-99999 flex h-screen flex-col bg-white duration-300 ease-in-out dark:bg-boxdark shadow-2xl ${isMobile ? 'block' : 'min-[751px]:sticky min-[751px]:top-0'} ${sidebarOpen ? 'w-72.5 translate-x-0 border-r border-stroke dark:border-strokedark visible' : 'w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 min-[751px]:border-r min-[751px]:border-stroke min-[751px]:dark:border-strokedark max-[750px]:invisible'}`} >
+      <aside ref={sidebar} className={`fixed left-0 top-0 z-99999 flex h-screen flex-col bg-white duration-300 ease-in-out dark:bg-[#111827] shadow-xl ${isMobile ? 'block' : 'min-[751px]:sticky min-[751px]:top-0'} ${sidebarOpen ? 'w-72.5 translate-x-0 border-r border-slate-200/80 dark:border-slate-800/80 visible' : 'w-0 -translate-x-full min-[751px]:w-18 min-[751px]:translate-x-0 min-[751px]:border-r min-[751px]:border-slate-200/80 min-[751px]:dark:border-slate-800/80 max-[750px]:invisible'}`} >
 
-        <div className={`flex items-center justify-between gap-2 py-6 border-b border-stroke dark:border-strokedark min-h-[76px] duration-300 ${sidebarOpen ? 'px-6' : 'px-0 min-[751px]:px-2 justify-center'}`} >
+        {/* Brand Header */}
+        <div className={`flex items-center justify-between gap-2 py-5 border-b border-slate-200/80 dark:border-slate-800/80 min-h-[76px] duration-300 ${sidebarOpen ? 'px-6' : 'px-0 min-[751px]:px-2 justify-center'}`} >
           {(sidebarOpen || isMobile) ? (
             <div className="flex items-center justify-between w-full">
-              <NavLink className="flex items-center gap-1" to="/">
-                <img src={IconDark} alt="NHT Icon" className="hidden dark:block h-8 w-auto object-contain shrink-0" />
-                <img src={IconLight} alt="NHT Icon" className="block dark:hidden h-8 w-auto object-contain shrink-0" />
-                <p className="text-primary dark:text-white truncate block text-left tracking-tight leading-tight margin-right-4">
-                  <span className="text-lg font-extrabold text-blue-600">NOOR </span>
-                  <span className="text-lg font-extrabold text-black dark:text-gray-300">HORIZON</span>
-                  <br />
-                  <span className="text-sm text-blue-600 font-bold">TECHNOLOGIES</span> <br></br>
-                  <span className="text-xs text-blue-600 font-bold">ERP</span>
-                </p>
+              <NavLink className="flex items-center gap-3 group" to="/">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-black text-base shadow-md shadow-emerald-600/20 group-hover:scale-105 transition-transform duration-200 border border-emerald-400/30">
+                  Z
+                </div>
+                <div className="text-left">
+                  <div className="flex items-center gap-1 leading-tight">
+                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">ZOHAIB</span>
+                    <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">ALI</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider">& COMPANY</span>
+                  </div>
+                </div>
               </NavLink>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setSidebarOpen(false);
                 }}
-                className="p-2 hover:bg-gray-50 dark:hover:bg-meta-4/50 rounded-full text-gray-800 dark:text-gray-100 transition-colors"
-                title="Close Sidebar"
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                title="Collapse Sidebar"
               >
-                <AiOutlineArrowLeft size={20} className="stroke-current stroke-[40px]" />
+                <AiOutlineArrowLeft size={18} />
               </button>
             </div>
           ) : (
             <div
-              className="w-full flex justify-center cursor-pointer"
+              className="w-full flex justify-center cursor-pointer py-1"
               onClick={(e) => {
                 e.stopPropagation();
                 setSidebarOpen(true);
               }}
               title="Open Sidebar"
             >
-              <img src={IconDark} alt="NAM Icon" className="hidden dark:block h-7 w-auto object-contain mx-auto" />
-              <img src={IconLight} alt="NAM Icon" className="block dark:hidden h-7 w-auto object-contain mx-auto" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-black text-base shadow-md shadow-emerald-600/20 hover:scale-105 transition-transform duration-200 border border-emerald-400/30">
+                Z
+              </div>
             </div>
           )}
         </div>
 
+        {/* Navigation Section */}
         <div className="no-scrollbar flex flex-col overflow-y-auto overflow-x-hidden flex-1">
-          <nav className={`py-4 duration-300 ${sidebarOpen ? 'px-2' : 'px-0 min-[751px]:px-2'}`}>
+          <nav className={`py-4 duration-300 ${sidebarOpen ? 'px-3' : 'px-0 min-[751px]:px-2'}`}>
             <ul className="mb-6 flex flex-col gap-1.5 w-full">
               {roleRoutes
                 .filter((route: any) => !route.hideFromSidebar)
@@ -394,9 +385,13 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
 
                 ))
               }
-              <li className={`group relative flex items-center rounded-sm py-2.5 font-medium text-textColor duration-300 ease-in-out hover:bg-meta-2 dark:hover:bg-meta-4 dark:text-white cursor-pointer mt-4 border-t border-stroke pt-4 ${sidebarOpen ? 'justify-start px-4' : 'justify-center mx-auto w-10 h-10 px-0'}`} onClick={() => logout()} title={!sidebarOpen ? 'LogOut' : undefined} >
-                <LuLogOut className="text-xl shrink-0" />
-                {(sidebarOpen || isMobile) && <span className="ml-2">LogOut</span>}
+              <li 
+                className={`group relative flex items-center rounded-xl py-2.5 font-medium text-slate-600 dark:text-slate-300 duration-200 ease-in-out hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400 cursor-pointer mt-4 border-t border-slate-200/80 dark:border-slate-800 pt-4 ${sidebarOpen ? 'justify-start px-3.5' : 'justify-center mx-auto w-10 h-10 px-0'}`} 
+                onClick={() => logout()} 
+                title={!sidebarOpen ? 'LogOut' : undefined} 
+              >
+                <LuLogOut className="text-lg shrink-0 text-slate-400 group-hover:text-rose-600 dark:group-hover:text-rose-400" />
+                {(sidebarOpen || isMobile) && <span className="ml-3 text-xs font-semibold">Log Out</span>}
               </li>
             </ul>
           </nav>

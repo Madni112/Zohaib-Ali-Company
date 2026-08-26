@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient'; 
 import { toast } from 'react-hot-toast'; 
 import Spinner from '../../../ui/Spinner'; 
-import { FiEdit, FiTrash2 } from 'react-icons/fi';
+import TableActions from '../../../ui/TableActions';
+import { useAuth } from '../../../Context/Auth';
 
 const SalesmanHistory = () => { 
   const [salesmen, setSalesmen] = useState<any[]>([]); 
@@ -144,23 +145,13 @@ const SalesmanHistory = () => {
                         {salesman.area || 'General'} 
                       </p> 
                     </td> 
-                    <td className="py-3.5 px-4 text-sm"> 
-                      <div className="flex items-center justify-center space-x-3.5"> 
-                        <button 
-                          onClick={() => navigate('/Salesman/add', { state: { salesman } })} 
-                          className="text-gray-500 hover:text-primary transition p-0.5" 
-                          title="Edit Salesman" 
-                        > 
-                          <FiEdit size={16} />
-                        </button> 
-                        <button 
-                          onClick={() => handleDelete(salesman.id)} 
-                          className="text-gray-500 hover:text-danger transition p-0.5" 
-                          title="Delete Salesman" 
-                        > 
-                          <FiTrash2 size={16} />
-                        </button> 
-                      </div> 
+                    <td className="py-3.5 px-4 text-center"> 
+                      <TableActions
+                        onEdit={() => navigate('/Salesman/add', { state: { salesman } })}
+                        onDelete={() => handleDelete(salesman.id)}
+                        editTitle="Edit Salesman"
+                        deleteTitle="Delete Salesman"
+                      />
                     </td> 
                   </tr> 
                 );

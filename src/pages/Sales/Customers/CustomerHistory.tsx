@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient'; 
 import { toast } from 'react-hot-toast'; 
 import Spinner from '../../../ui/Spinner'; 
-import { FiEdit, FiTrash2 } from 'react-icons/fi';
+import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
 
 const CustomerHistory = () => { 
@@ -150,23 +150,13 @@ const CustomerHistory = () => {
                     </td> 
                     <td className="py-3.5 px-4 text-sm text-black dark:text-white"><p>{c.primaryPhone || 'N/A'}</p></td> 
                     <td className="py-3.5 px-4 text-sm text-black dark:text-white"><p>{c.province || 'N/A'}</p></td> 
-                    <td className="py-3.5 px-4 text-sm"> 
-                      <div className="flex items-center justify-center space-x-3.5"> 
-                        <button 
-                          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Customers/customer-details`, { state: { customer: c } })} 
-                          className="text-gray-500 hover:text-primary transition p-0.5 cursor-pointer" 
-                          title="Edit Customer" 
-                        > 
-                          <FiEdit size={16} />
-                        </button> 
-                        <button 
-                          onClick={() => handleDelete(c.id)} 
-                          className="text-gray-500 hover:text-danger transition p-0.5 cursor-pointer" 
-                          title="Delete Customer" 
-                        > 
-                          <FiTrash2 size={16} />
-                        </button> 
-                      </div> 
+                    <td className="py-3.5 px-4 text-center"> 
+                      <TableActions
+                        onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Customers/customer-details`, { state: { customer: c } })}
+                        onDelete={() => handleDelete(c.id)}
+                        editTitle="Edit Customer"
+                        deleteTitle="Delete Customer"
+                      />
                     </td> 
 
                   </tr> 

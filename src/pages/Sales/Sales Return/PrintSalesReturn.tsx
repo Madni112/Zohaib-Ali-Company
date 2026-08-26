@@ -5,7 +5,6 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
 
-
 interface ReturnItem {
   itemName?: string;
   product_name?: string;
@@ -39,7 +38,6 @@ interface ReturnData {
   total_gst_amount?: number;
   total_net_amount?: number;
   payout_amount_paid?: number;
-  fbr_fiscal_number?: string;
   items: ReturnItem[];
   created_at: string;
 }
@@ -183,16 +181,16 @@ const PrintSalesReturn = () => {
           }
         }
       `}</style>
-      <div className="no-print flex justify-between items-center mb-6 bg-slate-50 p-4 rounded border border-stroke">
+      <div className="no-print flex justify-between items-center mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
         <button
-          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales-Return/Debit-Notes/List`)}
-          className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-black transition"
+          onClick={() => navigate('/Sales-Return/Debit-Notes/List')}
+          className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-black transition"
         >
           ← Back to List
         </button>
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 rounded bg-primary py-2 px-5 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm"
+          className="flex items-center gap-2 rounded-xl bg-emerald-600 py-2.5 px-5 text-sm font-bold text-white hover:bg-emerald-700 transition shadow-sm"
         >
           Print Voucher
         </button>
@@ -201,23 +199,36 @@ const PrintSalesReturn = () => {
       <div className="print-voucher bg-white">
         <div>
           <div className="text-center border-b border-gray-300 pb-4 mb-6">
-            <h2 className="text-xl font-extrabold tracking-wide uppercase text-primary">{businessName ? businessName.toUpperCase() : 'NOOR HORIZON TECHNOLOGIES ERP'}</h2>
-            <p className="text-xs text-gray-500 font-medium">Enterprise Sales Return Ledger & FBR Fiscal Record</p>
-            <h3 className="text-md font-bold mt-3 border border-black inline-block px-4 py-1 uppercase bg-gray-50">Sales Return / Credit Note</h3>
+            <h2 className="text-2xl font-black tracking-tight uppercase text-gray-900">ZOHAIB ALI & COMPANY</h2>
+            <p className="text-xs text-gray-500 font-medium">Enterprise Sales Return & Credit Adjustment Note</p>
+            <h3 className="text-xs font-bold mt-3 border border-black inline-block px-4 py-1 uppercase bg-gray-50 rounded">Sales Return / Credit Note</h3>
           </div>
-
 
           <div className="grid grid-cols-2 gap-4 border-b border-gray-300 pb-4 mb-6 text-xs font-semibold">
             <div className="space-y-1">
-              <p><span className="text-gray-500">Return Note # :</span> <span className="text-black font-bold">{`RTN-${String(returnRecord.id).padStart(4, '0')}`}</span></p>
+              <p><span className="text-gray-500">Return Note # :</span> <span className="text-black font-bold font-mono">{`RTN-${String(returnRecord.id).padStart(4, '0')}`}</span></p>
               <p><span className="text-gray-500">Return Date :</span> <span className="text-black font-bold">{returnRecord.return_date || new Date(returnRecord.created_at).toLocaleDateString()}</span></p>
-              <p><span className="text-gray-500">Settlement Type :</span> <span className="text-black font-bold text-danger">{returnRecord.settlement_mode || returnRecord.return_type || returnRecord.return_status || 'On Credit'}</span></p>
-              {returnRecord.fbr_fiscal_number && (
-                <p><span className="text-gray-500">FBR Fiscal Code :</span> <span className="text-success font-bold font-mono">{returnRecord.fbr_fiscal_number}</span></p>
-              )}
+              <p>
+                <span className="text-gray-500">Settlement Type :</span>{' '}
+                <span className="text-emerald-700 font-bold">
+                  {(() => {
+                    const meta = (returnRecord as any).metadata || {};
+                    if (returnRecord.settlement_mode === 'Split' || (meta.cashPayoutPaid && meta.bankPayoutPaid)) {
+                      return `Split Refund (Cash: Rs. ${Number(meta.cashPayoutPaid || 0).toLocaleString()} + Bank: Rs. ${Number(meta.bankPayoutPaid || 0).toLocaleString()})`;
+                    }
+                    if (returnRecord.settlement_mode === 'Bank') {
+                      return `Bank Transfer Refund (${(returnRecord as any).linked_bank_title || 'Bank Wire'})`;
+                    }
+                    if (returnRecord.settlement_mode === 'Cash') {
+                      return 'Cash Ledger Refund';
+                    }
+                    return returnRecord.return_type || returnRecord.return_status || 'On Credit';
+                  })()}
+                </span>
+              </p>
             </div>
             <div className="space-y-1 md:text-left">
-              <p><span className="text-gray-500">Original Invoice # :</span> <span className="text-black font-bold">{displayOrigInvNo}</span></p>
+              <p><span className="text-gray-500">Original Invoice # :</span> <span className="text-black font-bold font-mono">{displayOrigInvNo}</span></p>
               <p><span className="text-gray-500">Customer Name :</span> <span className="text-black font-bold">{returnRecord.customer_name}</span></p>
               <p><span className="text-gray-500">Salesman Name :</span> <span className="text-black font-bold">{returnRecord.salesman || 'General'}</span></p>
             </div>
@@ -231,7 +242,7 @@ const PrintSalesReturn = () => {
                   <th className="border border-gray-300 p-2 text-left">Returned Product Details</th>
                   <th className="border border-gray-300 p-2 w-24">Base Rate</th>
                   <th className="border border-gray-300 p-2 w-20">Returned Qty</th>
-                  <th className="border border-gray-300 p-2 w-20">GST %</th>
+                  <th className="border border-gray-300 p-2 w-20">Tax %</th>
                   <th className="border border-gray-300 p-2 w-24">Tax Amount</th>
                   <th className="border border-gray-300 p-2 w-28">Net Reverted</th>
                 </tr>
@@ -242,8 +253,8 @@ const PrintSalesReturn = () => {
                     <td className="border border-gray-300 p-2 bg-gray-50/50">{idx + 1}</td>
                     <td className="border border-gray-300 p-2 text-left font-semibold text-black">{item.pName}</td>
                     <td className="border border-gray-300 p-2 font-mono">{item.basePrice.toFixed(2)}</td>
-                    <td className="border border-gray-300 p-2 font-bold text-danger">{item.rQty}</td>
-                    <td className="border border-gray-300 p-2">{item.gstRate}%</td>
+                    <td className="border border-gray-300 p-2 font-bold text-rose-600 font-mono">{item.rQty}</td>
+                    <td className="border border-gray-300 p-2 font-mono">{item.gstRate}%</td>
                     <td className="border border-gray-300 p-2 font-mono">{item.gstAmount.toFixed(2)}</td>
                     <td className="border border-gray-300 p-2 font-bold text-black font-mono">{item.netRowAmount.toFixed(2)}</td>
                   </tr>
@@ -262,34 +273,17 @@ const PrintSalesReturn = () => {
                 <span className="font-mono font-bold">{finalTotalGoods.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between border-b pb-1">
-                <span>Total Sales Tax Reverted:</span>
+                <span>Total Tax Reverted:</span>
                 <span className="font-mono font-bold">{finalTotalGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
-              <div className="flex justify-between pt-1 text-danger font-extrabold text-sm uppercase">
+              <div className="flex justify-between pt-1 text-emerald-700 font-black text-sm uppercase">
                 <span>Total Credit Adjusted:</span>
                 <span className="font-mono font-bold">Rs. {finalTotalNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-between items-end pt-12 mt-auto">
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-300 p-2 rounded shadow-xs">
-              <div className="w-[1.0in] h-[1.0in] bg-white p-1 border border-gray-400 flex items-center justify-center text-center">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(returnRecord.fbr_fiscal_number || 'FBR_DI_VERIFIED')}`}
-                  alt="FBR QR Code"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <div className="text-[10px] space-y-0.5 font-semibold text-gray-700">
-                <div className="flex items-center gap-1 text-primary font-bold text-xs uppercase tracking-wider">
-                  <span>🏛️ FBR DIGITAL INVOICING</span>
-                </div>
-                <p className="font-mono text-[10px] text-black">Fiscal Ref: <b>{returnRecord.fbr_fiscal_number || 'Unposted'}</b></p>
-                <p className="text-[9px] text-emerald-600 font-bold">✓ Verified by PRAL / FBR System</p>
-              </div>
-            </div>
-
+          <div className="flex justify-end items-end pt-16 mt-auto">
             <div className="grid grid-cols-2 gap-8 text-center text-[11px] font-bold uppercase tracking-wider text-gray-600 w-1/2">
               <div><div className="border-t border-black pt-2">Authorized Signature</div></div>
               <div><div className="border-t border-black pt-2">Customer Acknowledgment</div></div>

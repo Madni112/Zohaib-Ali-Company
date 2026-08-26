@@ -46,11 +46,17 @@ const AddSalesman = () => {
         return;
       }
 
+      const payload = {
+        name: values.name.trim(),
+        phone: values.phone.trim(),
+        area: values.area ? values.area.trim() : null
+      };
+
       if (isEditMode) {
         // UPDATE EXISTING SALESMAN 
         const { error } = await supabase
           .from('salesmen')
-          .update(values)
+          .update(payload)
           .eq('id', editData.id);
 
         if (error) throw error;
@@ -58,7 +64,7 @@ const AddSalesman = () => {
         navigate('/Salesman/list');
       } else {
         // INSERT NEW SALESMAN 
-        const { error } = await supabase.from('salesmen').insert([values]);
+        const { error } = await supabase.from('salesmen').insert([payload]);
         if (error) throw error;
         toast.success('Salesman registered successfully!');
         navigate('/Salesman/list');
@@ -109,12 +115,20 @@ const AddSalesman = () => {
                   <input name="area" onChange={handleChange} value={values.area} placeholder="e.g. Hyderabad" className="w-full rounded border bg-transparent text-black dark:text-white border-stroke p-3 outline-none focus:border-primary" />
                 </div>
               </div>
-              <div className="pt-4 mt-4 border-t border-stroke dark:border-strokedark flex justify-end gap-3">
-                <button type="button" onClick={() => navigate('/Salesman/list')} className="bg-danger text-white py-2 px-8 rounded font-medium hover:bg-opacity-90 transition shadow-sm" >
+              <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-stroke dark:border-strokedark">
+                <button
+                  type="button"
+                  onClick={() => navigate('/Salesman/list')}
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
+                >
                   Cancel
                 </button>
-                <button type="submit" disabled={loading} className={`flex justify-center rounded ${isEditMode ? "bg-success" : "bg-primary"} py-2 px-10 font-medium text-white hover:bg-opacity-90 transition disabled:bg-opacity-50`}>
-                  {loading ? <Spinner /> : isEditMode ? 'Update Salesman' : 'Save Salesman'}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                >
+                  {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Salesman' : 'Save Salesman'}</span>}
                 </button>
               </div>
             </Form>

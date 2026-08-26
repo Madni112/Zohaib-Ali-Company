@@ -7,7 +7,7 @@ interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
 const GlassCard: React.FC<GlassCardProps> = ({ children, className = '', ...rest }) => {
   return (
     <div
-      className={`bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl shadow-md border border-gray-200 dark:border-gray-700 ${className}`}
+      className={`bg-white/90 dark:bg-[#111827]/90 backdrop-blur-md rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-200/80 dark:border-slate-800/80 transition-all duration-200 ${className}`}
       {...rest}
     >
       {children}

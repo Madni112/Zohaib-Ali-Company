@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdEvent, MdStore, MdPerson } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
+import { MdStore, MdPerson, MdEvent } from 'react-icons/md';
 
 const PurchaseList = () => {
   const navigate = useNavigate();
@@ -168,33 +169,21 @@ const PurchaseList = () => {
                       <td className="py-3.5 px-4 text-gray-400">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-mono font-black text-primary">{pur.purchase_no}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5"><MdPerson className="text-gray-400" size={16} />{vendorName}</td>
-                      <td className="py-3.5 px-4"><span className="bg-blue-50 dark:bg-meta-4 text-primary dark:text-white px-2.5 py-1 rounded-sm text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1"><MdStore size={12} />{pur.target_warehouse}</span></td>
+                      <td className="py-3.5 px-4"><span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1"><MdStore size={12} />{pur.target_warehouse}</span></td>
                       <td className="py-3.5 px-4 text-center text-gray-500"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{pur.purchase_date}</span></td>
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${term === 'On Credit' ? 'bg-purple-50 text-purple-600 border-purple-200' : term === 'By Cash' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${term === 'On Credit' ? 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300' : term === 'By Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300'}`}>
                           {term}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-success pr-6">Rs. {totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-3.5">
-                          <button
-                            type="button"
-                            onClick={() => navigate('/Purchase/Purchases/Add', { state: { purchaseRecord: pur } })}
-                            className="text-gray-500 hover:text-primary transition duration-150 cursor-pointer"
-                            title="Edit Order"
-                          >
-                            <MdEdit size={18} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePurchaseRecord(pur.id)}
-                            className="text-gray-500 hover:text-danger transition duration-150 cursor-pointer"
-                            title="Drop Slip"
-                          >
-                            <MdDelete size={18} />
-                          </button>
-                        </div>
+                        <TableActions
+                          onEdit={() => navigate('/Purchase/Purchases/Add', { state: { purchaseRecord: pur } })}
+                          onDelete={() => handleDeletePurchaseRecord(pur.id)}
+                          editTitle="Edit Purchase"
+                          deleteTitle="Delete Purchase"
+                        />
                       </td>
                     </tr>
                   );

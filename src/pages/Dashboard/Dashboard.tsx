@@ -56,7 +56,7 @@ const Dashboard: React.FC = () => {
       toolbar: { show: false },
       zoom: { enabled: false }
     },
-    colors: ['#3C50E0', '#10B981'],
+    colors: ['#059669', '#D97706'],
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 2 },
     xaxis: {
@@ -88,7 +88,7 @@ const Dashboard: React.FC = () => {
 
   const cashFlowOptions: any = {
     chart: { type: 'bar', height: 310, toolbar: { show: false } },
-    colors: ['#10B981', '#FF5733'],
+    colors: ['#059669', '#E11D48'],
     plotOptions: { bar: { columnWidth: '40%', borderRadius: 4 } },
     dataLabels: { enabled: false },
     xaxis: {
@@ -112,7 +112,7 @@ const Dashboard: React.FC = () => {
   // 3. Bank Balance Distribution Donut Chart
   const bankDonutOptions: any = {
     chart: { type: 'donut' },
-    colors: ['#3C50E0', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'],
+    colors: ['#059669', '#0D9488', '#D97706', '#0284C7', '#475569'],
     labels: metrics.bankAccounts && metrics.bankAccounts.length > 0 ? metrics.bankAccounts.map((b) => b.accountTitle) : ['Default Bank'],
     legend: { position: 'bottom' },
     tooltip: { y: { formatter: (val: number) => `Rs. ${val.toLocaleString()}` } }
@@ -124,32 +124,41 @@ const Dashboard: React.FC = () => {
 
   return (
 
-    <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-white text-xs">
+    <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs">
       {/* Top Header Actions */}
-      <div className="flex justify-end items-center gap-3 font-mono text-xs">
-        <div className="bg-white dark:bg-boxdark border border-stroke dark:border-strokedark px-3 py-1.5 rounded font-bold text-gray-600 dark:text-gray-300 shadow-default">
-          {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <div>
+          <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Executive Management Dashboard</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Real-time fiscal monitoring, procurement velocity & liquidity metrics</p>
         </div>
-        <button
-          onClick={() => navigate('/Reports/Balance-Sheet')}
-          className="bg-primary text-white py-1.5 px-4 rounded font-bold hover:bg-opacity-90 transition shadow-sm cursor-pointer"
-        >
-          Balance Sheet Statement →
-        </button>
-      </div>      {/* --- TOP ACTION TILES GRID (Matching Reference Interface) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-6">
-        <ActionCard title="Add Sale" subtitle="New Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-indigo-500 to-indigo-700" onClick={() => navigate('/sales/invoice/add')} />
-        <ActionCard title="Add Purchase" subtitle="Stock Procurement" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-rose-500 to-rose-600" onClick={() => navigate('/Purchase/Purchases/Add')} />
-        <ActionCard title="Add Product" subtitle="Catalog Item" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-amber-500 to-amber-600" onClick={() => navigate('/Administration/Products/Add')} />
-        <ActionCard title="Stock Transfer" subtitle="Bin to Warehouse" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-blue-500 to-blue-600" onClick={() => navigate('/Administration/StockTransfer/Add')} />
-        <ActionCard title="Stock Report" subtitle="Inventory Audit" Icon={MdAssessment} bgGradient="bg-gradient-to-br from-emerald-500 to-emerald-600" onClick={() => navigate('/Reports/Stock-Report')} />
-        <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-cyan-500 to-cyan-600" onClick={() => { }} />
-        <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-purple-500 to-purple-600" onClick={() => { }} />
-        <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-teal-500 to-teal-600" onClick={() => { }} />
+        <div className="flex items-center gap-3 font-mono text-xs">
+          <div className="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-slate-600 dark:text-slate-300 shadow-sm">
+            {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </div>
+          <button
+            onClick={() => navigate('/Reports/Balance-Sheet')}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded-xl font-bold transition shadow-sm hover:shadow-md cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Balance Sheet Statement</span>
+            <span>→</span>
+          </button>
+        </div>
+      </div>
+
+      {/* --- TOP ACTION TILES GRID */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
+        <ActionCard title="Add Sale" subtitle="New Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/add')} />
+        <ActionCard title="Add Purchase" subtitle="Stock Procurement" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-amber-600 to-amber-800" onClick={() => navigate('/Purchase/Purchases/Add')} />
+        <ActionCard title="Add Product" subtitle="Catalog Item" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/Add')} />
+        <ActionCard title="Stock Transfer" subtitle="Bin to Warehouse" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Administration/StockTransfer/Add')} />
+        <ActionCard title="Stock Report" subtitle="Inventory Audit" Icon={MdAssessment} bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900" onClick={() => navigate('/Reports/Stock-Report')} />
+        <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
+        <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
+        <ActionCard title="This Month Purchases" subtitle={`Rs. ${metrics.thisMonthPurchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowDownward} bgGradient="bg-gradient-to-br from-amber-700 to-stone-900" onClick={() => { }} />
       </div>
 
       {/* --- APP CALCULATED CASH & BANK BALANCES METRICS --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         <StatCard
           title="Calculated Cash Balance"
           value={metrics.cashBalance}
@@ -160,42 +169,48 @@ const Dashboard: React.FC = () => {
           title="Monthly Bank Balance"
           value={metrics.totalBankBalance}
           Icon={MdAccountBalance}
-          bgColor="bg-gradient-to-br from-primary-500 to-indigo-600"
+          bgColor="bg-gradient-to-br from-teal-600 to-cyan-700"
         />
         <StatCard
           title="Customer Receivables"
           value={metrics.totalReceivables}
           Icon={MdReceiptLong}
-          bgColor="bg-gradient-to-br from-blue-500 to-indigo-600"
+          bgColor="bg-gradient-to-br from-amber-500 to-amber-700"
         />
         <StatCard
           title="Total Assets"
           value={metrics.totalAssets}
           Icon={MdAssessment}
-          bgColor="bg-gradient-to-br from-purple-500 to-pink-600"
+          bgColor="bg-gradient-to-br from-emerald-700 to-slate-900"
         />
       </div>
 
       {/* --- CHARTS SECTION --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Chart 1: Sales vs Purchases Trend */}
-        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-5">
-          <div className="flex justify-between items-center mb-4 border-b border-stroke dark:border-strokedark pb-3">
-            <h3 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider">
-              Sales Volume vs Procurement Trend
-            </h3>
-            <span className="text-xs text-gray-400 font-mono">Monthly Comparative</span>
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+                Sales Volume vs Procurement Trend
+              </h3>
+              <p className="text-[11px] text-slate-400">Monthly Comparative Velocity</p>
+            </div>
+            <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Live Sync</span>
           </div>
           <ReactApexChart options={salesVsPurchasesOptions} series={salesVsPurchasesSeries} type="area" height={310} />
         </div>
 
         {/* Chart 2: Cash Flow Inflow vs Outflow */}
-        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-5">
-          <div className="flex justify-between items-center mb-4 border-b border-stroke dark:border-strokedark pb-3">
-            <h3 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider">
-              Cash Drawer Cash Flow Dynamics
-            </h3>
-            <span className="text-xs text-gray-400 font-mono">Inflows vs Payments</span>
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+                Cash Drawer Dynamics
+              </h3>
+              <p className="text-[11px] text-slate-400">Inflows vs Settlement Outflows</p>
+            </div>
+            <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Cash Ledger</span>
           </div>
           <ReactApexChart options={cashFlowOptions} series={cashFlowSeries} type="bar" height={310} />
         </div>
@@ -204,63 +219,75 @@ const Dashboard: React.FC = () => {
       {/* --- BANK ACCOUNT BALANCE DISTRIBUTION & BALANCE SHEET SUMMARY GRID --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bank Allocation Donut Chart */}
-        <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-5">
-          <h3 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider border-b border-stroke dark:border-strokedark pb-3 mb-4">
-            Bank Ledgers Balance Allocation
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
+          <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+            Bank Ledgers Allocation
           </h3>
           <ReactApexChart options={bankDonutOptions} series={bankDonutSeries} type="donut" height={260} />
         </div>
 
         {/* Corporate Bank Ledgers List Table */}
-        <div className="lg:col-span-2 rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-5">
-          <div className="flex justify-between items-center mb-4 border-b border-stroke dark:border-strokedark pb-3">
-            <h3 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider">
-              Corporate Bank Account Balances (Calculated from App)
-            </h3>
+        <div className="lg:col-span-2 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+                Corporate Bank Account Balances
+              </h3>
+              <p className="text-[11px] text-slate-400">Real-time ledger reconciliation</p>
+            </div>
             <button
               onClick={() => navigate('/Reports/Account-Report')}
-              className="text-primary font-bold hover:underline text-xs"
+              className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-xs flex items-center gap-1"
             >
-              View Full Accounts Report →
+              <span>View General Ledger</span>
+              <span>→</span>
             </button>
           </div>
 
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="max-w-full overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+            <table className="w-full table-auto border-collapse font-mono text-xs">
               <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b border-stroke">
-                  <th className="py-2.5 px-3">Bank Profile</th>
-                  <th className="py-2.5 px-3">Account Title</th>
-                  <th className="py-2.5 px-3 text-right">Opening</th>
-                  <th className="py-2.5 px-3 text-right">Inflow (+)</th>
-                  <th className="py-2.5 px-3 text-right">Outflow (-)</th>
-                  <th className="py-2.5 px-3 text-right pr-4">Calculated Net Balance</th>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-100 dark:border-slate-800 text-left text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4">Bank Title</th>
+                  <th className="py-3 px-4">Account Number</th>
+                  <th className="py-3 px-4 text-right">Debit (+In)</th>
+                  <th className="py-3 px-4 text-right">Credit (-Out)</th>
+                  <th className="py-3 px-4 text-right font-black">Net Balance</th>
                 </tr>
               </thead>
               <tbody>
-                {metrics.bankAccounts.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-6 text-gray-400 italic">No bank profiles currently logged in system.</td>
-                  </tr>
-                ) : (
+                {metrics.bankAccounts && metrics.bankAccounts.length > 0 ? (
                   metrics.bankAccounts.map((b) => (
-                    <tr key={b.id} className="border-b border-stroke dark:border-strokedark font-mono font-semibold hover:bg-slate-50 dark:hover:bg-meta-4/10">
-                      <td className="py-2.5 px-3 font-sans font-bold text-black dark:text-white">{b.bankName}</td>
-                      <td className="py-2.5 px-3 font-sans">{b.accountTitle}</td>
-                      <td className="py-2.5 px-3 text-right text-gray-500">Rs. {b.openingBalance.toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-right text-success">+ Rs. {b.totalInflow.toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-right text-danger">- Rs. {b.totalOutflow.toLocaleString()}</td>
-                      <td className="py-2.5 px-3 text-right pr-4 font-black text-primary">Rs. {b.netBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <tr
+                      key={b.id}
+                      className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150"
+                    >
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white font-sans flex items-center gap-2">
+                        <span className="p-1 rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                          <MdAccountBalance size={14} />
+                        </span>
+                        {b.bankName} - {b.accountTitle}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{b.accountNumber || '-'}</td>
+                      <td className="py-3 px-4 text-right text-emerald-600 font-semibold">
+                        {b.totalInflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-right text-rose-500 font-semibold">
+                        {b.totalOutflow.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">
+                        Rs. {b.netBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
                     </tr>
                   ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400 italic">
+                      No corporate bank accounts registered.
+                    </td>
+                  </tr>
                 )}
               </tbody>
-              <tfoot>
-                <tr className="bg-gray-50 dark:bg-meta-4/20 font-mono font-black border-t-2 border-stroke text-black dark:text-white text-xs">
-                  <td colSpan={5} className="py-3 px-3 uppercase font-sans">Total Monthly Bank Balance Across Ledgers:</td>
-                  <td className="py-3 px-3 text-right pr-4 text-primary text-sm">Rs. {metrics.totalBankBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>

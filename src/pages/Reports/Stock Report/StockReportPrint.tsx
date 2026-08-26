@@ -410,7 +410,7 @@ const StockReportPrint = () => {
                 </div>
 
                 <div className="text-center space-y-1 py-4 border-b border-double border-black">
-                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">{businessName ? businessName.toUpperCase() : 'NOOR HORIZON TECHNOLOGIES ERP'}</h1>
+                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">ZOHAIB ALI & COMPANY</h1>
                     <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">Master Dynamic Inventory Valuation & Real-Time Stock Balance Ledger</p>
 
                     <div className="text-[10px] pt-1 font-mono flex justify-between px-2 text-gray-600">
@@ -448,8 +448,8 @@ const StockReportPrint = () => {
                                     <th className="p-1.5 border border-black">Group (UOM)</th>
                                     <th className="p-1.5 border border-black">Brand / Category</th>
                                     <th className="p-1.5 border border-black text-right pr-2">Opening Stock</th>
-                                    <th className="p-1.5 border border-black text-right pr-2 text-blue-700">Stock In</th>
-                                    <th className="p-1.5 border border-black text-right pr-2 text-red-700">Stock Out</th>
+                                    <th className="p-1.5 border border-black text-right pr-2 text-emerald-700">Stock In</th>
+                                    <th className="p-1.5 border border-black text-right pr-2 text-rose-700">Stock Out</th>
                                     <th className="p-1.5 border border-black text-right pr-2">Net Movement</th>
                                     <th className="p-1.5 border border-black text-right pr-3 font-bold">Remaining Stock</th>
                                 </tr>
@@ -460,10 +460,10 @@ const StockReportPrint = () => {
                                         <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
                                         <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
                                         <td className="p-1.5 border border-black uppercase">{row.uom || 'PC'}</td>
-                                        <td className="p-1.5 border border-black font-sans"><span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
+                                        <td className="p-1.5 border border-black font-sans"><span className="text-teal-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
                                         <td className="p-1.5 border border-black text-right pr-2 font-mono text-gray-700">{Number(row.computed_opening || 0).toLocaleString()}</td>
-                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-blue-700 font-bold">+{Number(row.period_stock_in || 0).toLocaleString()}</td>
-                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-red-700 font-bold">-{Number(row.period_stock_out || 0).toLocaleString()}</td>
+                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-emerald-700 font-bold">+{Number(row.period_stock_in || 0).toLocaleString()}</td>
+                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-rose-700 font-bold">-{Number(row.period_stock_out || 0).toLocaleString()}</td>
                                         <td className={`p-1.5 border border-black text-right pr-2 font-mono font-bold ${row.net_activity >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                                             {row.net_activity > 0 ? `+${row.net_activity.toLocaleString()}` : row.net_activity.toLocaleString()}
                                         </td>
@@ -475,7 +475,7 @@ const StockReportPrint = () => {
                                 <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
                                     <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-gray-700">Total Consolidated Summary:</td>
                                     <td className="p-2 border border-black text-right pr-2 text-gray-700">{reportRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
-                                    <td className="p-2 border border-black text-right pr-2 text-blue-700">+{reportRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-black text-right pr-2 text-emerald-700">+{reportRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
                                     <td className="p-2 border border-black text-right pr-2 text-red-700">-{reportRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>
                                     <td className="p-2 border border-black text-right pr-2 text-purple-700">{reportRows.reduce((s, r) => s + (r.net_activity || 0), 0).toLocaleString()}</td>
                                     <td className="p-2 border border-black text-right pr-3 text-success font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
@@ -796,12 +796,12 @@ const StockReportPrint = () => {
                 {/* 🏢 Software & Corporate Provider Footer */}
                 <div className="mt-12 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400">
                     <div className="flex items-center gap-2 font-bold">
-                        <span className="text-black font-black uppercase">{businessName ? `${businessName.toUpperCase()} • ` : ''}NOOR HORIZON TECHNOLOGIES</span>
+                        <span className="text-black font-black uppercase">ZOHAIB ALI & COMPANY</span>
                         <span className="text-gray-400">|</span>
                         <span className="text-gray-700">Contact: <b className="text-black font-bold">03128039911</b></span>
                     </div>
                     <div className="text-[9px] text-gray-400 font-mono">
-                        System Generated Report • Noor Horizon Technologies ERP
+                        System Generated Report • Zohaib Ali & Company
                     </div>
                 </div>
             </div>

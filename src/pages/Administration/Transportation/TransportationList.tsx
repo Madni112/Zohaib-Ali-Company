@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdLocalShipping } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
+import { MdAdd, MdLocalShipping, MdPerson, MdPhone } from 'react-icons/md';
 
 const TransportationList = () => {
     const navigate = useNavigate();
@@ -88,6 +89,14 @@ const TransportationList = () => {
 
             {/* RE-CONSTRUCTED DATATABLE HISTORY BLOCK PANEL */}
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+                <div className="border-b border-stroke dark:border-strokedark pb-3 mb-4 flex items-center justify-between">
+                    <span className="text-xs font-bold text-black dark:text-white">
+                        Logistics Fleets & Vehicles
+                    </span>
+                    <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 font-mono">
+                        {vehicles.length} Vehicles Registered
+                    </span>
+                </div>
 
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -136,11 +145,13 @@ const TransportationList = () => {
                                     <td className="py-3.5 px-4 text-gray-700 dark:text-white font-mono font-bold">{agency.contact_number}</td>
                                     <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-semibold">{agency.email || '-'}</td>
                                     <td className="py-3.5 px-4 text-gray-500 font-medium truncate max-w-xs">{agency.address || '-'}</td>
-                                    <td className="py-3.5 px-4">
-                                        <div className="flex items-center justify-center space-x-3.5">
-                                            <button type="button" onClick={() => navigate('/Administration/Transportation/Add', { state: { vehicle: agency } })} className="text-gray-500 hover:text-primary transition p-0.5"><MdEdit size={18} /></button>
-                                            <button type="button" onClick={() => handleDeleteVehicle(agency.id)} className="text-gray-500 hover:text-danger transition p-0.5"><MdDelete size={18} /></button>
-                                        </div>
+                                    <td className="py-3.5 px-4 text-center">
+                                        <TableActions
+                                            onEdit={() => navigate('/Administration/Transportation/Add', { state: { vehicle: agency } })}
+                                            onDelete={() => handleDeleteVehicle(agency.id)}
+                                            editTitle="Edit Transport Record"
+                                            deleteTitle="Delete Transport Record"
+                                        />
                                     </td>
                                 </tr>
                             ))}

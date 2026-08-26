@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { MdEdit, MdDelete, MdLocationOn, MdStore, MdWarehouse } from 'react-icons/md';
 
 const LocationList = () => {
@@ -85,6 +86,14 @@ const LocationList = () => {
             </div>
 
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+                <div className="border-b border-stroke dark:border-strokedark pb-3 mb-4 flex items-center justify-between">
+                    <span className="text-xs font-bold text-black dark:text-white">
+                        Registered Storage Locations
+                    </span>
+                    <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 font-mono">
+                        {locations.length} Locations Registered
+                    </span>
+                </div>
 
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -150,11 +159,10 @@ const LocationList = () => {
                                                 <MdLocationOn size={14} className="text-primary" /> {loc.name}
                                             </td>
                                             <td className="py-3.5 px-4">
-                                                {/* COLOR CODED CLASSIFICATION DROPDOWN DISPLAY BADGES */}
-                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded font-bold uppercase tracking-wider text-[10px]
+                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px]
                           ${isSalePoint
-                                                        ? 'bg-success/10 text-success'
-                                                        : 'bg-indigo-50 dark:bg-meta-4 text-indigo-600 dark:text-indigo-400'}`}>
+                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60'
+                                                        : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60'}`}>
                                                     {isSalePoint ? <MdStore size={12} /> : <MdWarehouse size={12} />}
                                                     {loc.location_type || 'Unassigned'}
                                                 </span>
@@ -162,25 +170,13 @@ const LocationList = () => {
                                             <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-semibold font-mono">{loc.contact_phone || '-'}</td>
                                             <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-medium">{loc.address || 'No Address Provided'}</td>
 
-                                            <td className="py-3.5 px-4">
-                                                <div className="flex items-center justify-center space-x-3.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate('/Administration/Locations/Add', { state: { location: loc } })}
-                                                        className="text-gray-500 hover:text-primary transition p-0.5"
-                                                        title="Modify Location Details"
-                                                    >
-                                                        <MdEdit size={18} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteLocation(loc.id)}
-                                                        className="text-gray-500 hover:text-danger transition p-0.5"
-                                                        title="Delete Record"
-                                                    >
-                                                        <MdDelete size={18} />
-                                                    </button>
-                                                </div>
+                                            <td className="py-3.5 px-4 text-center">
+                                                <TableActions
+                                                    onEdit={() => navigate('/Administration/Locations/Add', { state: { location: loc } })}
+                                                    onDelete={() => handleDeleteLocation(loc.id)}
+                                                    editTitle="Edit Location"
+                                                    deleteTitle="Delete Location"
+                                                />
                                             </td>
                                         </tr>
                                     );

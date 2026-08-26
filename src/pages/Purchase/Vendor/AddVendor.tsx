@@ -163,20 +163,20 @@ const AddVendor = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
                 <button
                   type="button"
                   onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Vendor/List`)}
-                  className="rounded bg-slate-100 dark:bg-slate-800 py-2.5 px-6 font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition text-xs shadow-xs"
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="inline-flex items-center gap-2 bg-primary text-white py-2.5 px-8 rounded font-bold text-xs hover:bg-opacity-90 transition shadow-sm cursor-pointer disabled:opacity-50"
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                 >
-                  {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <><FiCheckCircle size={14} /> {isEditMode ? 'Update Vendor Account' : 'Save Vendor Profile'}</>}
+                  {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <><FiCheckCircle size={15} /> <span>{isEditMode ? 'Update Vendor Account' : 'Save Vendor Profile'}</span></>}
                 </button>
               </div>
             </Form>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { MdEdit, MdDelete, MdEvent, MdStore, MdPerson } from 'react-icons/md';
 
 const PurchaseReturnList = () => {
@@ -181,10 +182,12 @@ const PurchaseReturnList = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-success pr-6">Rs. {totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-3.5">
-                          <button type="button" onClick={() => navigate('/Purchase/Purchase-Return/Add', { state: { returnRecord: rtn } })} className="text-gray-500 hover:text-primary transition p-1 cursor-pointer"><MdEdit size={18} /></button>
-                          <button type="button" onClick={() => handleDeleteReturnRecord(rtn.id)} className="text-gray-500 hover:text-danger transition p-1 cursor-pointer"><MdDelete size={18} /></button>
-                        </div>
+                        <TableActions
+                          onEdit={() => navigate('/Purchase/Purchase-Return/Add', { state: { returnRecord: rtn } })}
+                          onDelete={() => handleDeleteReturnRecord(rtn.id)}
+                          editTitle="Edit Return"
+                          deleteTitle="Delete Return"
+                        />
                       </td>
                     </tr>
                   );

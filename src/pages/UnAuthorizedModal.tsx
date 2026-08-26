@@ -30,7 +30,7 @@ const UnAuthorizedModal: React.FC<{ alertMessage: AlertMessage[] | null }> = ({
       <button
         onClick={() => hideModal(true)}
         type="submit"
-        className="w-full bg-primary text-white p-2 rounded-lg hover:bg-blue-600"
+        className="w-full bg-emerald-600 text-white p-2.5 rounded-xl font-bold hover:bg-emerald-700 transition shadow-sm cursor-pointer"
       >
         Cancel
       </button>

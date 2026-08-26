@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
-import { MdDelete, MdAdd, MdEdit, MdClose } from 'react-icons/md';
+import TableActions from '../../ui/TableActions';
+import { MdDelete, MdAdd, MdEdit, MdClose, MdCategory } from 'react-icons/md';
 
 import { useAuth } from '../../Context/Auth';
 
@@ -162,13 +163,21 @@ const Categories = () => {
                 </h2>
             </div>
 
-            {/* FIXED TOP ROW HORIZONTAL INPUT REGISTRATION GRID CONTROLLER BLOCK */}
-            <div className={`rounded-sm border shadow-default p-5 transition duration-150
-        ${editingId ? 'border-primary bg-blue-50/10 dark:bg-meta-4/10' : 'border-stroke bg-white dark:border-strokedark dark:bg-boxdark'}`}>
+            <div className={`rounded-xl border shadow-xs p-5 transition duration-150
+        ${editingId ? 'border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-slate-200/80 bg-white dark:border-slate-800 dark:bg-boxdark'}`}>
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
+                        <MdCategory className="text-emerald-600 text-lg" />
+                        <span>{editingId ? 'Modify Selected Category' : 'Register New Category'}</span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
+                        {categories.length} Categories Registered
+                    </span>
+                </div>
                 <form onSubmit={handleFormSubmit} className="flex flex-col md:flex-row items-end gap-4 text-xs">
                     <div className="flex-1 w-full">
                         <label className="block text-gray-500 mb-1.5 font-medium">
-                            {editingId ? 'Modify Selected Category: *' : 'Add Category: *'}
+                            Category Name: *
                         </label>
                         <input
                             type="text"
@@ -184,7 +193,7 @@ const Categories = () => {
                             <button
                                 type="button"
                                 onClick={handleCancelEdit}
-                                className="flex items-center justify-center gap-1 rounded bg-danger py-3 px-5 font-medium text-white hover:bg-opacity-90 transition text-xs shadow-sm h-[38px]"
+                                className="flex items-center justify-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2.5 px-5 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer h-[38px]"
                             >
                                 <MdClose size={16} /> Cancel
                             </button>
@@ -192,8 +201,7 @@ const Categories = () => {
                         <button
                             type="submit"
                             disabled={submitting}
-                            className={`w-full md:w-auto flex items-center justify-center gap-1.5 rounded py-3 px-8 font-medium text-white hover:bg-opacity-90 transition text-xs shadow-sm h-[38px]
-                ${editingId ? 'bg-success' : 'bg-primary'}`}
+                            className="w-full md:w-auto flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 px-8 font-bold text-white transition shadow-md text-xs cursor-pointer h-[38px] disabled:opacity-50"
                         >
                             {submitting ? (
                                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -270,27 +278,13 @@ const Categories = () => {
                                             <td className="py-3.5 px-4 text-black dark:text-white font-medium">{serialNumber}</td>
                                             <td className="py-3.5 px-4 text-black dark:text-white uppercase tracking-tight">{cat.name}</td>
 
-                                            {/* FIXED FIXED ACTIONS BAR INTERNET LAYOUT CONTAINING BOTH MDEDIT AND MDDELETE BUTTONS */}
-                                            <td className="py-3.5 px-4">
-                                                <div className="flex items-center justify-center space-x-4">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleTriggerEdit(cat)}
-                                                        className="text-gray-500 hover:text-primary transition p-0.5"
-                                                        title="Edit Category Name String"
-                                                        disabled={isCurrentRowEditing}
-                                                    >
-                                                        <MdEdit size={18} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteCategory(cat.id)}
-                                                        className="text-gray-500 hover:text-danger transition p-0.5"
-                                                        title="Delete Record Item"
-                                                    >
-                                                        <MdDelete size={18} />
-                                                    </button>
-                                                </div>
+                                            <td className="py-3.5 px-4 text-center">
+                                                <TableActions
+                                                    onEdit={() => handleTriggerEdit(cat)}
+                                                    onDelete={() => handleDeleteCategory(cat.id)}
+                                                    editTitle="Edit Category"
+                                                    deleteTitle="Delete Category"
+                                                />
                                             </td>
                                         </tr>
                                     );

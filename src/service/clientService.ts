@@ -11,8 +11,6 @@ export interface CreateClientUserPayload {
   sellerNTNCNIC?: string;
   sellerProvince?: string;
   sellerAddress?: string;
-  fbrBearerToken?: string;
-  fbrEnvironment?: 'sandbox' | 'production';
   businessActivity?: string;
   businessSector?: string;
   defaultScenarioId?: string;
@@ -45,13 +43,13 @@ export const verifyTenantSlug = async (slug: string): Promise<boolean> => {
 };
 
 /**
- * Service to register a new Client Company with complete FBR Digital Invoicing Seller details.
- * Attaches tenant_id and FBR metadata to user_metadata and records in public.tenants.
+ * Service to register a new Client Company with complete details.
+ * Attaches tenant_id to user_metadata and records in public.tenants.
  */
 export const registerClient = async (payload: CreateClientUserPayload) => {
   const cleanSlug = payload.tenantSlug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-');
 
-  // 1. Sign up the user in Supabase Auth with tenant & FBR metadata
+  // 1. Sign up the user in Supabase Auth with tenant metadata
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email: payload.email,
     password: payload.password,
@@ -64,7 +62,6 @@ export const registerClient = async (payload: CreateClientUserPayload) => {
         seller_ntn_cnic: payload.sellerNTNCNIC || '',
         seller_province: payload.sellerProvince || 'SINDH',
         seller_address: payload.sellerAddress || '',
-        fbr_environment: payload.fbrEnvironment || 'sandbox',
         business_activity: payload.businessActivity || 'Wholesale / Retails',
         business_sector: payload.businessSector || 'All Other Sectors',
         default_scenario_id: payload.defaultScenarioId || 'SN001',
@@ -87,8 +84,6 @@ export const registerClient = async (payload: CreateClientUserPayload) => {
         seller_ntn_cnic: payload.sellerNTNCNIC || '',
         seller_province: payload.sellerProvince || 'SINDH',
         seller_address: payload.sellerAddress || '',
-        fbr_bearer_token: payload.fbrBearerToken || '',
-        fbr_environment: payload.fbrEnvironment || 'sandbox',
         business_activity: payload.businessActivity || 'Wholesale / Retails',
         business_sector: payload.businessSector || 'All Other Sectors',
         default_scenario_id: payload.defaultScenarioId || 'SN001',

@@ -440,7 +440,7 @@ export const recalculateInvoiceSettlementStatus = async (invoiceId: string | num
 
     const { data: inv } = await supabase
       .from('sales_invoices')
-      .select('id, total_amount, cash_amount_paid, bankPayments')
+      .select('id, total_amount, cash_amount_paid, bank_amount')
       .eq('id', Number(rawInvId))
       .maybeSingle();
 
@@ -450,7 +450,7 @@ export const recalculateInvoiceSettlementStatus = async (invoiceId: string | num
     const { data: remVouchers } = await supabase
       .from('financial_vouchers')
       .select('total_amount')
-      .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher')
+      .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher')
       .or(`original_invoice_no.eq.${rawInvId},original_invoice_no.eq.INV-${rawInvId}`);
 
     const subsequentVoucherPaid = (remVouchers || []).reduce(
@@ -470,10 +470,7 @@ export const recalculateInvoiceSettlementStatus = async (invoiceId: string | num
     );
 
     // 3. Upfront payments made at the time of sale
-    const initialBankPaid = (inv.bankPayments || []).reduce(
-      (sum: number, b: any) => sum + (Number(b.bankAmount) || 0),
-      0
-    );
+    const initialBankPaid = Number(inv.bank_amount || 0);
     const initialCashPaid = Number(inv.cash_amount_paid || 0);
 
     const totalPaidSoFar = initialCashPaid + initialBankPaid + subsequentVoucherPaid + totalReturned;

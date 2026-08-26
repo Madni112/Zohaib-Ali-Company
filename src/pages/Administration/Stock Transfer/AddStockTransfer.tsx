@@ -361,22 +361,21 @@ const AddStockTransfer = () => {
 
 
               {/* ✅ MODIFIED RIGHT-ALIGNED BUTTON ROW CONTAINER */}
-              <div className="pt-4 mt-4 border-t border-stroke dark:border-strokedark flex justify-end gap-3">
+              <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-stroke dark:border-strokedark">
                 <button
                   type="button"
                   onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Administration/StockTransfer/List`)}
-                  className="bg-danger text-white py-2 px-8 rounded font-medium hover:bg-opacity-90 transition shadow-sm cursor-pointer"
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                 >
-
                   {isEditMode ? 'Close View' : 'Cancel'}
                 </button>
                 {!isEditMode && (
                   <button
                     type="submit"
                     disabled={loading}
-                    className="bg-primary text-white py-2 px-10 rounded font-medium hover:bg-opacity-90 transition shadow-sm cursor-pointer"
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                   >
-                    {loading ? <Spinner /> : 'Dispatch Stock'}
+                    {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>Dispatch Stock</span>}
                   </button>
                 )}
               </div>

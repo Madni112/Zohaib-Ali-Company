@@ -223,20 +223,20 @@ const AddEmployee = () => {
 
               </div>
 
-              <div className="mt-8 flex justify-end gap-3 border-t border-stroke dark:border-strokedark pt-4">
+              <div className="flex items-center justify-end gap-3 mt-8 pt-4 border-t border-stroke dark:border-strokedark">
                 <button
                   type="button"
                   onClick={() => navigate('/Administration/Employees/List')}
-                  className="rounded bg-danger py-2.5 px-6 font-medium text-white hover:bg-opacity-90 transition shadow-sm text-xs"
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`rounded ${isEditMode ? "bg-success" : "bg-primary"} py-2.5 px-8 font-medium text-white hover:bg-opacity-90 transition disabled:bg-opacity-40 shadow-sm text-xs`}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                 >
-                  {loading ? <Spinner /> : isEditMode ? 'Update Employee Details' : 'Save Employee Card'}
+                  {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Employee Details' : 'Save Employee Card'}</span>}
                 </button>
               </div>
 

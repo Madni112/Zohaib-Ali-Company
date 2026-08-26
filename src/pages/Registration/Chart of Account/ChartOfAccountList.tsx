@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdAccountBalanceWallet, MdAutoAwesome } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
+import { MdAdd, MdAccountBalanceWallet, MdAutoAwesome } from 'react-icons/md';
 
 const RECOMMENDED_DEFAULT_ACCOUNTS = [
     { account_code: '1010', account_title: 'Cash Box', category_code: 'A-Assets', control_code: 'Cash', notes: 'Main cash in hand vault / cash register' },
@@ -231,21 +232,23 @@ const ChartOfAccountList = () => {
                                     return (
                                         <tr key={account.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150">
                                             <td className="py-3.5 px-4 font-medium text-black dark:text-white">{serialNumber}</td>
-                                            <td className="py-3.5 px-4 font-mono font-bold text-primary tracking-wide">{account.account_code}</td>
-                                            <td className="py-3.5 px-4 font-bold text-black dark:text-white uppercase tracking-tight flex items-center gap-1.5">
-                                                <MdAccountBalanceWallet size={14} className="text-gray-400" /> {account.account_title}
+                                            <td className="py-3.5 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">{account.account_code}</td>
+                                            <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-1.5">
+                                                <MdAccountBalanceWallet size={14} className="text-emerald-600 dark:text-emerald-400" /> {account.account_title}
                                             </td>
-                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 font-semibold">{account.control_code}</td>
+                                            <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-semibold">{account.control_code}</td>
                                             <td className="py-3.5 px-4">
-                                                <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 dark:bg-meta-4 text-gray-600 dark:text-gray-300">
+                                                <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
                                                     {account.category_code}
                                                 </span>
                                             </td>
                                             <td className="py-3.5 px-4 text-center">
-                                                <div className="flex items-center justify-center space-x-3.5">
-                                                    <button type="button" onClick={() => navigate('/Registration/Chart-of-Account/Add', { state: { account } })} className="text-gray-500 hover:text-primary transition p-0.5"><MdEdit size={18} /></button>
-                                                   <button type="button" onClick={() => handleDeleteAccount(account.id)} className="text-gray-500 hover:text-danger transition p-0.5"><MdDelete size={18} /></button>
-                                                </div>
+                                                <TableActions
+                                                    onEdit={() => navigate('/Registration/Chart-of-Account/Add', { state: { account } })}
+                                                    onDelete={() => handleDeleteAccount(account.id)}
+                                                    editTitle="Edit Account"
+                                                    deleteTitle="Delete Account"
+                                                />
                                             </td>
                                         </tr>
                                     );

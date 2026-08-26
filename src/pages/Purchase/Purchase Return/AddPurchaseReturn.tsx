@@ -24,12 +24,17 @@ const AddPurchaseReturn = () => {
     const fetchReturnMetadata = async () => {
       try {
         setMetadataLoading(true);
-        const { data: vData } = await supabase.from('vendors').select('id, vendor_name').order('vendor_name', { ascending: true });
+        const { data: vData } = await supabase.from('vendors').select('*');
+        const normalizedVendors = (vData || []).map((v: any) => ({
+          id: v.id,
+          vendor_name: v.vendor_name || v.name || 'Unnamed Vendor'
+        })).sort((a: any, b: any) => a.vendor_name.localeCompare(b.vendor_name));
+
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
         const { data: prodData } = await supabase.from('products').select('id, product_name, purchase_price, uom');
         const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
 
-        if (vData) setVendors(vData);
+        setVendors(normalizedVendors);
         if (locData) setLocations(locData);
         if (prodData) setProductList(prodData);
         if (bankData) setBankAccountsList(bankData);
@@ -322,12 +327,20 @@ const AddPurchaseReturn = () => {
                 })()}
               </div>
 
-              <div className="pt-4 border-t border-stroke dark:border-strokedark flex justify-end gap-3">
-                <button type="button" onClick={() => navigate('/Purchase/Purchase-Return/List')} className="rounded bg-[#cb3c53] py-2 px-8 font-semibold text-xs text-white hover:bg-opacity-90 transition shadow-sm h-9 min-w-32 cursor-pointer">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
+                <button
+                  type="button"
+                  onClick={() => navigate('/Purchase/Purchase-Return/List')}
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
+                >
                   Cancel
                 </button>
-                <button type="submit" disabled={loading} className={`rounded ${isEditMode ? 'bg-success' : 'bg-[#4338ca]'} py-2 px-10 font-bold text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 min-w-32 cursor-pointer font-semibold`}>
-                  {loading ? <Spinner /> : isEditMode ? 'Update Note' : 'Save Return'}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                >
+                  {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Note' : 'Save Return'}</span>}
                 </button>
               </div>
             </Form>

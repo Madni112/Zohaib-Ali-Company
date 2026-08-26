@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete, MdAccountBalance } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
+import { MdAccountBalance } from 'react-icons/md';
 
 const BankAccountList = () => {
   const [banks, setBanks] = useState<any[]>([]);
@@ -43,59 +44,52 @@ const BankAccountList = () => {
   };
 
   return (
-    <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-      <div className="flex justify-between items-center mb-6 border-b border-stroke dark:border-strokedark pb-4">
-        <h4 className="text-xl font-semibold text-black dark:text-white flex items-center gap-2">
-          <MdAccountBalance className="text-primary text-2xl" /> Bank Accounts Directory
-        </h4>
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-sm dark:border-slate-800/80 dark:bg-[#111827]">
+      <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div>
+          <h4 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+            <MdAccountBalance className="text-emerald-600 dark:text-emerald-400 text-2xl" /> Bank Accounts Directory
+          </h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage enterprise bank accounts, branches & IBAN ledgers</p>
+        </div>
         <button 
           onClick={() => navigate('/Registration/Bank-Account/AddBank')}
-          className="bg-primary hover:bg-opacity-90 text-white font-medium py-2 px-4 rounded text-sm transition-all shadow-sm"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-sm cursor-pointer"
         >
-          + Add New Bank Account
+          + Add Bank Account
         </button>
       </div>
 
-      <div className="max-w-full overflow-x-auto">
-        <table className="w-full table-auto text-sm">
+      <div className="max-w-full overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+        <table className="w-full table-auto text-xs">
           <thead>
-            <tr className="bg-gray-2 text-left dark:bg-meta-4">
-              <th className="py-4 px-4 font-medium text-black dark:text-white">Account Title</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">Account Number</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">Branch Name</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white">Branch Code</th>
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-center">Actions</th>
+            <tr className="bg-slate-50 dark:bg-slate-800/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
+              <th className="py-3.5 px-4 font-bold">Account Title</th>
+              <th className="py-3.5 px-4 font-bold">Account Number</th>
+              <th className="py-3.5 px-4 font-bold">Branch Name</th>
+              <th className="py-3.5 px-4 font-bold">Branch Code</th>
+              <th className="py-3.5 px-4 font-bold text-center w-24">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={5} className="text-center py-10"><Spinner /></td></tr>
             ) : banks.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-10 text-gray-500">No records found. Click "+ Add New Bank Account" to begin.</td></tr>
+              <tr><td colSpan={5} className="text-center py-10 text-slate-400 italic">No bank records found. Click "+ Add Bank Account" to begin.</td></tr>
             ) : (
               banks.map((b) => (
-                <tr key={b.id} className="border-b border-[#eee] dark:border-strokedark hover:bg-gray-50 dark:hover:bg-black transition-colors">
-                  <td className="py-5 px-4 font-medium text-black dark:text-white">{b.accountTitle}</td>
-                  <td className="py-5 px-4 font-mono text-gray-600 dark:text-bodydark">{b.accountNumber}</td>
-                  <td className="py-5 px-4">{b.branchName || 'N/A'}</td>
-                  <td className="py-5 px-4 font-medium text-primary">{b.branchCode || 'N/A'}</td>
-                  <td className="py-5 px-4">
-                    <div className="flex items-center justify-center space-x-3.5">
-                      <button 
-                        onClick={() => navigate('/Registration/Bank-Account/AddBank', { state: { bank: b } })}
-                        className="hover:text-primary transition-colors"
-                        title="Edit Details"
-                      >
-                        <MdEdit size={20} />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(b.id)}
-                        className="hover:text-danger transition-colors"
-                        title="Delete Ledger"
-                      >
-                        <MdDelete size={20} />
-                      </button>
-                    </div>
+                <tr key={b.id} className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                  <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{b.accountTitle}</td>
+                  <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300 font-semibold">{b.accountNumber}</td>
+                  <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">{b.branchName || 'N/A'}</td>
+                  <td className="py-3.5 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">{b.branchCode || 'N/A'}</td>
+                  <td className="py-3.5 px-4 text-center">
+                    <TableActions
+                      onEdit={() => navigate('/Registration/Bank-Account/AddBank', { state: { bank: b } })}
+                      onDelete={() => handleDelete(b.id)}
+                      editTitle="Edit Account"
+                      deleteTitle="Delete Account"
+                    />
                   </td>
                 </tr>
               ))

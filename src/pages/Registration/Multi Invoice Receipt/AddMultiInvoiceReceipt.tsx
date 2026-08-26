@@ -24,6 +24,9 @@ const AddMultiInvoiceReceipt = () => {
     const [banks, setBanks] = useState<any[]>([]);
     const [coaAccounts, setCoaAccounts] = useState<any[]>([]);
 
+    const [isCustDropdownOpen, setIsCustDropdownOpen] = useState(false);
+    const [highlightedCustIdx, setHighlightedCustIdx] = useState(0);
+
     const [formInitValues, setFormInitValues] = useState({
         receiptNo: `MRV-${Date.now().toString().slice(-6)}`,
         receiptDate: new Date().toISOString().split('T')[0],
@@ -31,6 +34,8 @@ const AddMultiInvoiceReceipt = () => {
         paymentMethod: 'Cash',
         selectedBankId: '',
         totalAmountCollected: 0,
+        cashAmount: 0,
+        bankAmount: 0,
         notes: '',
         allocations: [] as any[]
     });
@@ -39,7 +44,7 @@ const AddMultiInvoiceReceipt = () => {
         const fetchCoreMetadata = async () => {
             try {
                 setInitialLoading(true);
-                const { data: custData } = await supabase.from('customers').select('id, customerName');
+                const { data: custData } = await supabase.from('customers').select('id, customerName, primaryPhone');
                 const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle');
                 const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
                 if (custData) setCustomers(custData);
@@ -52,6 +57,15 @@ const AddMultiInvoiceReceipt = () => {
             }
         };
         fetchCoreMetadata();
+
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('.customer-search-container')) {
+                setIsCustDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const handleCustomerChange = async (chosenCustomer: string, setFieldValue: any) => {
@@ -63,11 +77,15 @@ const AddMultiInvoiceReceipt = () => {
 
         try {
             setFetchingInvoices(true);
+            const trimmedCustomer = chosenCustomer.trim();
+
             const { data: openInvoices, error } = await supabase
                 .from('sales_invoices')
-                .select('id, total_amount, cash_amount_paid, "bankPayments", receipt_status')
-                .eq('customer_name', chosenCustomer)
-                .in('receipt_status', ['Unpaid', 'Partial']);
+                .select('id, customer_name, total_amount, cash_amount_paid, bank_amount, receipt_status, created_at')
+                .ilike('customer_name', `%${trimmedCustomer}%`)
+                .not('receipt_status', 'ilike', '%RETURNED%')
+                .not('receipt_status', 'ilike', '%PAID%')
+                .order('id', { ascending: true });
 
             if (error) throw error;
 
@@ -78,20 +96,24 @@ const AddMultiInvoiceReceipt = () => {
             }
 
             const activeAllocationsPromise = openInvoices.map(async (inv) => {
-                let initialDownpayments = Number(inv.cash_amount_paid) || 0;
-                if (inv["bankPayments"] && Array.isArray(inv["bankPayments"])) {
-                    initialDownpayments += inv["bankPayments"].reduce((sum: number, b: any) => sum + (Number(b.bankAmount) || 0), 0);
-                }
+                const initialDownpayments = (Number(inv.cash_amount_paid) || 0) + (Number(inv.bank_amount) || 0);
 
                 const { data: historicalReceipts } = await supabase
                     .from('financial_vouchers')
                     .select('total_amount')
-                    .eq('original_invoice_no', String(inv.id))
-                    .in('voucher_type', ['Cash Receipt Voucher', 'Bank Receipt Voucher']);
+                    .or(`original_invoice_no.eq.${inv.id},original_invoice_no.eq.INV-${inv.id}`)
+                    .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher');
+
+                const { data: returnRecords } = await supabase
+                    .from('sales_returns')
+                    .select('total_amount')
+                    .or(`original_invoice_no.eq.${inv.id},original_invoice_no.eq.INV-${inv.id}`);
 
                 const historicalCleared = historicalReceipts ? historicalReceipts.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0) : 0;
+                const totalReturnedVal = returnRecords ? returnRecords.reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0) : 0;
+
                 const totalNetInvoiceValue = Number(inv.total_amount) || 0;
-                const outstandingRemainingDebt = Math.max(0, totalNetInvoiceValue - initialDownpayments - historicalCleared);
+                const outstandingRemainingDebt = Math.max(0, totalNetInvoiceValue - initialDownpayments - historicalCleared - totalReturnedVal);
 
                 return {
                     invoiceId: inv.id,
@@ -102,7 +124,9 @@ const AddMultiInvoiceReceipt = () => {
             });
 
             const functionalAllocationsArray = await Promise.all(activeAllocationsPromise);
-            const validAllocations = functionalAllocationsArray.filter(a => a.remainingBalance > 0.01);
+            const validAllocations = functionalAllocationsArray
+                .filter(a => a.remainingBalance > 0.01)
+                .sort((a, b) => Number(a.invoiceId) - Number(b.invoiceId));
 
             if (validAllocations.length === 0) {
                 toast.error('All credit invoices for this profile have already been fully cleared.');
@@ -141,6 +165,12 @@ const AddMultiInvoiceReceipt = () => {
     const validationSchema = Yup.object().shape({
         customerName: Yup.string().required('Please choose a target wholesale customer profile!'),
         receiptDate: Yup.string().required('Voucher entry execution date field is mandatory!'),
+        paymentMethod: Yup.string().oneOf(['Cash', 'Bank Transfer', 'Split']).required('Required Field'),
+        selectedBankId: Yup.string().when('paymentMethod', {
+            is: (val: string) => val === 'Bank Transfer' || val === 'Split',
+            then: (schema) => schema.required('Please select corporate bank ledger profile'),
+            otherwise: (schema) => schema.notRequired()
+        }),
         totalAmountCollected: Yup.number()
             .typeError('Collected payment value must be numeric')
             .min(1, 'Lump-sum collected payments must be greater than 0 PKR!')
@@ -185,6 +215,14 @@ const AddMultiInvoiceReceipt = () => {
                             return;
                         }
 
+                        if (values.paymentMethod === 'Split') {
+                            const splitSum = (Number(values.cashAmount) || 0) + (Number(values.bankAmount) || 0);
+                            if (Math.abs(splitSum - Number(values.totalAmountCollected)) > 1) {
+                                toast.error(`Split Error: Cash (Rs. ${Number(values.cashAmount || 0).toLocaleString()}) + Bank (Rs. ${Number(values.bankAmount || 0).toLocaleString()}) must equal Total Collected (Rs. ${Number(values.totalAmountCollected).toLocaleString()})`);
+                                return;
+                            }
+                        }
+
                         try {
                             setLoading(true);
                             // Dynamically resolve COA account codes from live Supabase records
@@ -208,26 +246,38 @@ const AddMultiInvoiceReceipt = () => {
                                 String(c.account_title || '').toLowerCase().includes('receivable')
                             );
 
-                            const assetAccountCode = values.paymentMethod === 'Cash'
-                                ? (cashCoa ? String(cashCoa.account_code) : '1010')
-                                : (bankCoa ? String(bankCoa.account_code) : '6789');
-
+                            const cashAccountCode = cashCoa ? String(cashCoa.account_code) : '1010';
+                            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : '6789';
                             const customerAccountCode = recCoa ? String(recCoa.account_code) : (cashCoa ? String(cashCoa.account_code) : '1010');
 
                             const activeRowsToClear = values.allocations.filter((a: any) => Number(a.amountToAllocate) > 0);
+                            const totalCollected = Number(values.totalAmountCollected) || 1;
+                            const cashRatio = values.paymentMethod === 'Split' ? (Number(values.cashAmount || 0) / totalCollected) : (values.paymentMethod === 'Cash' ? 1 : 0);
+                            const bankRatio = values.paymentMethod === 'Split' ? (Number(values.bankAmount || 0) / totalCollected) : (values.paymentMethod === 'Bank Transfer' ? 1 : 0);
 
                             for (const row of activeRowsToClear) {
                                 const rowAmount = Number(row.amountToAllocate);
-                                const balancedJournalItems = [
-                                    { accountCode: assetAccountCode, description: `Multi-Invoice Allocation Vch-${values.receiptNo} split against INV-${row.invoiceId}`, debit: rowAmount, credit: 0 },
-                                    { accountCode: customerAccountCode, description: `Multi-Invoice Allocation Vch-${values.receiptNo} split debt clear against INV-${row.invoiceId}`, debit: 0, credit: rowAmount }
-                                ];
+                                const rowCash = Number((rowAmount * cashRatio).toFixed(2));
+                                const rowBank = Number((rowAmount - rowCash).toFixed(2));
 
-                                const compositeNarration = `Customer: ${values.customerName} | Bulk Voucher: ${values.receiptNo} | Settling target segment of INV-${row.invoiceId} | Note: ${values.notes.trim()}`.trim();
+                                const balancedJournalItems = [];
+                                if (rowCash > 0) {
+                                    balancedJournalItems.push({ accountCode: cashAccountCode, description: `Cash allocation Vch-${values.receiptNo} against INV-${row.invoiceId}`, debit: rowCash, credit: 0 });
+                                }
+                                if (rowBank > 0) {
+                                    balancedJournalItems.push({ accountCode: bankAccountCode, description: `Bank allocation Vch-${values.receiptNo} against INV-${row.invoiceId}`, debit: rowBank, credit: 0 });
+                                }
+                                balancedJournalItems.push({ accountCode: customerAccountCode, description: `Debt clearance Vch-${values.receiptNo} against INV-${row.invoiceId}`, debit: 0, credit: rowAmount });
+
+                                const voucherType = values.paymentMethod === 'Split' 
+                                    ? 'Cash & Bank Receipt Voucher' 
+                                    : (values.paymentMethod === 'Cash' ? 'Cash Receipt Voucher' : 'Bank Receipt Voucher');
+
+                                const compositeNarration = `Customer: ${values.customerName} | Bulk Voucher: ${values.receiptNo} | Settling target segment of INV-${row.invoiceId} (${values.paymentMethod}) | Note: ${values.notes.trim()}`.trim();
 
                                 const financialVoucherPayload = {
                                     voucher_no: `${values.receiptNo}/INV-${row.invoiceId}`,
-                                    voucher_type: values.paymentMethod === 'Cash' ? 'Cash Receipt Voucher' : 'Bank Receipt Voucher',
+                                    voucher_type: voucherType,
                                     voucher_date: values.receiptDate,
                                     original_invoice_no: String(row.invoiceId),
                                     customerName: values.customerName,
@@ -235,8 +285,17 @@ const AddMultiInvoiceReceipt = () => {
                                     narration: compositeNarration,
                                     notes: compositeNarration,
                                     total_amount: rowAmount,
+                                    bank_name: selectedBankObj?.bankName || null,
+                                    payment_mode: values.paymentMethod,
                                     items: balancedJournalItems,
-                                    metadata: { bulk_parent_reference: values.receiptNo, selectedBankId: values.selectedBankId }
+                                    metadata: {
+                                        bulk_parent_reference: values.receiptNo,
+                                        selectedBankId: values.selectedBankId,
+                                        bankAccountTitle: selectedBankObj?.accountTitle || null,
+                                        paymentMethod: values.paymentMethod,
+                                        cashAmount: rowCash,
+                                        bankAmount: rowBank
+                                    }
                                 };
 
                                 const { error: insertError } = await supabase.from('financial_vouchers').insert([financialVoucherPayload]);
@@ -272,63 +331,230 @@ const AddMultiInvoiceReceipt = () => {
                 >
                     {({ values, handleChange, setFieldValue, errors, touched }) => (
                         <Form className="p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-xs">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 text-xs">
                                 <div>
                                     <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Receipt Voucher #:</label>
-                                    <p className="text-primary font-black text-sm font-mono">{values.receiptNo}</p>
+                                    <p className="text-primary font-black text-sm font-mono p-2 bg-gray-50 dark:bg-meta-4/10 rounded">{values.receiptNo}</p>
                                 </div>
                                 <div>
-                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Clearing Date:</label>
+                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Clearing Date: *</label>
                                     <input type="date" name="receiptDate" onChange={handleChange} value={values.receiptDate} className="w-full rounded border border-stroke p-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs font-semibold text-black dark:text-white" />
                                 </div>
-                                <div>
+                                <div className="relative customer-search-container">
                                     <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Target Customer Profile: *</label>
-                                    <select
-                                        name="customerName"
-                                        onChange={(e) => handleCustomerChange(e.target.value, setFieldValue)}
-                                        value={values.customerName}
-                                        className={`w-full rounded border p-2 bg-transparent outline-none text-xs font-black text-black dark:text-white ${errors.customerName && touched.customerName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
-                                    >
-                                        <option value="">-- Choose Debtor Client --</option>
-                                        {customers.map(c => <option key={c.id} value={c.customerName} className="dark:bg-boxdark text-black dark:text-white">{c.customerName}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Lump-Sum Amount Collected: *</label>
-                                    <input
-                                        type="number"
-                                        name="totalAmountCollected"
-                                        onKeyDown={blockInvalidChar}
-                                        onChange={(e) => handleAutoKnockoffDistribution(e.target.value, values.allocations, setFieldValue)}
-                                        value={values.totalAmountCollected || ''}
-                                        placeholder="Enter total received value"
-                                        className={`w-full rounded border p-2 bg-transparent outline-none text-xs font-black text-right ${errors.totalAmountCollected && touched.totalAmountCollected ? 'border-red-500 text-red-500' : 'border-stroke dark:border-strokedark text-success focus:border-primary'}`}
-                                        disabled={!values.customerName || fetchingInvoices}
-                                    />
+                                    {(() => {
+                                        const query = (values.customerName || '').toLowerCase().trim();
+                                        const filteredCustomers = customers.filter((c: any) => {
+                                            if (!query) return true;
+                                            const name = (c.customerName || '').toLowerCase();
+                                            const phone = (c.primaryPhone || '').toLowerCase();
+                                            return name.includes(query) || phone.includes(query);
+                                        });
+
+                                        return (
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    autoComplete="off"
+                                                    value={values.customerName}
+                                                    onFocus={() => {
+                                                        setIsCustDropdownOpen(true);
+                                                        setHighlightedCustIdx(0);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'ArrowDown') {
+                                                            e.preventDefault();
+                                                            setHighlightedCustIdx(prev => prev < filteredCustomers.length - 1 ? prev + 1 : 0);
+                                                        } else if (e.key === 'ArrowUp') {
+                                                            e.preventDefault();
+                                                            setHighlightedCustIdx(prev => prev > 0 ? prev - 1 : filteredCustomers.length - 1);
+                                                        } else if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (filteredCustomers.length > 0) {
+                                                                const chosen = filteredCustomers[highlightedCustIdx] || filteredCustomers[0];
+                                                                handleCustomerChange(chosen.customerName, setFieldValue);
+                                                                setIsCustDropdownOpen(false);
+                                                            }
+                                                        } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                                            setIsCustDropdownOpen(false);
+                                                        }
+                                                    }}
+                                                    onChange={(e) => {
+                                                        const typed = e.target.value;
+                                                        setFieldValue('customerName', typed);
+                                                        setIsCustDropdownOpen(true);
+                                                        setHighlightedCustIdx(0);
+
+                                                        // Exact match sync
+                                                        const matched = customers.find(c => c.customerName && c.customerName.toLowerCase() === typed.trim().toLowerCase());
+                                                        if (matched) {
+                                                            handleCustomerChange(matched.customerName, setFieldValue);
+                                                        }
+                                                    }}
+                                                    placeholder="Search debtor customer name..."
+                                                    className={`w-full rounded border p-2 bg-transparent outline-none text-xs font-black text-black dark:text-white ${errors.customerName && touched.customerName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                                                />
+
+                                                {/* RICH SEARCHABLE CUSTOMER DROPDOWN */}
+                                                {isCustDropdownOpen && (
+                                                    <div className="absolute left-0 top-full mt-1.5 z-[99999] w-full min-w-[280px] max-h-[260px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                                                        {filteredCustomers.map((c: any, cIdx: number) => {
+                                                            const isHighlighted = cIdx === highlightedCustIdx;
+                                                            return (
+                                                                <div
+                                                                    key={c.id}
+                                                                    onMouseEnter={() => setHighlightedCustIdx(cIdx)}
+                                                                    onMouseDown={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleCustomerChange(c.customerName, setFieldValue);
+                                                                        setIsCustDropdownOpen(false);
+                                                                    }}
+                                                                    className={`p-2.5 cursor-pointer transition flex items-center justify-between group ${
+                                                                        isHighlighted
+                                                                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
+                                                                            : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                                                                    }`}
+                                                                >
+                                                                    <div className="flex flex-col gap-0.5 text-left">
+                                                                        <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                                                                            {c.customerName}
+                                                                        </span>
+                                                                        {c.primaryPhone && (
+                                                                            <span className="text-[10px] text-slate-400 font-mono">
+                                                                                📞 {c.primaryPhone}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {filteredCustomers.length === 0 && (
+                                                            <div className="p-3 text-center text-xs text-slate-400 italic">
+                                                                No matching customers found
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                    {errors.customerName && touched.customerName && <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.customerName)}</p>}
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-xs border border-stroke dark:border-strokedark p-4 rounded-sm bg-slate-50/10">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-xs border border-stroke dark:border-strokedark p-4 rounded-sm bg-slate-50/10">
                                 <div>
-                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Payment Instrument Mode:</label>
-                                    <select name="paymentMethod" onChange={handleChange} value={values.paymentMethod} className="w-full rounded border border-stroke p-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs font-bold text-black dark:text-white">
-                                        <option value="Cash" className="dark:bg-boxdark">Cash Box Register</option>
-                                        <option value="Bank Transfer" className="dark:bg-boxdark">Direct Bank Deposit / Wire / Check</option>
+                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Payment Instrument Mode: *</label>
+                                    <select 
+                                        name="paymentMethod" 
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setFieldValue('paymentMethod', val);
+                                            if (val === 'Cash') {
+                                                setFieldValue('selectedBankId', '');
+                                                setFieldValue('cashAmount', values.totalAmountCollected);
+                                                setFieldValue('bankAmount', 0);
+                                            } else if (val === 'Bank Transfer') {
+                                                setFieldValue('cashAmount', 0);
+                                                setFieldValue('bankAmount', values.totalAmountCollected);
+                                            } else if (val === 'Split') {
+                                                setFieldValue('cashAmount', values.totalAmountCollected);
+                                                setFieldValue('bankAmount', 0);
+                                            }
+                                        }} 
+                                        value={values.paymentMethod} 
+                                        className="w-full rounded border border-stroke p-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs font-bold text-black dark:text-white"
+                                    >
+                                        <option value="Cash" className="dark:bg-boxdark">Cash Only</option>
+                                        <option value="Bank Transfer" className="dark:bg-boxdark">Bank Transfer Only</option>
+                                        <option value="Split" className="dark:bg-boxdark">Cash & Bank Combined</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Asset Target Bank Ledger Account: {values.paymentMethod === 'Cash' && <span className="text-gray-400 font-normal">(Disabled for Cash)</span>}</label>
+                                <div className={values.paymentMethod === 'Cash' ? 'opacity-50' : ''}>
+                                    <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">
+                                        Asset Target Bank Ledger Account: {values.paymentMethod === 'Cash' && <span className="text-gray-400 font-normal">(Disabled for Cash)</span>}
+                                    </label>
                                     <select
                                         name="selectedBankId"
                                         onChange={handleChange}
                                         value={values.selectedBankId}
                                         disabled={values.paymentMethod === 'Cash'}
-                                        className="w-full rounded border border-stroke p-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs text-black dark:text-white font-semibold disabled:bg-gray-100 dark:disabled:bg-meta-4/20 disabled:cursor-not-allowed"
+                                        className={`w-full rounded border p-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs text-black dark:text-white font-semibold disabled:bg-gray-100 dark:disabled:bg-meta-4/20 disabled:cursor-not-allowed ${errors.selectedBankId && touched.selectedBankId ? 'border-red-500' : 'border-stroke'}`}
                                     >
-                                        <option value="" className="dark:bg-boxdark">-- Choose Vault/Account --</option>
+                                        <option value="" className="dark:bg-boxdark">-- Choose Bank Account --</option>
                                         {banks.map(b => <option key={b.id} value={b.id} className="dark:bg-boxdark">{b.bankName} - {b.accountTitle}</option>)}
                                     </select>
+                                    {errors.selectedBankId && touched.selectedBankId && <p className="text-red-500 text-[10px] mt-0.5">{String(errors.selectedBankId)}</p>}
                                 </div>
+
+                                {values.paymentMethod !== 'Split' ? (
+                                    <div>
+                                        <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">
+                                            {values.paymentMethod === 'Cash' ? 'Cash Collected (PKR): *' : 'Bank Received (PKR): *'}
+                                        </label>
+                                        <input
+                                            type="number"
+                                            name="totalAmountCollected"
+                                            onKeyDown={blockInvalidChar}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                handleAutoKnockoffDistribution(val, values.allocations, setFieldValue);
+                                                if (values.paymentMethod === 'Cash') {
+                                                    setFieldValue('cashAmount', Number(val) || 0);
+                                                    setFieldValue('bankAmount', 0);
+                                                } else {
+                                                    setFieldValue('cashAmount', 0);
+                                                    setFieldValue('bankAmount', Number(val) || 0);
+                                                }
+                                            }}
+                                            value={values.totalAmountCollected || ''}
+                                            placeholder="Enter total received value"
+                                            className={`w-full rounded border p-2 bg-transparent outline-none text-xs font-black text-right ${errors.totalAmountCollected && touched.totalAmountCollected ? 'border-red-500 text-red-500' : 'border-stroke dark:border-strokedark text-success focus:border-primary'}`}
+                                            disabled={!values.customerName || fetchingInvoices}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Cash Portion: *</label>
+                                            <input
+                                                type="number"
+                                                name="cashAmount"
+                                                onKeyDown={blockInvalidChar}
+                                                value={values.cashAmount || ''}
+                                                onChange={(e) => {
+                                                    const cash = Math.max(0, Number(e.target.value) || 0);
+                                                    setFieldValue('cashAmount', cash);
+                                                    const bank = Number(values.bankAmount || 0);
+                                                    const total = cash + bank;
+                                                    handleAutoKnockoffDistribution(String(total), values.allocations, setFieldValue);
+                                                }}
+                                                placeholder="0"
+                                                className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-transparent outline-none text-xs font-black text-right text-black dark:text-white focus:border-primary"
+                                                disabled={!values.customerName || fetchingInvoices}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-medium mb-1.5 uppercase text-gray-500 font-bold">Bank Portion: *</label>
+                                            <input
+                                                type="number"
+                                                name="bankAmount"
+                                                onKeyDown={blockInvalidChar}
+                                                value={values.bankAmount || ''}
+                                                onChange={(e) => {
+                                                    const bank = Math.max(0, Number(e.target.value) || 0);
+                                                    setFieldValue('bankAmount', bank);
+                                                    const cash = Number(values.cashAmount || 0);
+                                                    const total = cash + bank;
+                                                    handleAutoKnockoffDistribution(String(total), values.allocations, setFieldValue);
+                                                }}
+                                                placeholder="0"
+                                                className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-transparent outline-none text-xs font-black text-right text-emerald-600 dark:text-emerald-400 focus:border-primary"
+                                                disabled={!values.customerName || fetchingInvoices}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="w-full overflow-x-auto border border-stroke dark:border-strokedark rounded-sm mb-6">
                                 <table className="w-full border-collapse text-[12px] text-center min-w-[800px] table-fixed">
@@ -417,12 +643,20 @@ const AddMultiInvoiceReceipt = () => {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-4 pt-4 border-t border-stroke dark:border-strokedark">
-                                <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`)} className="rounded bg-danger py-2.5 px-8 font-medium text-white hover:bg-opacity-90 transition text-xs shadow-sm h-10 min-w-36 cursor-pointer" >Cancel</button>
-                                
-
-                                <button type="submit" disabled={loading || values.allocations.length === 0} className="bg-primary text-white py-2 px-10 rounded font-semibold text-sm hover:bg-opacity-90 transition shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer" >
-                                    {loading ? <Spinner /> : 'Save Bulk Receipt'}
+                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`)}
+                                    className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={loading || values.allocations.length === 0}
+                                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                                >
+                                    {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>Save Bulk Receipt</span>}
                                 </button>
                             </div>
                         </Form>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdEdit, MdDelete } from 'react-icons/md';
+import TableActions from '../../../ui/TableActions';
 
 const PurchaseReturnReceiptList = () => {
   const navigate = useNavigate();
@@ -81,9 +81,16 @@ const PurchaseReturnReceiptList = () => {
                 <td className="py-3 px-4 font-mono font-black text-primary">{rcpt.receipt_no}</td>
                 <td className="py-3 px-4 font-mono font-bold text-gray-500">{rcpt.return_no}</td>
                 <td className="py-3 px-4">{rcpt.vendor_name}</td>
-                <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 border text-[10px] rounded font-bold ${rcpt.payment_method === 'By Cash' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>{rcpt.payment_method}</span></td>
+                <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 border text-[10px] rounded font-bold ${rcpt.payment_method === 'By Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60'}`}>{rcpt.payment_method}</span></td>
                 <td className="py-3 px-4 text-right font-mono font-black text-success pr-6">Rs. {Number(rcpt.amount_received || 0).toLocaleString()}</td>
-                <td className="py-3 px-4 text-center"><div className="flex justify-center space-x-2"><button type="button" onClick={() => navigate('/Purchase/Purchase-Return-Receipt/Add', { state: { receiptRecord: rcpt } })} className="text-gray-400 hover:text-primary"><MdEdit size={16} /></button><button type="button" onClick={() => handleDeleteReceipt(rcpt.id)} className="text-gray-400 hover:text-danger"><MdDelete size={16} /></button></div></td>
+                <td className="py-3 px-4 text-center">
+                  <TableActions
+                    onEdit={() => navigate('/Purchase/Purchase-Return-Receipt/Add', { state: { receiptRecord: rcpt } })}
+                    onDelete={() => handleDeleteReceipt(rcpt.id)}
+                    editTitle="Edit Receipt"
+                    deleteTitle="Delete Receipt"
+                  />
+                </td>
               </tr>
             ))}
           </tbody>

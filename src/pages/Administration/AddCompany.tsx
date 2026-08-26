@@ -130,10 +130,20 @@ const AddCompany = () => {
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-6 relative">
 
+            {/* SCREEN ROUTE TITLE HEADER */}
+            <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
+                    Company
+                </h2>
+            </div>
+
             {/* INPUT FORM BLOCK */}
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-                <div className="border-b border-stroke py-4 px-6.5 dark:border-strokedark">
+                <div className="border-b border-stroke py-4 px-6.5 dark:border-strokedark flex items-center justify-between">
                     <h3 className="font-medium text-black dark:text-white">Add New Company</h3>
+                    <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 font-mono">
+                        {companies.length} Companies Registered
+                    </span>
                 </div>
                 <form onSubmit={handleAddCompany} className="p-6.5">
                     {message.text && (

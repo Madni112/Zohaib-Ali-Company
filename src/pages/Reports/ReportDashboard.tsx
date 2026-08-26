@@ -70,7 +70,7 @@ const ReportDashboard = () => {
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-black dark:text-white">ERP Corporate Analytics Reporting Center</h2>
+          <h2 className="text-xl font-bold text-black dark:text-white">Corporate Analytics Reporting Center</h2>
           <p className="text-xs text-gray-400">Generate, filter and inspect transactional audit sheets, bank balances, and balance sheets</p>
         </div>
       </div>
@@ -212,7 +212,7 @@ const ReportDashboard = () => {
                   <tr key={st.id} className="border-b font-semibold border-stroke dark:border-strokedark text-black dark:text-white hover:bg-slate-50/50">
                     <td className="p-3 text-gray-400">{i + 1}</td>
                     <td className="p-3 font-bold text-black dark:text-white">{st.product_name}</td>
-                    <td className="p-3"><span className="bg-blue-50 dark:bg-meta-4 text-primary dark:text-white px-2 py-0.5 rounded-sm uppercase text-[10px] font-black">{st.warehouse_name}</span></td>
+                    <td className="p-3"><span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{st.warehouse_name}</span></td>
                     <td className="p-3 text-center font-mono font-black text-warning">{Number(st.quantity || 0).toLocaleString()} Units</td>
                   </tr>
                 ))}
@@ -317,10 +317,10 @@ const ReportDashboard = () => {
                     <b className="text-success">Rs. {metrics.totalAssets.toLocaleString()}</b>
                   </h4>
                   <div className="space-y-2">
-                    <div className="flex justify-between"><span>Cash in Hand:</span><b className="text-emerald-600">Rs. {metrics.cashBalance.toLocaleString()}</b></div>
-                    <div className="flex justify-between"><span>Bank Accounts Total:</span><b className="text-primary">Rs. {metrics.totalBankBalance.toLocaleString()}</b></div>
-                    <div className="flex justify-between"><span>Accounts Receivable:</span><b className="text-blue-600">Rs. {metrics.totalReceivables.toLocaleString()}</b></div>
-                    <div className="flex justify-between"><span>Merchandise Inventory:</span><b className="text-purple-600">Rs. {metrics.inventoryAssetValue.toLocaleString()}</b></div>
+                    <div className="flex justify-between"><span>Cash in Hand:</span><b className="text-emerald-600 dark:text-emerald-400">Rs. {metrics.cashBalance.toLocaleString()}</b></div>
+                    <div className="flex justify-between"><span>Bank Accounts Total:</span><b className="text-teal-600 dark:text-teal-400">Rs. {metrics.totalBankBalance.toLocaleString()}</b></div>
+                    <div className="flex justify-between"><span>Accounts Receivable:</span><b className="text-amber-600 dark:text-amber-400">Rs. {metrics.totalReceivables.toLocaleString()}</b></div>
+                    <div className="flex justify-between"><span>Merchandise Inventory:</span><b className="text-emerald-700 dark:text-emerald-300">Rs. {metrics.inventoryAssetValue.toLocaleString()}</b></div>
                   </div>
                 </div>
 

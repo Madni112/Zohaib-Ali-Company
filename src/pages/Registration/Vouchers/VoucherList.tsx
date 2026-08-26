@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { MdReceipt, MdAssignment, MdDelete } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
 import { recalculateInvoiceSettlementStatus } from '../../../service/financialCalculations';
@@ -168,21 +169,18 @@ function VoucherList() {
                               </div>
                             );
                           })}
-                          {(v.notes || v.narration) && <p className="text-[10px] text-primary dark:text-blue-400 border-t border-stroke dark:border-strokedark mt-1 pt-0.5 italic">Note: {v.notes || v.narration}</p>}
+                          {(v.notes || v.narration) && <p className="text-[10px] text-emerald-600 dark:text-emerald-400 border-t border-stroke dark:border-strokedark mt-1 pt-0.5 italic">Note: {v.notes || v.narration}</p>}
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-right font-bold text-black dark:text-white font-mono">{Number(v.total_amount || 0).toFixed(2)}</td>
                       <td className="py-3.5 px-4 text-center text-gray-500 font-medium">{v.voucher_date}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-3">
-                          <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/Vouchers/Add`, { state: { voucher: v } })} className="text-gray-500 hover:text-primary transition p-0.5 cursor-pointer" title="View or Edit Voucher Details" >
-                            <MdReceipt size={18} />
-                          </button>
-
-                          <button type="button" onClick={() => handleDeleteVoucher(v.id)} className="text-gray-500 hover:text-danger transition p-0.5 cursor-pointer" title="Delete Voucher Profile" >
-                            <MdDelete size={18} />
-                          </button>
-                        </div>
+                        <TableActions
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/Vouchers/Add`, { state: { voucher: v } })}
+                          onDelete={() => handleDeleteVoucher(v.id)}
+                          editTitle="View or Edit Voucher"
+                          deleteTitle="Delete Voucher"
+                        />
                       </td>
                     </tr>
                   );

@@ -322,20 +322,20 @@ const AddChartOfAccount = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t border-stroke dark:border-strokedark">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
                   <button
                     type="button"
                     onClick={() => navigate('/Registration/Chart-of-Account/List')}
-                    className="rounded bg-danger py-2.5 px-8 font-medium text-white hover:bg-opacity-90 transition text-xs shadow-sm h-10 min-w-36 cursor-pointer"
+                    className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className={`rounded ${isEditMode ? 'bg-success' : 'bg-primary'} py-2.5 px-8 font-medium text-white hover:bg-opacity-90 transition disabled:bg-opacity-40 text-xs shadow-sm h-10 min-w-36 cursor-pointer`}
+                    className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                   >
-                    {loading ? <Spinner /> : isEditMode ? 'Update Record' : 'Save Record'}
+                    {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Record' : 'Save Record'}</span>}
                   </button>
                 </div>
 

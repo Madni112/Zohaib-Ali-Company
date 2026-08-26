@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { MdEdit, MdDelete, MdCompareArrows } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
 
@@ -143,6 +144,14 @@ const StockTransferList = () => {
       </div>
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+        <div className="border-b border-stroke dark:border-strokedark pb-3 mb-4 flex items-center justify-between">
+          <span className="text-xs font-bold text-black dark:text-white">
+            Stock Transfer Transactions
+          </span>
+          <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 font-mono">
+            {transfers.length} Transfers Recorded
+          </span>
+        </div>
         
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -194,23 +203,13 @@ const StockTransferList = () => {
                           {item.status}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-center flex items-center justify-center gap-2">
-                        <button 
-                          type="button" 
-                          onClick={() => navigate('/Administration/StockTransfer/Add', { state: { transfer: item } })}
-                          className="text-gray-500 hover:text-primary transition p-0.5"
-                          title="View or Modify Transfer"
-                        >
-                          <MdEdit size={18} />
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => handleDeleteTransferRecord(item.id)}
-                          className="text-gray-500 hover:text-danger transition p-0.5"
-                          title="Delete Stock Transfer"
-                        >
-                          <MdDelete size={18} />
-                        </button>
+                      <td className="py-3.5 px-4 text-center">
+                        <TableActions
+                          onEdit={() => navigate('/Administration/StockTransfer/Add', { state: { transfer: item } })}
+                          onDelete={() => handleDeleteTransferRecord(item.id)}
+                          editTitle="View or Modify Transfer"
+                          deleteTitle="Delete Stock Transfer"
+                        />
                       </td>
                     </tr>
                   );

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { useNavigate } from 'react-router-dom';
 import { MdDelete, MdEdit } from 'react-icons/md';
 
@@ -18,13 +19,29 @@ const SaleReturnReceiptList = () => {
     const fetchReceiptsLog = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            const { data: receiptRows, error: receiptError } = await supabase
                 .from('sales_return_receipts')
-                .select('*, sales_returns(total_amount, payout_amount_paid)')
+                .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
-            setReceipts(data || []);
+            if (receiptError) throw receiptError;
+
+            const { data: returnsData } = await supabase
+                .from('sales_returns')
+                .select('id, total_amount, payout_amount_paid, invoice_no');
+
+            const returnsMap = new Map((returnsData || []).map((r: any) => [String(r.id), r]));
+            const returnsInvoiceMap = new Map((returnsData || []).map((r: any) => [String(r.invoice_no).replace('INV-', ''), r]));
+
+            const combinedReceipts = (receiptRows || []).map((rec: any) => {
+                const parentReturn = returnsMap.get(String(rec.sales_return_id)) || returnsInvoiceMap.get(String(rec.original_invoice_no).replace('INV-', '')) || {};
+                return {
+                    ...rec,
+                    sales_returns: parentReturn
+                };
+            });
+
+            setReceipts(combinedReceipts);
         } catch (err: any) {
             toast.error('Failed to load receipts: ' + err.message);
         } finally {
@@ -94,82 +111,52 @@ const SaleReturnReceiptList = () => {
                                 <th className="py-3 px-4 text-center">Settlement Mode</th>
                                 <th className="py-3 px-4">Allocated Bank Ledger</th>
                                 <th className="py-3 px-4 text-right pr-4">Amount Payout Remitted</th>
-                                {/* --- ✅ NEW HEADER SPEC: ADDED THE REFUND CASH-FLOW MONITOR COLUMN --- */}
-                                <th className="py-3 px-4 text-center">Payment Status</th>
                                 <th className="py-3 px-4 text-center w-28">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={9} className="text-center py-12"><Spinner /></td></tr>
+                                <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
                             ) : filteredReceipts.length === 0 ? (
-                                <tr><td colSpan={9} className="text-center py-12 text-gray-400 font-bold italic bg-gray-50/50">No remittance adjustment entries currently logged.</td></tr>
+                                <tr><td colSpan={8} className="text-center py-12 text-gray-400 font-bold italic bg-gray-50/50">No remittance adjustment entries currently logged.</td></tr>
                             ) : (
                                 filteredReceipts.map((rec) => {
 
-                                    // --- ✅ FIXED: CLEAN STRING COMPILER FOR TYPINGS ASSIGNMENTS ---
-                                    let displayDate = String(rec.processing_date || '').trim();
+                                    let displayDate = String(rec.payment_date || rec.processing_date || rec.created_at || '').trim();
                                     if (displayDate.startsWith('[')) {
                                         displayDate = displayDate.replace(/[\[\]"']/g, '').split(',')[0];
                                     }
-
-                                    const parentBill = rec.sales_returns || {};
-                                    const currentTotalPaidBack = Number(parentBill.payout_amount_paid || 0);
-                                    const returnBillItemsSum = Number(parentBill.total_amount || 0);
-
-                                    let statusTextText = "Payment Not Returned Yet";
-                                    let statusBadgeColorStyle = "bg-red-500";
-
-                                    if (currentTotalPaidBack === 0) {
-                                        statusTextText = "Payment Not Returned Yet";
-                                        statusBadgeColorStyle = "bg-red-500";
-                                    } else if (currentTotalPaidBack >= returnBillItemsSum && returnBillItemsSum > 0) {
-                                        statusTextText = "All Amount Received";
-                                        statusBadgeColorStyle = "bg-success";
-                                    } else {
-                                        statusTextText = "Partially Disbursed";
-                                        statusBadgeColorStyle = "bg-amber-500";
+                                    if (displayDate.includes('T')) {
+                                        displayDate = displayDate.split('T')[0];
                                     }
+
+                                    const rawInvoice = String(rec.invoice_no || rec.original_invoice_no || '').trim();
+                                    const cleanInv = rawInvoice.replace(/^inv-?/i, '').trim();
+                                    const formattedInvoiceNo = cleanInv ? `INV-${cleanInv.padStart(4, '0')}` : (rawInvoice || '-');
+
+                                    const formattedReceiptNo = rec.receipt_no || `REC-${String(rec.id).padStart(4, '0')}`;
 
                                     return (
                                         <tr key={rec.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
-                                            <td className="py-2.5 px-4 text-center font-bold font-mono text-primary">REC-{String(rec.id).padStart(4, '0')}</td>
+                                            <td className="py-2.5 px-4 text-center font-bold font-mono text-primary">{formattedReceiptNo}</td>
                                             <td className="py-2.5 px-4 text-gray-500 whitespace-nowrap">{displayDate}</td>
                                             <td className="py-2.5 px-4 font-sans font-bold">{rec.customer_name}</td>
-                                            <td className="py-2.5 px-4 font-mono text-danger font-bold uppercase">{rec.original_invoice_no}</td>
+                                            <td className="py-2.5 px-4 font-mono text-danger font-bold uppercase">{formattedInvoiceNo}</td>
                                             <td className="py-2.5 px-4 text-center">
-                                                <span className={`inline-flex rounded-sm py-0.5 px-2 text-[9px] font-black text-white uppercase tracking-wide ${rec.settlement_mode === 'Cash' ? 'bg-success' : 'bg-primary'}`}>
-                                                    {rec.settlement_mode}
+                                                <span className={`inline-flex rounded-sm py-0.5 px-2 text-[9px] font-black text-white uppercase tracking-wide ${(rec.settlement_mode || rec.payment_mode) === 'Cash' ? 'bg-success' : 'bg-primary'}`}>
+                                                    {rec.settlement_mode || rec.payment_mode || 'Cash'}
                                                 </span>
                                             </td>
-                                            <td className="py-2.5 px-4 font-mono text-gray-600 dark:text-gray-400">{rec.bank_account_title || '-'}</td>
+                                            <td className="py-2.5 px-4 font-mono text-gray-600 dark:text-gray-400">{rec.bank_name || rec.bank_account_title || '-'}</td>
                                             <td className="py-2.5 px-4 text-right pr-4 text-danger font-black font-mono">Rs. {Number(rec.amount_paid).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
 
-                                            <td className="py-2.5 px-4 text-center whitespace-nowrap">
-                                                <span className={`inline-flex rounded-sm py-0.5 px-2 text-[9px] font-black text-white uppercase tracking-wider ${statusBadgeColorStyle}`}>
-                                                    {statusTextText}
-                                                </span>
-                                            </td>
-
                                             <td className="py-2.5 px-4 text-center">
-                                                <div className="flex items-center justify-center space-x-2.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate('/sales/sales-return-receipt/add', { state: { receiptRecord: rec } })}
-                                                        className="text-gray-400 hover:text-primary transition cursor-pointer p-0.5"
-                                                        title="Edit Receipt"
-                                                    >
-                                                        <MdEdit size={16} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteReceipt(rec.id)}
-                                                        className="text-gray-400 hover:text-danger transition cursor-pointer p-0.5"
-                                                        title="Delete Receipt"
-                                                    >
-                                                        <MdDelete size={16} />
-                                                    </button>
-                                                </div>
+                                                <TableActions
+                                                    onEdit={() => navigate('/sales/sales-return-receipt/add', { state: { receiptRecord: rec } })}
+                                                    onDelete={() => handleDeleteReceipt(rec.id)}
+                                                    editTitle="Edit Receipt"
+                                                    deleteTitle="Delete Receipt"
+                                                />
                                             </td>
                                         </tr>
                                     );

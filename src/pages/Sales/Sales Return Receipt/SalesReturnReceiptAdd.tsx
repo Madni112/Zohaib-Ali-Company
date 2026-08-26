@@ -20,6 +20,7 @@ const SaleReturnReceiptAdd = () => {
     const [banksList, setBanksList] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [highlightReturnIdx, setHighlightReturnIdx] = useState(0);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const [selectedReturnDetails, setSelectedReturnDetails] = useState<any>({
@@ -31,10 +32,13 @@ const SaleReturnReceiptAdd = () => {
     const [initialFormValues, setInitialFormValues] = useState<any>({
         processingDate: new Date().toISOString().split('T')[0],
         returnRowId: '',
+        returnNoRef: '',
         invoiceNoRef: '',
         customerName: '',
         settlementMode: 'Cash',
         selectedBankTitle: '',
+        cashPaid: 0,
+        bankPaid: 0,
         amountPaid: 0,
         remainingBalanceMax: 99999999
     });
@@ -44,15 +48,15 @@ const SaleReturnReceiptAdd = () => {
             try {
                 setInitialLoading(true);
 
-                // 1. Fetch raw returns data from your database table
+                // 1. Fetch raw returns data from database matching exact schema
                 const { data: returnsData } = await supabase
                     .from('sales_returns')
-                    .select('id, original_invoice_no, customer_name, total_amount, total_net_amount, payout_amount_paid, return_status');
+                    .select('id, return_no, invoice_no, customer_name, total_amount, payout_amount_paid, status, return_date');
 
                 // 2. Fetch sales_invoices to inspect cash and bank collected payments
                 const { data: invoicesData } = await supabase
                     .from('sales_invoices')
-                    .select('id, cash_amount_paid, bank_amount, bankPayments, payment_term, total_amount');
+                    .select('id, cash_amount_paid, bank_amount, payment_term, total_amount');
 
                 // 3. Fetch all existing receipts to dynamically aggregate them on the fly
                 const { data: allReceiptsData } = await supabase
@@ -67,35 +71,29 @@ const SaleReturnReceiptAdd = () => {
 
                 if (returnsData) {
                     const compiledReturnsPool = returnsData.map(r => {
-                        const invRefClean = String(r.original_invoice_no || '').replace('INV-', '').trim().toLowerCase();
-                        const matchedInv = (invoicesData || []).find(inv => String(inv.id).trim().toLowerCase() === invRefClean);
+                        const cleanInvNo = String(r.invoice_no || '').replace(/^inv-?/i, '').trim();
+                        const formattedInvNo = cleanInvNo ? `INV-${cleanInvNo.padStart(4, '0')}` : (r.invoice_no || `INV-${r.id}`);
 
-                        const upfrontCash = Number(matchedInv?.cash_amount_paid || 0);
-                        const upfrontBank = Number(matchedInv?.bank_amount || 0) + (Array.isArray(matchedInv?.bankPayments) ? matchedInv.bankPayments.reduce((sum: number, b: any) => sum + (Number(b.bankAmount) || 0), 0) : 0);
-                        const invoiceTotalCollected = upfrontCash + upfrontBank;
-                        const trueNetItemsReturnVal = Number(r.total_net_amount || r.total_amount || 0);
-
-                        // Max cash/bank refundable to customer cannot exceed payments actually collected for this invoice!
-                        const maxCashRefundablePool = Math.min(trueNetItemsReturnVal, invoiceTotalCollected);
+                        const returnTotalVal = Number(r.total_amount || 0);
 
                         const associatedReceipts = (allReceiptsData || []).filter(rec => String(rec.sales_return_id) === String(r.id));
                         const totalReceiptsSum = associatedReceipts.reduce((sum, rec) => sum + Number(rec.amount_paid || 0), 0);
 
-                        const trueTotalAccumulatedPaid = Number(r.payout_amount_paid || 0) + totalReceiptsSum;
-                        const dynamicRemainingOwed = Math.max(0, maxCashRefundablePool - trueTotalAccumulatedPaid);
+                        const initialPaidAtReturnCreation = Number(r.payout_amount_paid || 0);
+                        const totalPaidSoFar = initialPaidAtReturnCreation + totalReceiptsSum;
+                        const dynamicRemainingOwed = Math.max(0, returnTotalVal - totalPaidSoFar);
 
-                        const isSettledOrZeroCash = maxCashRefundablePool === 0 || dynamicRemainingOwed <= 0;
+                        const isSettled = dynamicRemainingOwed <= 0.01;
 
                         return {
                             ...r,
-                            max_refundable_pool: maxCashRefundablePool,
-                            invoice_cash_collected: invoiceTotalCollected,
-                            computed_total_paid: trueTotalAccumulatedPaid,
+                            original_invoice_no: formattedInvNo,
+                            computed_total_paid: totalPaidSoFar,
                             computed_remaining_due: dynamicRemainingOwed,
-                            is_fully_settled: isSettledOrZeroCash,
-                            statusBadge: maxCashRefundablePool === 0 
-                                ? 'CREDIT SETTLED (0 CASH OWED)' 
-                                : (dynamicRemainingOwed <= 0 ? 'FULLY REFUNDED' : `OPEN (Rs. ${dynamicRemainingOwed.toFixed(2)} DUE)`)
+                            is_fully_settled: isSettled,
+                            statusBadge: isSettled 
+                                ? 'FULLY REFUNDED' 
+                                : `OPEN (Rs. ${dynamicRemainingOwed.toFixed(2)} DUE)`
                         };
                     });
 
@@ -125,6 +123,8 @@ const SaleReturnReceiptAdd = () => {
                                 customerName: routeReceiptRow.customer_name || '',
                                 settlementMode: routeReceiptRow.settlement_mode || 'Cash',
                                 selectedBankTitle: routeReceiptRow.bank_account_title || '',
+                                cashPaid: routeReceiptRow.metadata?.cashPaid || (routeReceiptRow.settlement_mode === 'Bank' ? 0 : (routeReceiptRow.amount_paid || 0)),
+                                bankPaid: routeReceiptRow.metadata?.bankPaid || (routeReceiptRow.settlement_mode === 'Bank' ? (routeReceiptRow.amount_paid || 0) : 0),
                                 amountPaid: routeReceiptRow.amount_paid || 0,
                                 remainingBalanceMax: isolatedRemainingDue
                             });
@@ -154,34 +154,30 @@ const SaleReturnReceiptAdd = () => {
         if (isEditMode) return;
         const term = searchQuery.trim().toLowerCase();
         if (!term) {
-            setFilteredReturns(onCreditReturns.slice(0, 3));
+            setFilteredReturns(onCreditReturns);
             return;
         }
         const filtered = onCreditReturns.filter(r =>
-            String(r.original_invoice_no).toLowerCase().includes(term) ||
-            String(r.customer_name).toLowerCase().includes(term)
+            String(r.original_invoice_no || '').toLowerCase().includes(term) ||
+            String(r.return_no || '').toLowerCase().includes(term) ||
+            String(r.customer_name || '').toLowerCase().includes(term)
         );
         setFilteredReturns(filtered);
     }, [searchQuery, onCreditReturns, isEditMode]);
 
     const validationSchema = Yup.object().shape({
-        returnRowId: Yup.string().required('Required'),
-        customerName: Yup.string().required('Required'),
-        invoiceNoRef: Yup.string().required('Required'),
-        settlementMode: Yup.string().oneOf(['Cash', 'Bank']).required('Required'),
+        returnRowId: Yup.string().required('Please select an invoice return record'),
+        customerName: Yup.string().required('Customer name required'),
+        invoiceNoRef: Yup.string().required('Invoice reference required'),
+        settlementMode: Yup.string().oneOf(['Cash', 'Bank', 'Split']).required('Required'),
         selectedBankTitle: Yup.string().when('settlementMode', {
-            is: 'Bank',
-            then: (schema) => schema.required('Required'),
+            is: (val: string) => val === 'Bank' || val === 'Split',
+            then: (schema) => schema.required('Please select target bank profile'),
             otherwise: (schema) => schema.notRequired()
         }),
-        amountPaid: Yup.number()
-            .typeError('Must be a number')
-            .required('Required')
-            .min(0.01, 'Min 0.01')
-            .test('max-due', 'Amount exceeds remaining balance owed', function (val) {
-                const max = this.parent.remainingBalanceMax;
-                return val === undefined || max === undefined || val <= max + 0.01;
-            })
+        amountPaid: Yup.number().min(0).nullable(),
+        cashPaid: Yup.number().min(0).nullable(),
+        bankPaid: Yup.number().min(0).nullable()
     });
 
     const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) =>
@@ -205,34 +201,63 @@ const SaleReturnReceiptAdd = () => {
                     enableReinitialize={true}
 
                     onSubmit={async (values) => {
+                        let finalAmountToSave = 0;
+                        let cashVal = 0;
+                        let bankVal = 0;
+
+                        if (values.settlementMode === 'Cash') {
+                            cashVal = Number(values.amountPaid !== undefined && values.amountPaid !== '' ? values.amountPaid : values.cashPaid) || 0;
+                            finalAmountToSave = cashVal;
+                        } else if (values.settlementMode === 'Bank') {
+                            bankVal = Number(values.amountPaid !== undefined && values.amountPaid !== '' ? values.amountPaid : values.bankPaid) || 0;
+                            finalAmountToSave = bankVal;
+                        } else if (values.settlementMode === 'Split') {
+                            cashVal = Number(values.cashPaid) || 0;
+                            bankVal = Number(values.bankPaid) || 0;
+                            finalAmountToSave = cashVal + bankVal;
+                        }
+
+                        if (finalAmountToSave <= 0) {
+                            toast.error('Validation Error: Refund payout amount must be greater than 0 PKR!');
+                            return;
+                        }
+
+                        const maxLimit = values.remainingBalanceMax ?? selectedReturnDetails.remainingDue ?? 999999;
+                        if (finalAmountToSave > maxLimit + 0.05) {
+                            toast.error(`Validation Error: Remitted amount (Rs. ${finalAmountToSave.toLocaleString()}) exceeds the maximum outstanding refund due (Rs. ${maxLimit.toLocaleString()})!`);
+                            return;
+                        }
+
                         try {
                             setLoading(true);
 
+                            const receiptPayload = {
+                                receipt_no: routeReceiptRow?.receipt_no || `REC-${Date.now().toString().slice(-6)}`,
+                                sales_return_id: values.returnRowId ? Number(values.returnRowId) : null,
+                                return_no: values.returnNoRef || null,
+                                invoice_no: values.invoiceNoRef,
+                                customer_name: values.customerName,
+                                payment_date: values.processingDate,
+                                settlement_mode: values.settlementMode,
+                                payment_mode: values.settlementMode,
+                                bank_name: (values.settlementMode === 'Bank' || values.settlementMode === 'Split') ? values.selectedBankTitle : null,
+                                amount_paid: finalAmountToSave,
+                                payment_status: 'Paid'
+                            };
+
                             if (isEditMode) {
-                                // ✅ ISOLATED UPDATE: Modifies ONLY the receipt log entry row. Zero interaction with sales_returns columns!
                                 const { error: updateReceiptError } = await supabase
                                     .from('sales_return_receipts')
-                                    .update({
-                                        processing_date: values.processingDate,
-                                        settlement_mode: values.settlementMode,
-                                        bank_account_title: values.settlementMode === 'Bank' ? values.selectedBankTitle : null,
-                                        amount_paid: Number(values.amountPaid)
-                                    })
+                                    .update(receiptPayload)
                                     .eq('id', routeReceiptRow.id);
 
                                 if (updateReceiptError) throw updateReceiptError;
                                 toast.success('Collection receipt modification authorized!');
                             } else {
-                                // ✅ ISOLATED INSERT: Creates a new receipt log entry row. Zero interaction with sales_returns columns!
-                                const { error: insertError } = await supabase.from('sales_return_receipts').insert([{
-                                    processing_date: values.processingDate,
-                                    sales_return_id: values.returnRowId,
-                                    original_invoice_no: values.invoiceNoRef,
-                                    customer_name: values.customerName,
-                                    settlement_mode: values.settlementMode,
-                                    bank_account_title: values.settlementMode === 'Bank' ? values.selectedBankTitle : null,
-                                    amount_paid: Number(values.amountPaid)
-                                }]);
+                                const { error: insertError } = await supabase
+                                    .from('sales_return_receipts')
+                                    .insert([receiptPayload]);
+
                                 if (insertError) throw insertError;
                                 toast.success('Cash-back collection voucher approved!');
                             }
@@ -257,64 +282,136 @@ const SaleReturnReceiptAdd = () => {
                                     <label className="block font-bold text-primary mb-1">Search Outstanding Return Invoice: *</label>
                                     <input
                                         type="text"
-                                        placeholder="🔍 Type Invoice # or Name..."
+                                        autoComplete="off"
+                                        placeholder="Type Invoice # or Name..."
                                         value={searchQuery}
-                                        onFocus={() => { if (!isEditMode) setIsDropdownOpen(true); }}
+                                        onFocus={() => {
+                                            if (!isEditMode) {
+                                                setIsDropdownOpen(true);
+                                                setHighlightReturnIdx(0);
+                                            }
+                                        }}
+                                        onClick={() => {
+                                            if (!isEditMode) {
+                                                setIsDropdownOpen(true);
+                                                setHighlightReturnIdx(0);
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setHighlightReturnIdx(prev => prev < filteredReturns.length - 1 ? prev + 1 : 0);
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setHighlightReturnIdx(prev => prev > 0 ? prev - 1 : filteredReturns.length - 1);
+                                            } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (filteredReturns.length > 0) {
+                                                    const r = filteredReturns[highlightReturnIdx] || filteredReturns[0];
+                                                    if (r.is_fully_settled) {
+                                                        toast.error(`Return note ${r.original_invoice_no} is ${r.statusBadge} and cannot be selected.`);
+                                                        return;
+                                                    }
+                                                    setFieldValue('returnRowId', r.id);
+                                                    setFieldValue('returnNoRef', r.return_no || `RTN-${r.id}`);
+                                                    setFieldValue('invoiceNoRef', r.original_invoice_no);
+                                                    setFieldValue('customerName', r.customer_name);
+                                                    setFieldValue('remainingBalanceMax', r.computed_remaining_due);
+                                                    setSearchQuery(`${r.original_invoice_no} (${r.customer_name})`);
+
+                                                    setSelectedReturnDetails({
+                                                        totalAmount: Number(r.total_amount || 0),
+                                                        alreadyPaid: Number(r.computed_total_paid),
+                                                        remainingDue: Number(r.computed_remaining_due)
+                                                    });
+                                                    setIsDropdownOpen(false);
+                                                }
+                                            } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                                setIsDropdownOpen(false);
+                                            }
+                                        }}
                                         onChange={(e) => {
                                             if (!isEditMode) {
                                                 setSearchQuery(e.target.value);
                                                 setIsDropdownOpen(true);
+                                                setHighlightReturnIdx(0);
                                             }
                                         }}
-                                        className={`w-full rounded border p-2 text-xs font-bold outline-none focus:border-primary ${isEditMode ? 'bg-gray-100 dark:bg-meta-4/20 text-gray-500 cursor-not-allowed' : 'bg-white dark:bg-boxdark text-black dark:text-white'} ${hasAttempted && errors.returnRowId ? 'border-red-500' : 'border-stroke dark:border-stroke'}`}
+                                        className={`w-full rounded border p-2 text-xs font-bold outline-none ${isEditMode ? 'bg-gray-100 dark:bg-meta-4/20 text-gray-500 cursor-not-allowed' : 'bg-white dark:bg-boxdark text-black dark:text-white focus:border-primary'} ${hasAttempted && errors.returnRowId ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
                                     />
+
+                                    {/* RICH SEARCHABLE RETURN INVOICE DROPDOWN (ELEVATED Z-INDEX) */}
                                     {isDropdownOpen && !isEditMode && (
-                                        <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded shadow-2xl z-99999 max-h-44 overflow-y-auto scrollbar-thin">
+                                        <div className="absolute left-0 top-full mt-1.5 w-full min-w-[340px] max-h-[290px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 z-[99999] scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
                                             {filteredReturns.length === 0 ? (
                                                 <div className="p-3 text-center text-xs text-gray-400 font-medium italic">No pending return options profiles.</div>
                                             ) : (
-                                                filteredReturns.map(r => {
+                                                filteredReturns.map((r, rIdx) => {
                                                     const isDisabled = r.is_fully_settled;
+                                                    const isHighlighted = rIdx === highlightReturnIdx;
 
                                                     return (
                                                         <div
                                                             key={r.id}
-                                                            onClick={() => {
+                                                            onMouseEnter={() => setHighlightReturnIdx(rIdx)}
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault();
                                                                 if (isDisabled) {
                                                                     toast.error(`Return note ${r.original_invoice_no} is ${r.statusBadge} and cannot be selected.`);
                                                                     return;
                                                                 }
 
                                                                 setFieldValue('returnRowId', r.id);
+                                                                setFieldValue('returnNoRef', r.return_no || `RTN-${r.id}`);
                                                                 setFieldValue('invoiceNoRef', r.original_invoice_no);
                                                                 setFieldValue('customerName', r.customer_name);
                                                                 setFieldValue('remainingBalanceMax', r.computed_remaining_due);
                                                                 setSearchQuery(`${r.original_invoice_no} (${r.customer_name})`);
 
                                                                 setSelectedReturnDetails({
-                                                                    totalAmount: Number(r.total_net_amount || r.total_amount || 0),
+                                                                    totalAmount: Number(r.total_amount || 0),
                                                                     alreadyPaid: Number(r.computed_total_paid),
                                                                     remainingDue: Number(r.computed_remaining_due)
                                                                 });
                                                                 setIsDropdownOpen(false);
                                                             }}
-                                                            className={`p-2.5 duration-100 flex justify-between items-center text-xs border-b border-stroke dark:border-strokedark last:border-0 ${
+                                                            className={`p-3 cursor-pointer transition flex items-center justify-between group ${
                                                                 isDisabled
-                                                                    ? 'bg-gray-100 dark:bg-meta-4/30 text-gray-400 dark:text-gray-500 cursor-not-allowed opacity-75'
-                                                                    : 'hover:bg-slate-100 dark:hover:bg-meta-4 cursor-pointer text-black dark:text-white font-bold'
+                                                                    ? 'bg-gray-50 dark:bg-meta-4/20 text-gray-400 cursor-not-allowed opacity-70'
+                                                                    : isHighlighted
+                                                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
+                                                                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
                                                             }`}
                                                         >
-                                                            <div className="flex items-center gap-2">
-                                                                <span>📄 {r.original_invoice_no} - {r.customer_name}</span>
-                                                                {isDisabled && (
-                                                                    <span className="text-[9px] font-black uppercase tracking-wide bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded">
-                                                                        {r.statusBadge}
+                                                            <div className="flex flex-col gap-0.5 text-left">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-mono font-bold text-xs text-primary group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                                                                        {r.original_invoice_no}
+                                                                    </span>
+                                                                    {r.return_no && (
+                                                                        <span className="text-[9px] font-mono text-gray-400">
+                                                                            ({r.return_no})
+                                                                        </span>
+                                                                    )}
+                                                                    {isDisabled && (
+                                                                        <span className="text-[9px] font-black uppercase tracking-wide bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                                                                            {r.statusBadge}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                                                    {r.customer_name}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-right font-mono text-xs pl-2">
+                                                                {isDisabled ? (
+                                                                    <span className="text-gray-400">Rs. 0</span>
+                                                                ) : (
+                                                                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                                        Due: Rs. {Number(r.computed_remaining_due).toLocaleString()}
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <span className="text-[10px] font-mono opacity-80 ml-2">
-                                                                {isDisabled ? `Rs. 0` : `Cash Owed: Rs. ${Number(r.computed_remaining_due).toLocaleString()}`}
-                                                            </span>
                                                         </div>
                                                     );
                                                 })
@@ -333,13 +430,25 @@ const SaleReturnReceiptAdd = () => {
                                 </div>
                                 <div>
                                     <label className="block font-bold text-gray-500 mb-1">Settlement Mode Selector: *</label>
-                                    <select name="settlementMode" value={values.settlementMode} onChange={handleChange} className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-white dark:bg-boxdark outline-none font-black text-xs text-black dark:text-white focus:border-primary">
+                                    <select
+                                        name="settlementMode"
+                                        value={values.settlementMode}
+                                        onChange={(e) => {
+                                            handleChange(e);
+                                            if (e.target.value === 'Cash') {
+                                                setFieldValue('selectedBankTitle', '');
+                                                setFieldValue('bankPaid', 0);
+                                            }
+                                        }}
+                                        className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-white dark:bg-boxdark outline-none font-black text-xs text-black dark:text-white focus:border-primary"
+                                    >
                                         <option value="Cash">Cash Ledger Account</option>
                                         <option value="Bank">Bank Account Wire Transfer</option>
+                                        <option value="Split">Cash & Bank Refund Combined</option>
                                     </select>
                                 </div>
 
-                                {values.settlementMode === 'Bank' && (
+                                {(values.settlementMode === 'Bank' || values.settlementMode === 'Split') && (
                                     <div className="md:col-span-2">
                                         <label className="block font-bold text-gray-500 mb-1">Choose Target Financial Bank Account: *</label>
                                         <select name="selectedBankTitle" value={values.selectedBankTitle} onChange={handleChange} className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-white dark:bg-boxdark outline-none font-bold text-xs text-black dark:text-white focus:border-primary">
@@ -349,24 +458,107 @@ const SaleReturnReceiptAdd = () => {
                                     </div>
                                 )}
 
-                                <div className="md:col-span-2">
-                                    <label className="block font-bold text-danger mb-1">Remitted Cash Back Amount Paid (PKR): *</label>
-                                    <input
-                                        type="number"
-                                        name="amountPaid"
-                                        value={values.amountPaid}
-                                        onKeyDown={blockInvalidChar}
-                                        onChange={(e) => {
-                                            const val = Number(e.target.value) || 0;
-                                            const maxLimit = values.remainingBalanceMax ?? selectedReturnDetails.remainingDue ?? 999999;
-                                            const finalVal = Math.min(val, maxLimit);
-                                            setFieldValue('amountPaid', finalVal);
-                                        }}
-                                        placeholder="Type payment..."
-                                        className={`w-full rounded border p-2 bg-transparent text-right font-black text-danger text-sm focus:border-primary outline-none text-black dark:text-white ${hasAttempted && errors.amountPaid ? 'border-red-500 bg-red-50' : 'border-stroke'}`}
-                                    />
-                                    {hasAttempted && errors.amountPaid && <p className="text-red-500 font-bold text-[10px] mt-1">⚠️ {String(errors.amountPaid)}</p>}
-                                </div>
+                                {values.settlementMode === 'Split' ? (
+                                    <div className="md:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block font-bold text-danger mb-1">Cash Refund Amount (PKR): *</label>
+                                            <input
+                                                type="number"
+                                                name="cashPaid"
+                                                value={values.cashPaid === 0 ? '' : (values.cashPaid ?? '')}
+                                                onKeyDown={blockInvalidChar}
+                                                onFocus={(e) => {
+                                                    if (Number(values.cashPaid) === 0) {
+                                                        setFieldValue('cashPaid', '');
+                                                    }
+                                                }}
+                                                onBlur={(e) => {
+                                                    handleBlur(e);
+                                                    if (values.cashPaid === '' || values.cashPaid === undefined || values.cashPaid === null) {
+                                                        setFieldValue('cashPaid', 0);
+                                                    }
+                                                }}
+                                                onChange={(e) => {
+                                                    const valStr = e.target.value;
+                                                    if (valStr === '') {
+                                                        setFieldValue('cashPaid', '');
+                                                    } else {
+                                                        const val = Number(valStr);
+                                                        setFieldValue('cashPaid', isNaN(val) ? '' : Math.max(0, val));
+                                                    }
+                                                }}
+                                                placeholder="0.00"
+                                                className="w-full rounded border border-stroke p-2 bg-transparent text-right font-black text-danger text-sm focus:border-primary outline-none text-black dark:text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-bold text-primary mb-1">Bank Refund Amount (PKR): *</label>
+                                            <input
+                                                type="number"
+                                                name="bankPaid"
+                                                value={values.bankPaid === 0 ? '' : (values.bankPaid ?? '')}
+                                                onKeyDown={blockInvalidChar}
+                                                onFocus={(e) => {
+                                                    if (Number(values.bankPaid) === 0) {
+                                                        setFieldValue('bankPaid', '');
+                                                    }
+                                                }}
+                                                onBlur={(e) => {
+                                                    handleBlur(e);
+                                                    if (values.bankPaid === '' || values.bankPaid === undefined || values.bankPaid === null) {
+                                                        setFieldValue('bankPaid', 0);
+                                                    }
+                                                }}
+                                                onChange={(e) => {
+                                                    const valStr = e.target.value;
+                                                    if (valStr === '') {
+                                                        setFieldValue('bankPaid', '');
+                                                    } else {
+                                                        const val = Number(valStr);
+                                                        setFieldValue('bankPaid', isNaN(val) ? '' : Math.max(0, val));
+                                                    }
+                                                }}
+                                                placeholder="0.00"
+                                                className="w-full rounded border border-stroke p-2 bg-transparent text-right font-black text-primary text-sm focus:border-primary outline-none text-black dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="md:col-span-2">
+                                        <label className="block font-bold text-danger mb-1">Remitted Refund Amount Paid (PKR): *</label>
+                                        <input
+                                            type="number"
+                                            name="amountPaid"
+                                            value={values.amountPaid === 0 ? '' : (values.amountPaid ?? '')}
+                                            onKeyDown={blockInvalidChar}
+                                            onFocus={(e) => {
+                                                if (Number(values.amountPaid) === 0) {
+                                                    setFieldValue('amountPaid', '');
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                handleBlur(e);
+                                                if (values.amountPaid === '' || values.amountPaid === undefined || values.amountPaid === null) {
+                                                    setFieldValue('amountPaid', 0);
+                                                }
+                                            }}
+                                            onChange={(e) => {
+                                                const valStr = e.target.value;
+                                                if (valStr === '') {
+                                                    setFieldValue('amountPaid', '');
+                                                } else {
+                                                    const val = Number(valStr);
+                                                    const maxLimit = values.remainingBalanceMax ?? selectedReturnDetails.remainingDue ?? 999999;
+                                                    const finalVal = Math.min(Math.max(0, val), maxLimit);
+                                                    setFieldValue('amountPaid', finalVal);
+                                                }
+                                            }}
+                                            placeholder="0.00"
+                                            className={`w-full rounded border p-2 bg-transparent text-right font-black text-danger text-sm focus:border-primary outline-none text-black dark:text-white ${hasAttempted && errors.amountPaid ? 'border-red-500 bg-red-50' : 'border-stroke'}`}
+                                        />
+                                        {hasAttempted && errors.amountPaid && <p className="text-red-500 font-bold text-[10px] mt-1">⚠️ {String(errors.amountPaid)}</p>}
+                                    </div>
+                                )}
 
                                 {values.returnRowId && (
                                     <div className="md:col-span-4 bg-gray-50 dark:bg-meta-4/20 p-3 rounded border border-stroke dark:border-strokedark font-mono text-[11px] grid grid-cols-3 text-center text-gray-500 dark:text-white">
@@ -382,9 +574,21 @@ const SaleReturnReceiptAdd = () => {
                                 )}
 
 
-                                <div className="md:col-span-4 pt-4 mt-2 border-t border-stroke dark:border-strokedark flex justify-between items-center bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm">
-                                    <button type="button" onClick={() => navigate('/sales/sales-return-receipt/list')} className="rounded border border-stroke dark:border-strokedark py-2 px-10 font-semibold text-sm text-black dark:text-white hover:bg-gray-100 transition cursor-pointer">Cancel</button>
-                                    <button type="submit" disabled={loading} className="bg-success text-white py-2 px-12 rounded font-black text-sm hover:bg-opacity-90 transition shadow-sm cursor-pointer">{loading ? <Spinner /> : (isEditMode ? 'Modify Entry' : 'Save Record')}</button>
+                                <div className="md:col-span-4 pt-4 mt-2 border-t border-stroke dark:border-strokedark flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/sales/sales-return-receipt/list')}
+                                        className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                                    >
+                                        {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Modify Entry' : 'Save Record'}</span>}
+                                    </button>
                                 </div>
                             </Form>
                         );

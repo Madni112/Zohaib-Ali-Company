@@ -10,18 +10,23 @@ interface ActionCardProps {
   onClick: () => void;
 }
 
-const ActionCard: React.FC<ActionCardProps> = ({ title, subtitle, Icon, bgGradient = 'bg-gradient-to-br from-indigo-500 to-purple-600', onClick }) => {
+const ActionCard: React.FC<ActionCardProps> = ({ title, subtitle, Icon, bgGradient = 'bg-gradient-to-br from-emerald-600 to-teal-700', onClick }) => {
   return (
-    <GlassCard
-      className={`p-5 cursor-pointer transform transition hover:scale-105 ${bgGradient} text-white flex items-center justify-between`}
+    <div
+      className={`p-5 rounded-2xl cursor-pointer transform transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${bgGradient} text-white flex items-center justify-between shadow-md relative overflow-hidden group`}
       onClick={onClick}
     >
-      <div className="flex flex-col">
-        <span className="text-sm font-bold uppercase tracking-wider">{title}</span>
-        <span className="text-xs opacity-80">{subtitle}</span>
+      {/* Decorative background light orb */}
+      <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-white/10 blur-xl group-hover:scale-125 transition-transform duration-300 pointer-events-none" />
+      
+      <div className="flex flex-col z-10">
+        <span className="text-sm font-extrabold uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-medium text-white/85 mt-0.5">{subtitle}</span>
       </div>
-      <Icon size={28} />
-    </GlassCard>
+      <div className="p-2.5 rounded-xl bg-white/15 backdrop-blur-xs group-hover:scale-110 transition-transform duration-200 z-10">
+        <Icon size={24} />
+      </div>
+    </div>
   );
 };
 

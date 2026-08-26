@@ -7,7 +7,10 @@ module.exports = {
   darkMode: 'class',
   theme: {
     fontFamily: {
-      poppins: ['Poppins', 'sans-serif'],
+      sans: ['"Plus Jakarta Sans"', 'Inter', 'Poppins', 'sans-serif'],
+      poppins: ['"Plus Jakarta Sans"', 'Inter', 'Poppins', 'sans-serif'],
+      inter: ['Inter', 'sans-serif'],
+      jakarta: ['"Plus Jakarta Sans"', 'sans-serif'],
     },
     screens: {
       '2xsm': '375px',
@@ -31,28 +34,30 @@ module.exports = {
         },
 
         body: '#64748B',
-        bodydark: '#AEB7C0',
-        bodydark1: '#DEE4EE',
-        bodydark2: '#8A99AF',
-        primary: '#4319FF',
-        secondary: '#E0E5F2',
-        textColor: '#2b3674',
+        bodydark: '#94A3B8',
+        bodydark1: '#E2E8F0',
+        bodydark2: '#64748B',
+        primary: '#059669', // Sophisticated Emerald
+        'primary-hover': '#047857',
+        'primary-light': '#D1FAE5',
+        secondary: '#0F766E', // Deep Teal
+        textColor: '#0F172A',
 
         stroke: '#E2E8F0',
         gray: {
           ...colors.gray,
           DEFAULT: '#EFF4FB',
-          2: '#F7F9FC',
+          2: '#F8FAFC',
           3: '#FAFAFA',
         },
-        graydark: '#333A48',
-        whiten: '#F1F5F9',
-        whiter: '#F5F7FD',
-        boxdark: '#24303F',
-        'boxdark-2': '#1A222C',
-        strokedark: '#2E3A47',
-        'form-strokedark': '#3d4d60',
-        'form-input': '#1d2a39',
+        graydark: '#1E293B',
+        whiten: '#F8FAFC',
+        whiter: '#F1F5F9',
+        boxdark: '#111827',
+        'boxdark-2': '#0B0F17',
+        strokedark: '#1E293B',
+        'form-strokedark': '#334155',
+        'form-input': '#0F172A',
         meta: {
           1: '#DC3545',
           2: '#EFF2F7',

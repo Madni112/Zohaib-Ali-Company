@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import * as RoleRoutes from '../Navigation/Roles';
 import { UserRole } from '../constant/auth';
+import { getModulesForRole, ROLE_PRESETS } from '../constant/roles';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -20,69 +21,54 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Detects the active portal/client slug from subdomain, URL parameter, or path.
+ * Detects any legacy portal slug if present in URL.
  */
 export const detectPortalTenant = (): string | null => {
-  if (typeof window === 'undefined') return null;
-
-  // 1. Check Subdomain (e.g. bashir.noorhorizontechnologies.com or bashir.localhost)
-  const hostname = window.location.hostname.toLowerCase();
-  const parts = hostname.split('.');
-  if (parts.length > 1) {
-    const firstPart = parts[0];
-    if (firstPart !== 'www' && firstPart !== 'erp' && firstPart !== 'api' && firstPart !== 'app' && firstPart !== 'localhost') {
-      return firstPart;
-    }
-  }
-
-  // 2. Check URL search param (e.g. ?tenant=bashir or ?client=bashir)
-  const params = new URLSearchParams(window.location.search);
-  const paramTenant = params.get('tenant') || params.get('client');
-  if (paramTenant) {
-    return paramTenant.toLowerCase().trim();
-  }
-
-  // 3. Check Path Prefix (e.g. /tenant=bashir or /tenant=bashir/signin or /bashir)
-  const pathParts = window.location.pathname.split('/').filter(Boolean);
-  for (const part of pathParts) {
-    if (part.startsWith('tenant=')) {
-      return part.replace('tenant=', '').toLowerCase().trim();
-    }
-    if (part.startsWith('tenant-')) {
-      return part.replace('tenant-', '').toLowerCase().trim();
-    }
-  }
-
-  if (pathParts.length > 0) {
-    const first = pathParts[0].toLowerCase();
-    if (first !== 'auth' && first !== 'dev' && first !== 'dashboard' && first !== 'administration' && first !== 'sales' && first !== 'purchase' && first !== 'reports' && first !== 'registration' && first !== 'inventory') {
-      return first;
-    }
-  }
-
   return null;
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [role, setRole] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('zac_is_authenticated') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  const [role, setRole] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('zac_user_role') || 'Super Admin';
+    } catch (_) {
+      return 'Super Admin';
+    }
+  });
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState<string | null>('Zohaib Ali & Company');
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('zac_user_email') || null;
+    } catch (_) {
+      return null;
+    }
+  });
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    // If we have cached auth status, don't block the router with a full screen loader on refresh
+    try {
+      return localStorage.getItem('zac_is_authenticated') !== 'true';
+    } catch (_) {
+      return true;
+    }
+  });
   const navigate = useNavigate();
 
-  // Initialize allowedModules immediately from local storage cache if available to prevent 1-second flicker
+  // Initialize allowedModules
   const [allowedModules, setAllowedModules] = useState<string[] | null>(() => {
-    const portal = detectPortalTenant();
-    if (portal) {
-      try {
-        const cached = localStorage.getItem(`nht_modules_${portal}`);
-        if (cached) return JSON.parse(cached);
-      } catch (_) {}
-    }
-    return null;
+    try {
+      const cached = localStorage.getItem('zac_user_modules');
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return ROLE_PRESETS['Super Admin'].modules;
   });
 
   useEffect(() => {
@@ -99,60 +85,68 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleAuthState = (session: any) => {
+  const handleAuthState = async (session: any) => {
     if (session && session.user) {
       const metadata = session.user.user_metadata || {};
       const appMetadata = session.user.app_metadata || {};
+      const email = session.user.email || '';
+
+      let userRole = metadata.role || appMetadata.role || 'Super Admin';
+      let userPermissions: string[] | null = null;
+
+      // 1. Try to fetch live permissions and role from tenants table by email
+      try {
+        if (email) {
+          const { data: tenantRecord } = await supabase
+            .from('tenants')
+            .select('business_activity, allowed_modules, name')
+            .ilike('email', email)
+            .maybeSingle();
+
+          if (tenantRecord) {
+            if (tenantRecord.business_activity) userRole = tenantRecord.business_activity;
+            if (Array.isArray(tenantRecord.allowed_modules) && tenantRecord.allowed_modules.length > 0) {
+              userPermissions = tenantRecord.allowed_modules;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Auth live tenant lookup note:', err);
+      }
+
+      // 2. Fallback to user metadata or role preset
+      if (!userPermissions || userPermissions.length === 0) {
+        userPermissions = metadata.allowed_modules || appMetadata.allowed_modules || getModulesForRole(userRole);
+      }
 
       setIsAuthenticated(true);
       setCurrentUser(session.user);
-      setUserEmail(session.user.email || null);
-      setRole(metadata.role || appMetadata.role || UserRole.ADMIN);
-      
-      // Extract client tenant ID (e.g. 'bashir', 'client2')
-      const resolvedTenant = metadata.tenant_id || appMetadata.tenant_id || metadata.tenantId || null;
-      setTenantId(resolvedTenant);
-      setBusinessName(metadata.business_name || metadata.businessName || metadata.full_name || null);
+      setUserEmail(email || null);
+      setRole(userRole);
+      setTenantId(null);
+      setBusinessName('Zohaib Ali & Company');
+      setAllowedModules(userPermissions);
 
-      if (resolvedTenant) {
-        // 1. Immediately read cached permissions synchronously to ensure zero flicker
-        try {
-          const cached = localStorage.getItem(`nht_modules_${resolvedTenant}`);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed)) {
-              setAllowedModules(parsed);
-            }
-          } else if (metadata.allowed_modules) {
-            setAllowedModules(metadata.allowed_modules);
-          }
-        } catch (_) {}
-
-        // 2. Fetch fresh allowed_modules from database in background
-        supabase
-          .from('tenants')
-          .select('allowed_modules, name')
-          .eq('slug', resolvedTenant)
-          .maybeSingle()
-          .then(({ data }) => {
-            if (data && Array.isArray(data.allowed_modules)) {
-              setAllowedModules(data.allowed_modules);
-              localStorage.setItem(`nht_modules_${resolvedTenant}`, JSON.stringify(data.allowed_modules));
-            } else if (metadata.allowed_modules) {
-              setAllowedModules(metadata.allowed_modules);
-            }
-          });
-      } else {
-        setAllowedModules(metadata.allowed_modules || appMetadata.allowed_modules || null);
-      }
+      try {
+        localStorage.setItem('zac_is_authenticated', 'true');
+        localStorage.setItem('zac_user_role', userRole);
+        if (email) localStorage.setItem('zac_user_email', email);
+        localStorage.setItem('zac_user_modules', JSON.stringify(userPermissions));
+      } catch (_) {}
     } else {
       setIsAuthenticated(false);
       setCurrentUser(null);
       setUserEmail(null);
-      setRole(null);
+      setRole('Super Admin');
       setTenantId(null);
-      setAllowedModules(null);
-      setBusinessName(null);
+      setBusinessName('Zohaib Ali & Company');
+      setAllowedModules(ROLE_PRESETS['Super Admin'].modules);
+
+      try {
+        localStorage.removeItem('zac_is_authenticated');
+        localStorage.removeItem('zac_user_role');
+        localStorage.removeItem('zac_user_email');
+      } catch (_) {}
     }
   };
 
@@ -160,48 +154,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
-    // Strict Cross-Tenant Portal Security Check:
-    const portalTenant = detectPortalTenant();
     if (data.user) {
-      const metadata = data.user.user_metadata || {};
-      const appMetadata = data.user.app_metadata || {};
-      const userTenant = String(metadata.tenant_id || appMetadata.tenant_id || '').toLowerCase().trim();
-
-      // If user's registered tenant does NOT match the portal being accessed, block immediately!
-      if (portalTenant && userTenant && userTenant !== portalTenant) {
-        await supabase.auth.signOut();
-        throw new Error('Invalid email or password for this organization portal.');
-      }
-
-      const targetTenant = portalTenant || userTenant;
-      if (targetTenant) {
-        // Fetch tenant permissions synchronously before navigating
-        const { data: tenantRow } = await supabase
-          .from('tenants')
-          .select('allowed_modules')
-          .eq('slug', targetTenant)
-          .maybeSingle();
-
-        const modules = tenantRow?.allowed_modules || metadata.allowed_modules || appMetadata.allowed_modules || [];
-        localStorage.setItem(`nht_modules_${targetTenant}`, JSON.stringify(modules));
-        setAllowedModules(modules);
-
-        navigate(`/${targetTenant}`);
-        return;
-      }
+      await handleAuthState(data.session);
     }
 
-    navigate('/Administration/Products/List');
+    navigate('/');
   };
 
   const logout = async () => {
-    const lastTenant = tenantId;
     await supabase.auth.signOut();
-    if (lastTenant) {
-      navigate(`/${lastTenant}/signin`);
-    } else {
-      navigate('/');
-    }
+    localStorage.removeItem('zac_is_authenticated');
+    localStorage.removeItem('zac_user_role');
+    localStorage.removeItem('zac_user_email');
+    localStorage.removeItem('zac_user_modules');
+    navigate('/signin');
   };
 
   const getRoleBasedRoutes = () => {
@@ -240,13 +206,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // 3. Parent Categories with Children (Administration, Registration, Sales, Purchase, Reports)
           if (route.children && Array.isArray(route.children)) {
-            // Strictly filter sub-pages by exact permitted child path or label
+            // Filter sub-pages: check path, path with/without leading slash, and label
             const filteredChildren = route.children.filter((child: any) => {
               if (child.hideFromSidebar) return true;
               const childPath = String(child.path || '').toLowerCase().trim();
               const childLabel = String(child.label || '').toLowerCase().trim();
 
-              return lowerAllowed.includes(childPath) || lowerAllowed.includes(childLabel);
+              const isMatch =
+                lowerAllowed.includes(childPath) ||
+                lowerAllowed.includes(childLabel) ||
+                lowerAllowed.some(m => m.endsWith(childPath) || childPath.endsWith(m) || m.includes(childLabel) || childLabel.includes(m));
+
+              return isMatch;
             });
 
             // If at least one sub-page is permitted, render the parent category with ONLY allowed sub-pages

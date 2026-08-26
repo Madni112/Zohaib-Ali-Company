@@ -7,24 +7,10 @@ import { useAuth, detectPortalTenant } from '../../Context/Auth';
 import { supabase } from '../../Context/supabaseClient';
 
 const DropdownUser = () => {
-  const { logout, businessName: authBusinessName, tenantId: authTenantId, userEmail, role } = useAuth();
+  const { logout, businessName: authBusinessName, userEmail, role, currentUser } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [profile, setProfile] = useState<any>();
   const [imageError, setImageError] = useState(false);
-  const [companyName, setCompanyName] = useState<string>('');
-
-  const activeTenant = authTenantId || detectPortalTenant() || 'bashir';
-
-  // Format tenant slug to clean title (e.g. 'bashir' -> 'Bashir Traders', 'client2' -> 'Client 2')
-  const formatSlug = (slug: string) => {
-    if (!slug) return 'Client Company';
-    if (slug.toLowerCase() === 'bashir') return 'Bashir Traders';
-    if (slug.toLowerCase() === 'client2') return 'Client 2';
-    return slug
-      .split(/[-_]/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -33,45 +19,16 @@ const DropdownUser = () => {
         setProfile(JSON.parse(user));
       } catch (_) {}
     }
-
-    // Priority 1: AuthContext businessName
-    if (authBusinessName && authBusinessName.trim()) {
-      setCompanyName(authBusinessName);
-      return;
-    }
-
-    // Priority 2: Check localStorage cache
-    const cachedName = localStorage.getItem(`nht_business_name_${activeTenant}`);
-    if (cachedName) {
-      setCompanyName(cachedName);
-    } else {
-      setCompanyName(formatSlug(activeTenant));
-    }
-
-    // Priority 3: Fetch fresh company name from Supabase tenants table
-    if (activeTenant) {
-      supabase
-        .from('tenants')
-        .select('name')
-        .eq('slug', activeTenant)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data && data.name) {
-            setCompanyName(data.name);
-            localStorage.setItem(`nht_business_name_${activeTenant}`, data.name);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [authBusinessName, activeTenant]);
+  }, []);
 
   const Logout = () => {
     logout();
   };
 
-  const displayEmail = userEmail || profile?.email || `${activeTenant}@noorhorizontechnologies.com`;
-  const displayRole = role || profile?.role || 'Administrator';
-  const displayCompanyName = companyName || formatSlug(activeTenant);
+  const displayEmail = userEmail || profile?.email || 'admin@zohaibalicompany.com';
+  const displayRole = role || profile?.role || 'Super Admin';
+  const displayCompanyName = 'Zohaib Ali & Company';
+  const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
 
   return (
     <ClickOutside onClick={() => setDropdownOpen(false)} className="relative z-9999">
@@ -84,8 +41,8 @@ const DropdownUser = () => {
           <span className="block text-sm font-bold text-black dark:text-white truncate max-w-[200px]">
             {displayCompanyName}
           </span>
-          <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-            {displayRole} • @{activeTenant}
+          <span className="block text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            {displayRole}
           </span>
         </span>
 
@@ -97,7 +54,7 @@ const DropdownUser = () => {
             alt="User"
           />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary dark:bg-primary/20 flex items-center justify-center font-bold border border-primary/20 shadow-sm">
+          <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 flex items-center justify-center font-bold border border-emerald-500/20 shadow-sm">
             <MdPerson size={20} />
           </div>
         )}
