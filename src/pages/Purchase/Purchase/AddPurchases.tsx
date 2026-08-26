@@ -22,6 +22,8 @@ const AddPurchases = () => {
   const [highlightedSkuIndex, setHighlightedSkuIndex] = useState<number>(0);
   const [activeProdNameIndex, setActiveProdNameIndex] = useState<number | null>(null);
   const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState<number>(0);
+  const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
+  const [highlightedVendorIndex, setHighlightedVendorIndex] = useState<number>(0);
 
   const [defaultPurchaseNo] = useState(() => `PUR-${Math.floor(100000 + Math.random() * 900000)}`);
 
@@ -40,6 +42,9 @@ const AddPurchases = () => {
       if (!target.closest('.prod-name-container')) {
         setActiveProdNameIndex(null);
       }
+      if (!target.closest('.vendor-search-container')) {
+        setIsVendorDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -57,7 +62,10 @@ const AddPurchases = () => {
 
         const normalizedVendors = (vendorData || []).map((v: any) => ({
           id: v.id,
-          vendor_name: v.vendor_name || v.name || 'Unnamed Vendor'
+          vendor_name: v.vendor_name || v.name || 'Unnamed Vendor',
+          contact_person: v.contact_person || v.contact || '',
+          phone: v.phone || v.mobile || '',
+          city: v.city || ''
         })).sort((a: any, b: any) => a.vendor_name.localeCompare(b.vendor_name));
 
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
@@ -317,17 +325,112 @@ const AddPurchases = () => {
                     />
                   </div>
 
-                  <div>
+                  {/* Searchable Wholesale Vendor */}
+                  <div className="relative vendor-search-container">
                     <label className="block font-bold text-gray-500 mb-1">Wholesale Vendor: *</label>
-                    <select
-                      name="supplierName"
-                      value={values.supplierName}
-                      onChange={handleChange}
-                      className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.supplierName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
-                    >
-                      <option value="">-- Choose Vendor --</option>
-                      {suppliers.map(s => <option key={s.id} value={s.vendor_name}>{s.vendor_name}</option>)}
-                    </select>
+                    {(() => {
+                      const filteredVendors = suppliers.filter(s => {
+                        if (!values.supplierName) return true;
+                        const q = (values.supplierName || '').toLowerCase().trim();
+                        const vName = (s.vendor_name || '').toLowerCase();
+                        const vPhone = (s.phone || '').toLowerCase();
+                        const vContact = (s.contact_person || '').toLowerCase();
+                        return vName.includes(q) || vPhone.includes(q) || vContact.includes(q);
+                      });
+
+                      return (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            autoComplete="off"
+                            value={values.supplierName}
+                            onFocus={() => {
+                              setIsVendorDropdownOpen(true);
+                              setHighlightedVendorIndex(0);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                setIsVendorDropdownOpen(true);
+                                setHighlightedVendorIndex(prev => prev < filteredVendors.length - 1 ? prev + 1 : 0);
+                              } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                setIsVendorDropdownOpen(true);
+                                setHighlightedVendorIndex(prev => prev > 0 ? prev - 1 : filteredVendors.length - 1);
+                              } else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (filteredVendors[highlightedVendorIndex]) {
+                                  setFieldValue('supplierName', filteredVendors[highlightedVendorIndex].vendor_name);
+                                  setIsVendorDropdownOpen(false);
+                                }
+                              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                setIsVendorDropdownOpen(false);
+                              }
+                            }}
+                            onChange={(e) => {
+                              setFieldValue('supplierName', e.target.value);
+                              setIsVendorDropdownOpen(true);
+                              setHighlightedVendorIndex(0);
+                            }}
+                            placeholder="Type or search vendor name..."
+                            className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${
+                              hasAttempted && errors.supplierName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'
+                            }`}
+                          />
+
+                          {isVendorDropdownOpen && (
+                            <div className="absolute left-0 top-full mt-1 z-[999999] w-full max-h-60 overflow-y-auto bg-white dark:bg-[#1A222C] border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                              {filteredVendors.length > 0 ? (
+                                filteredVendors.map((vendor, vIdx) => (
+                                  <div
+                                    key={vendor.id}
+                                    onMouseEnter={() => setHighlightedVendorIndex(vIdx)}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setFieldValue('supplierName', vendor.vendor_name);
+                                      setIsVendorDropdownOpen(false);
+                                    }}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setFieldValue('supplierName', vendor.vendor_name);
+                                      setIsVendorDropdownOpen(false);
+                                    }}
+                                    className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${
+                                      highlightedVendorIndex === vIdx || values.supplierName === vendor.vendor_name
+                                        ? 'bg-primary/10 text-primary font-bold'
+                                        : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
+                                    }`}
+                                  >
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-xs font-bold">{vendor.vendor_name}</span>
+                                      {(vendor.contact_person || vendor.phone) && (
+                                        <span className="text-[10px] text-slate-400">
+                                          {vendor.contact_person} {vendor.phone ? `• ${vendor.phone}` : ''}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {vendor.city && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+                                        {vendor.city}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="p-3 text-center text-xs text-slate-400 italic">
+                                  No matching vendors found
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {hasAttempted && errors.supplierName && (
+                      <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.supplierName)}</p>
+                    )}
                   </div>
                 </div>
 
