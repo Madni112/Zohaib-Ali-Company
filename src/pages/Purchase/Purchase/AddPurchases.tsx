@@ -23,6 +23,8 @@ const AddPurchases = () => {
   const [activeProdNameIndex, setActiveProdNameIndex] = useState<number | null>(null);
   const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState<number>(0);
 
+  const [defaultPurchaseNo] = useState(() => `PUR-${Math.floor(100000 + Math.random() * 900000)}`);
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -128,9 +130,7 @@ const AddPurchases = () => {
   const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) =>
     ['-', 'e', 'E', '+'].includes(e.key) && e.preventDefault();
 
-  if (metadataLoading) return <div className="flex h-64 items-center justify-center bg-white"><Spinner /></div>;
-
-  const getFormInitialValues = () => {
+  const formInitialValues = React.useMemo(() => {
     if (isEditMode && editData) {
       const rawItems = Array.isArray(editData.items) ? editData.items : JSON.parse(editData.items || '[]');
       const paymentTerm = editData.payment_term || 'Cash';
@@ -165,7 +165,7 @@ const AddPurchases = () => {
       };
     }
     return {
-      purchaseNo: `PUR-${Date.now().toString().slice(-6)}`,
+      purchaseNo: defaultPurchaseNo,
       supplierName: '',
       targetWarehouse: '',
       purchaseDate: new Date().toISOString().split('T')[0],
@@ -189,7 +189,9 @@ const AddPurchases = () => {
         }
       ]
     };
-  };
+  }, [isEditMode, editData, defaultPurchaseNo]);
+
+  if (metadataLoading) return <div className="flex h-64 items-center justify-center bg-white"><Spinner /></div>;
 
   return (
     <div className="mx-auto max-w-7xl text-black dark:text-bodydark text-xs pb-12">
@@ -213,7 +215,7 @@ const AddPurchases = () => {
         </div>
 
         <Formik
-          initialValues={getFormInitialValues()}
+          initialValues={formInitialValues}
           validationSchema={validationSchema}
           enableReinitialize={true}
           onSubmit={async (values) => {
@@ -437,9 +439,22 @@ const AddPurchases = () => {
 
                               const handleProductSelection = (p: any) => {
                                 const displaySku = p.item_sr_no || `SKU-${p.id}`;
-                                setFieldValue(`items.${idx}.skuCode`, displaySku);
-                                setFieldValue(`items.${idx}.itemName`, p.product_name);
-                                setFieldValue(`items.${idx}.rate`, Number(p.purchase_price || 0));
+                                const price = Number(p.purchase_price ?? p.cost_price ?? 0);
+                                const updatedItems = [...values.items];
+                                const cur = updatedItems[idx] || {};
+                                const qty = Number(cur.qty) || 1;
+                                const dPer = Number(cur.discountPer) || 0;
+                                const dAmt = dPer > 0 ? Number(((price * qty * dPer) / 100).toFixed(2)) : (Number(cur.discountAmt) || 0);
+
+                                updatedItems[idx] = {
+                                  ...cur,
+                                  skuCode: displaySku,
+                                  itemName: p.product_name,
+                                  rate: price,
+                                  discountAmt: dAmt
+                                };
+
+                                setFieldValue('items', updatedItems);
                                 setActiveProdNameIndex(null);
                                 setActiveSkuIndex(null);
                               };
