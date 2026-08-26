@@ -193,13 +193,15 @@ const AddPurchaseReturn = () => {
     );
   });
 
-  // Extract all products ever purchased from the selected vendor
-  const vendorBoughtProducts = React.useMemo(() => {
-    if (!vendorSearchQuery) return [];
+  // Helper to extract products bought from the selected vendor
+  const getVendorBoughtProducts = (vendorName: string) => {
+    const vTrim = (vendorName || '').trim().toLowerCase();
+    if (!vTrim) return [];
 
-    const matchedPurchases = purchaseOrdersList.filter(p =>
-      (p.supplier_name || p.vendor_name || '').toLowerCase() === vendorSearchQuery.toLowerCase()
-    );
+    const matchedPurchases = purchaseOrdersList.filter(p => {
+      const sName = (p.supplier_name || p.vendor_name || '').trim().toLowerCase();
+      return sName === vTrim || sName.includes(vTrim) || vTrim.includes(sName);
+    });
 
     // If a specific PO is selected, show items from that PO
     if (selectedPoNo && selectedPoObj && selectedPoObj.items) {
@@ -249,7 +251,7 @@ const AddPurchaseReturn = () => {
     });
 
     return Object.values(prodMap);
-  }, [vendorSearchQuery, selectedPoNo, selectedPoObj, purchaseOrdersList, productList]);
+  };
 
   const validationSchema = Yup.object().shape({
     vendorName: Yup.string().required('Wholesale Vendor selection is required'),
@@ -965,11 +967,24 @@ const AddPurchaseReturn = () => {
                           {values.items.map((item: any, idx: number) => {
                             const lineTotal = (Number(item.qty || 0) * Number(item.rate || 0));
 
-                            const availableProds = values.vendorName ? vendorBoughtProducts : productList;
-                            const filteredRowProds = availableProds.filter(p =>
+                            const activeVendor = (values.vendorName || vendorSearchQuery || '').trim();
+                            const boughtProducts = getVendorBoughtProducts(activeVendor);
+
+                            const filteredBought = boughtProducts.filter(p =>
                               (p.product_name || '').toLowerCase().includes((item.itemName || '').toLowerCase()) ||
                               (p.item_sr_no || p.sku || '').toLowerCase().includes((item.itemName || '').toLowerCase())
                             );
+
+                            const otherCatalogProds = productList.filter(p => {
+                              const isAlreadyInBought = boughtProducts.some(bp => (bp.product_name || '').toLowerCase() === (p.product_name || '').toLowerCase());
+                              if (isAlreadyInBought) return false;
+                              return (
+                                (p.product_name || '').toLowerCase().includes((item.itemName || '').toLowerCase()) ||
+                                (p.item_sr_no || p.sku || '').toLowerCase().includes((item.itemName || '').toLowerCase())
+                              );
+                            });
+
+                            const totalMatchingCount = filteredBought.length + otherCatalogProds.length;
 
                             return (
                               <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
@@ -988,18 +1003,23 @@ const AddPurchaseReturn = () => {
                                       onKeyDown={(e) => {
                                         if (e.key === 'ArrowDown') {
                                           e.preventDefault();
-                                          setHighlightedProdIdx(prev => Math.min(prev + 1, filteredRowProds.length - 1));
+                                          setHighlightedProdIdx(prev => Math.min(prev + 1, totalMatchingCount - 1));
                                         } else if (e.key === 'ArrowUp') {
                                           e.preventDefault();
                                           setHighlightedProdIdx(prev => Math.max(prev - 1, 0));
                                         } else if (e.key === 'Enter') {
                                           e.preventDefault();
-                                          if (filteredRowProds[highlightedProdIdx]) {
-                                            const p = filteredRowProds[highlightedProdIdx];
-                                            setFieldValue(`items.${idx}.itemName`, p.product_name);
-                                            setFieldValue(`items.${idx}.rate`, Number(p.purchase_price || p.price || 0));
-                                            setFieldValue(`items.${idx}.uom`, p.uom || 'Nos');
-                                            setFieldValue(`items.${idx}.sku`, p.item_sr_no || p.sku || '');
+                                          let chosen: any = null;
+                                          if (highlightedProdIdx < filteredBought.length) {
+                                            chosen = filteredBought[highlightedProdIdx];
+                                          } else {
+                                            chosen = otherCatalogProds[highlightedProdIdx - filteredBought.length];
+                                          }
+                                          if (chosen) {
+                                            setFieldValue(`items.${idx}.itemName`, chosen.product_name);
+                                            setFieldValue(`items.${idx}.rate`, Number(chosen.purchase_price || chosen.price || 0));
+                                            setFieldValue(`items.${idx}.uom`, chosen.uom || 'Nos');
+                                            setFieldValue(`items.${idx}.sku`, chosen.item_sr_no || chosen.sku || '');
                                             setActiveItemSearchIdx(null);
                                           }
                                         } else if (e.key === 'Escape') {
@@ -1011,7 +1031,7 @@ const AddPurchaseReturn = () => {
                                         setActiveItemSearchIdx(idx);
                                         setHighlightedProdIdx(0);
                                       }}
-                                      placeholder={values.vendorName ? "Search products bought from vendor..." : "Select vendor above first..."}
+                                      placeholder={activeVendor ? `Search products bought from ${activeVendor}...` : "Search products catalog..."}
                                       className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
                                     />
 
@@ -1031,51 +1051,110 @@ const AddPurchaseReturn = () => {
 
                                   {/* Floating Product Dropdown */}
                                   {activeItemSearchIdx === idx && (
-                                    <div className="absolute left-2 right-2 top-full mt-1 z-[9999] max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                                      {!values.vendorName ? (
-                                        <div className="p-3 text-center text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center gap-1.5 font-bold">
-                                          <MdWarning size={16} /> Please select a Target Vendor above first to view products purchased from them.
-                                        </div>
-                                      ) : filteredRowProds.length > 0 ? (
-                                        filteredRowProds.map((prod, pIdx) => (
-                                          <div
-                                            key={prod.id || pIdx}
-                                            onMouseEnter={() => setHighlightedProdIdx(pIdx)}
-                                            onMouseDown={(e) => {
-                                              e.preventDefault();
-                                              setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                              setFieldValue(`items.${idx}.rate`, Number(prod.purchase_price || prod.price || 0));
-                                              setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
-                                              setFieldValue(`items.${idx}.sku`, prod.item_sr_no || prod.sku || '');
-                                              setActiveItemSearchIdx(null);
-                                            }}
-                                            className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                              highlightedProdIdx === pIdx
-                                                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                                                : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                                            }`}
-                                          >
-                                            <div className="flex flex-col gap-0.5">
-                                              <span className="font-bold text-xs">{prod.product_name}</span>
-                                              <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                                {(prod.item_sr_no || prod.sku) && (
-                                                  <span className="font-mono">SKU: {prod.item_sr_no || prod.sku}</span>
-                                                )}
-                                                {prod.totalBoughtQty && (
-                                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded">
-                                                    Bought from Vendor: {prod.totalBoughtQty} {prod.uom || 'Nos'}
-                                                  </span>
-                                                )}
+                                    <div className="absolute left-2 right-2 top-full mt-1 z-[9999] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                                      {/* 1. Products Purchased from Selected Vendor */}
+                                      {filteredBought.length > 0 && (
+                                        <div>
+                                          {activeVendor && (
+                                            <div className="px-3 py-1.5 bg-rose-50/90 dark:bg-rose-950/40 text-[10px] font-black uppercase text-rose-700 dark:text-rose-300 border-b border-rose-100 dark:border-rose-900/60 flex items-center justify-between">
+                                              <span>🛒 Products Purchased from {activeVendor}</span>
+                                              <span className="font-mono">{filteredBought.length} items</span>
+                                            </div>
+                                          )}
+                                          {filteredBought.map((prod, pIdx) => (
+                                            <div
+                                              key={prod.id || pIdx}
+                                              onMouseEnter={() => setHighlightedProdIdx(pIdx)}
+                                              onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                setFieldValue(`items.${idx}.rate`, Number(prod.purchase_price || prod.price || 0));
+                                                setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                setFieldValue(`items.${idx}.sku`, prod.item_sr_no || prod.sku || '');
+                                                setActiveItemSearchIdx(null);
+                                              }}
+                                              className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                highlightedProdIdx === pIdx
+                                                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
+                                                  : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                              }`}
+                                            >
+                                              <div className="flex flex-col gap-0.5">
+                                                <span className="font-bold text-xs">{prod.product_name}</span>
+                                                <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                                                  {(prod.item_sr_no || prod.sku) && (
+                                                    <span className="font-mono">SKU: {prod.item_sr_no || prod.sku}</span>
+                                                  )}
+                                                  {prod.totalBoughtQty && (
+                                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded">
+                                                      Bought from Vendor: {prod.totalBoughtQty} {prod.uom || 'Nos'}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div className="text-right">
+                                                <span className="text-[10px] font-mono block text-rose-600 dark:text-rose-400 font-black">
+                                                  Inward Cost: Rs. {formatMoney(prod.purchase_price || prod.price || 0)}
+                                                </span>
+                                                <span className="text-[9px] text-slate-400">
+                                                  Total Stock: {prod.current_stock || 0} {prod.uom || 'Nos'}
+                                                </span>
                                               </div>
                                             </div>
-                                            <div className="text-right">
-                                              <span className="text-[10px] font-mono block text-rose-600 dark:text-rose-400 font-black">Inward Cost: Rs. {formatMoney(prod.purchase_price || prod.price || 0)}</span>
-                                              <span className="text-[9px] text-slate-400">Total Stock: {prod.current_stock || 0} {prod.uom || 'Nos'}</span>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {/* 2. Other Catalog Products */}
+                                      {otherCatalogProds.length > 0 && (
+                                        <div>
+                                          {activeVendor && filteredBought.length > 0 && (
+                                            <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700">
+                                              Other General Products
                                             </div>
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <div className="p-3 text-center text-xs text-slate-400 italic">No products recorded in procurement history from this vendor.</div>
+                                          )}
+                                          {otherCatalogProds.map((prod, pIdx) => {
+                                            const overallIdx = filteredBought.length + pIdx;
+                                            return (
+                                              <div
+                                                key={prod.id || overallIdx}
+                                                onMouseEnter={() => setHighlightedProdIdx(overallIdx)}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                  setFieldValue(`items.${idx}.rate`, Number(prod.purchase_price || prod.price || 0));
+                                                  setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                  setFieldValue(`items.${idx}.sku`, prod.item_sr_no || prod.sku || '');
+                                                  setActiveItemSearchIdx(null);
+                                                }}
+                                                className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                  highlightedProdIdx === overallIdx
+                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
+                                                    : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                                }`}
+                                              >
+                                                <div className="flex flex-col gap-0.5">
+                                                  <span className="font-bold text-xs">{prod.product_name}</span>
+                                                  {(prod.item_sr_no || prod.sku) && (
+                                                    <span className="text-[10px] text-slate-400 font-mono">SKU: {prod.item_sr_no || prod.sku}</span>
+                                                  )}
+                                                </div>
+                                                <div className="text-right">
+                                                  <span className="text-[10px] font-mono block text-slate-600 dark:text-slate-300 font-bold">
+                                                    Cost: Rs. {formatMoney(prod.purchase_price || prod.price || 0)}
+                                                  </span>
+                                                  <span className="text-[9px] text-slate-400">
+                                                    Total Stock: {prod.current_stock || 0} {prod.uom || 'Nos'}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+
+                                      {filteredBought.length === 0 && otherCatalogProds.length === 0 && (
+                                        <div className="p-3 text-center text-xs text-slate-400 italic">No matching products found</div>
                                       )}
                                     </div>
                                   )}
