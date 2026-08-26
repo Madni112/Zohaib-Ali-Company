@@ -239,7 +239,7 @@ const PrintInvoice = () => {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 6mm 8mm;
+            margin: 12mm 14mm;
           }
           aside, nav, header, .no-print, button {
             display: none !important;
@@ -373,29 +373,29 @@ const PrintInvoice = () => {
           <table className="w-full text-xs text-left border-collapse">
             <thead>
               <tr className="bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
-                <th className="py-2.5 px-3 w-10 text-center">S#</th>
-                <th className="py-2.5 px-3 w-24 font-mono">SKU</th>
-                <th className="py-2.5 px-3">Item Description</th>
-                <th className="py-2.5 px-3 text-center w-36">Quantity</th>
-                <th className="py-2.5 px-3 text-right w-24">Unit Rate</th>
+                <th className="py-2.5 px-2 w-[4%] text-center">S#</th>
+                <th className="py-2.5 px-2 w-[14%] font-mono">SKU</th>
+                <th className="py-2.5 px-2 w-[28%]">Item Description</th>
+                <th className="py-2.5 px-2 text-center w-[18%]">Quantity</th>
+                <th className="py-2.5 px-2 text-right w-[14%]">Unit Rate</th>
                 {computedTotalDiscount > 0 && (
-                  <th className="py-2.5 px-3 text-right w-20 text-amber-300">Discount</th>
+                  <th className="py-2.5 px-2 text-right w-[10%] text-amber-300">Discount</th>
                 )}
                 {computedTotalGst > 0 && (
-                  <th className="py-2.5 px-3 text-right w-20 text-emerald-300">GST (18%)</th>
+                  <th className="py-2.5 px-2 text-right w-[10%] text-emerald-300">GST (18%)</th>
                 )}
-                <th className="py-2.5 px-3 text-right pr-4 w-28 font-black">Net Total</th>
+                <th className="py-2.5 px-2 text-right pr-2 w-[16%] font-black">Net Total</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
+            <tbody className="divide-y divide-slate-100 font-medium text-[10.5px]">
               {processedItems.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50">
-                  <td className="py-2.5 px-3 text-center text-slate-400 font-mono">{idx + 1}</td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-slate-700">{item.skuCode}</td>
-                  <td className="py-2.5 px-3">
-                    <span className="font-bold text-slate-900 block">{item.pName}</span>
+                  <td className="py-2 px-2 text-center text-slate-400 font-mono">{idx + 1}</td>
+                  <td className="py-2 px-2 font-mono font-bold text-slate-700">{item.skuCode}</td>
+                  <td className="py-2 px-2">
+                    <span className="font-bold text-slate-900 block leading-tight">{item.pName}</span>
                   </td>
-                  <td className="py-2.5 px-3 text-center bg-slate-50/40">
+                  <td className="py-2 px-2 text-center bg-slate-50/40">
                     <div className="font-mono font-black text-slate-900 text-[11px]">{item.qtyDisplay}</div>
                     {item.isTile && item.totalLineSqm > 0 && (
                       <div className="mt-0.5 space-y-0.5 font-mono">
@@ -408,20 +408,20 @@ const PrintInvoice = () => {
                       </div>
                     )}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono">
+                  <td className="py-2 px-2 text-right font-mono whitespace-nowrap">
                     Rs. {item.rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                   {computedTotalDiscount > 0 && (
-                    <td className="py-2.5 px-3 text-right font-mono text-amber-700">
+                    <td className="py-2 px-2 text-right font-mono text-amber-700 whitespace-nowrap">
                       {item.discountAmt > 0 ? `Rs. ${item.discountAmt.toLocaleString()}` : '-'}
                     </td>
                   )}
                   {computedTotalGst > 0 && (
-                    <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                    <td className="py-2 px-2 text-right font-mono text-emerald-700 whitespace-nowrap">
                       {item.gstAmount > 0 ? `Rs. ${item.gstAmount.toLocaleString()}` : '-'}
                     </td>
                   )}
-                  <td className="py-2.5 px-3 text-right pr-4 font-mono font-black text-slate-950">
+                  <td className="py-2 px-2 text-right pr-2 font-mono font-black text-slate-950 whitespace-nowrap">
                     Rs. {item.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>

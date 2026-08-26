@@ -231,7 +231,7 @@ const PrintPurchase = () => {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 6mm 8mm;
+            margin: 12mm 14mm;
           }
           aside, nav, header, .no-print, button {
             display: none !important;
@@ -251,6 +251,7 @@ const PrintPurchase = () => {
             padding: 0 !important;
             margin: 0 !important;
             width: 100% !important;
+            max-width: 100% !important;
           }
           table {
             width: 100% !important;
@@ -365,20 +366,20 @@ const PrintPurchase = () => {
           <table className="w-full text-left border-collapse print-table">
             <thead>
               <tr className="bg-slate-100 text-[9.5px] font-black uppercase text-slate-700 border-b border-slate-300">
-                <th className="py-2.5 px-2 w-[4%] text-center">S#</th>
-                <th className="py-2.5 px-2 w-[14%]">SKU Code</th>
-                <th className="py-2.5 px-2 w-[34%]">Product Description</th>
-                <th className="py-2.5 px-2 w-[20%] text-center">Received Qty</th>
-                <th className="py-2.5 px-2 w-[14%] text-right">Cost Rate</th>
-                <th className="py-2.5 px-2 w-[14%] text-right pr-3">Total (PKR)</th>
+                <th className="py-2.5 px-2.5 w-[5%] text-center">S#</th>
+                <th className="py-2.5 px-2.5 w-[14%]">SKU Code</th>
+                <th className="py-2.5 px-2.5 w-[28%]">Product Description</th>
+                <th className="py-2.5 px-2.5 w-[17%] text-center">Received Qty</th>
+                <th className="py-2.5 px-2.5 w-[16%] text-right">Cost Rate</th>
+                <th className="py-2.5 px-2.5 w-[20%] text-right pr-4">Total (PKR)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-[11px]">
               {processedItems.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50">
-                  <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[10.5px]">{idx + 1}</td>
-                  <td className="py-2.5 px-2 font-mono font-bold text-slate-900 text-[10.5px]">{item.skuCode}</td>
-                  <td className="py-2.5 px-2">
+                  <td className="py-2.5 px-2.5 text-center text-slate-400 font-mono text-[10.5px]">{idx + 1}</td>
+                  <td className="py-2.5 px-2.5 font-mono font-bold text-slate-900 text-[10.5px]">{item.skuCode}</td>
+                  <td className="py-2.5 px-2.5">
                     <span className="font-bold text-slate-900 block leading-tight">{item.pName}</span>
                     <div className="flex flex-wrap items-center gap-2 mt-0.5">
                       {item.isTile && item.perBoxSqm > 0 && (
@@ -393,7 +394,7 @@ const PrintPurchase = () => {
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-2 text-center">
+                  <td className="py-2.5 px-2.5 text-center">
                     <div className="flex flex-col items-center justify-center font-mono">
                       <span className="font-bold text-slate-900 text-[11px]">{item.qtyDisplay}</span>
                       {item.isTile && item.totalLineSqm > 0 && (
@@ -403,10 +404,10 @@ const PrintPurchase = () => {
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-2 text-right font-mono font-semibold text-slate-800 text-[10.5px] whitespace-nowrap">
+                  <td className="py-2.5 px-2.5 text-right font-mono font-semibold text-slate-800 text-[10.5px] whitespace-nowrap">
                     Rs. {item.rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="py-2.5 px-2 text-right font-mono font-black text-slate-900 pr-3 text-[10.5px] whitespace-nowrap">
+                  <td className="py-2.5 px-2.5 text-right font-mono font-black text-slate-900 pr-4 text-[10.5px] whitespace-nowrap">
                     Rs. {item.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
