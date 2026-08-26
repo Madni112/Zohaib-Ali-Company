@@ -365,43 +365,48 @@ const PrintPurchase = () => {
           <table className="w-full text-left border-collapse print-table">
             <thead>
               <tr className="bg-slate-100 text-[9.5px] font-black uppercase text-slate-700 border-b border-slate-300">
-                <th className="py-2 px-2 w-[5%] text-center">S#</th>
-                <th className="py-2 px-2 w-[15%]">SKU Code</th>
-                <th className="py-2 px-2 w-[30%]">Product Description</th>
-                <th className="py-2 px-2 w-[16%]">Destination</th>
-                <th className="py-2 px-2 w-[16%] text-center">Received Qty</th>
-                <th className="py-2 px-2 w-[9%] text-right">Cost Rate</th>
-                <th className="py-2 px-2 w-[9%] text-right pr-2">Total</th>
+                <th className="py-2.5 px-2 w-[4%] text-center">S#</th>
+                <th className="py-2.5 px-2 w-[14%]">SKU Code</th>
+                <th className="py-2.5 px-2 w-[34%]">Product Description</th>
+                <th className="py-2.5 px-2 w-[20%] text-center">Received Qty</th>
+                <th className="py-2.5 px-2 w-[14%] text-right">Cost Rate</th>
+                <th className="py-2.5 px-2 w-[14%] text-right pr-3">Total (PKR)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-[11px]">
               {processedItems.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50">
-                  <td className="py-2 px-2 text-center text-slate-400 font-mono text-[10.5px]">{idx + 1}</td>
-                  <td className="py-2 px-2 font-mono font-bold text-slate-900 text-[10.5px]">{item.skuCode}</td>
-                  <td className="py-2 px-2">
+                  <td className="py-2.5 px-2 text-center text-slate-400 font-mono text-[10.5px]">{idx + 1}</td>
+                  <td className="py-2.5 px-2 font-mono font-bold text-slate-900 text-[10.5px]">{item.skuCode}</td>
+                  <td className="py-2.5 px-2">
                     <span className="font-bold text-slate-900 block leading-tight">{item.pName}</span>
-                    {item.isTile && item.perBoxSqm > 0 && (
-                      <span className="text-[9.5px] font-mono text-emerald-700 font-semibold block mt-0.5">
-                        [Tile Metric] 1 Box = {item.perBoxSqm.toFixed(2)} sq.m
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      {item.isTile && item.perBoxSqm > 0 && (
+                        <span className="text-[9.5px] font-mono text-emerald-700 font-semibold">
+                          [Tile Metric] 1 Box = {item.perBoxSqm.toFixed(2)} sq.m
+                        </span>
+                      )}
+                      {item.warehouse && item.warehouse !== purchase.target_warehouse && (
+                        <span className="text-[9.5px] text-slate-500 font-medium">
+                          • Location: {item.warehouse}
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="py-2 px-2 text-slate-600 text-[10.5px] font-medium leading-tight">{item.warehouse}</td>
-                  <td className="py-2 px-2 text-center">
+                  <td className="py-2.5 px-2 text-center">
                     <div className="flex flex-col items-center justify-center font-mono">
                       <span className="font-bold text-slate-900 text-[11px]">{item.qtyDisplay}</span>
                       {item.isTile && item.totalLineSqm > 0 && (
-                        <span className="text-[9px] font-black text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 mt-0.5">
+                        <span className="text-[9px] font-black text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 mt-0.5 whitespace-nowrap">
                           {item.totalLineSqm.toFixed(2)} sq.m
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="py-2 px-2 text-right font-mono font-semibold text-slate-800 text-[10.5px]">
+                  <td className="py-2.5 px-2 text-right font-mono font-semibold text-slate-800 text-[10.5px] whitespace-nowrap">
                     Rs. {item.rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="py-2 px-2 text-right font-mono font-black text-slate-900 pr-2 text-[10.5px]">
+                  <td className="py-2.5 px-2 text-right font-mono font-black text-slate-900 pr-3 text-[10.5px] whitespace-nowrap">
                     Rs. {item.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
