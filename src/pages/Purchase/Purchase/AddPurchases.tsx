@@ -79,7 +79,6 @@ const AddPurchases = () => {
 
   const validationSchema = Yup.object().shape({
     supplierName: Yup.string().required('Wholesale Vendor selection is required'),
-    targetWarehouse: Yup.string().required('Destination Receiving Warehouse is required'),
     purchaseDate: Yup.string().required('Inbound Date is required'),
     settlementMode: Yup.string().required('Payment Method is required'),
     selectedBankTitle: Yup.string().when('settlementMode', {
@@ -168,7 +167,6 @@ const AddPurchases = () => {
     return {
       purchaseNo: defaultPurchaseNo,
       supplierName: '',
-      targetWarehouse: '',
       purchaseDate: new Date().toISOString().split('T')[0],
       applyTax: false,
       showDiscount: false,
@@ -181,7 +179,7 @@ const AddPurchases = () => {
         {
           itemName: '',
           skuCode: '',
-          warehouse: '',
+          warehouse: locations[0]?.name || '',
           qty: 1,
           rate: 0,
           discountPer: 0,
@@ -241,7 +239,7 @@ const AddPurchases = () => {
               const databasePayload = {
                 purchase_no: values.purchaseNo,
                 supplier_name: values.supplierName,
-                target_warehouse: values.targetWarehouse,
+                target_warehouse: values.items[0]?.warehouse || locations[0]?.name || 'Main Warehouse',
                 purchase_date: values.purchaseDate,
                 purchase_type: values.applyTax ? 'GST Standard Item' : 'No Tax',
                 payment_term: paymentTermLabel,
@@ -306,8 +304,8 @@ const AddPurchases = () => {
             return (
               <Form className="p-6 space-y-6">
                 
-                {/* ── TOP 3-COLUMN HEADER BAR (MATCHING SALES INVOICE UX) ── */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                {/* ── TOP 2-COLUMN HEADER BAR ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Inbound Purchase Date: *</label>
                     <input
@@ -329,19 +327,6 @@ const AddPurchases = () => {
                     >
                       <option value="">-- Choose Vendor --</option>
                       {suppliers.map(s => <option key={s.id} value={s.vendor_name}>{s.vendor_name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-500 mb-1">Destination Receiving Warehouse: *</label>
-                    <select
-                      name="targetWarehouse"
-                      value={values.targetWarehouse}
-                      onChange={handleChange}
-                      className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.targetWarehouse ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
-                    >
-                      <option value="">-- Choose Stock Destination Bin --</option>
-                      {locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -649,15 +634,14 @@ const AddPurchases = () => {
                                   </td>
 
                                   {/* ROW-LEVEL DESTINATION WAREHOUSE */}
-                                  <td className="p-3 w-44">
+                                  <td className="p-3 w-48">
                                     <select
-                                      value={item.warehouse || values.targetWarehouse || ''}
+                                      value={item.warehouse || locations[0]?.name || ''}
                                       onChange={(e) => {
                                         setFieldValue(`items.${idx}.warehouse`, e.target.value);
                                       }}
                                       className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-xs"
                                     >
-                                      <option value="">Default ({values.targetWarehouse || 'None'})</option>
                                       {locations.map((loc) => (
                                         <option key={loc.id} value={loc.name}>
                                           {loc.name}
@@ -819,7 +803,7 @@ const AddPurchases = () => {
                       {({ push }) => (
                         <button
                           type="button"
-                          onClick={() => push({ itemName: '', skuCode: '', warehouse: values.targetWarehouse || '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 })}
+                          onClick={() => push({ itemName: '', skuCode: '', warehouse: locations[0]?.name || '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 })}
                           className="inline-flex items-center gap-1 bg-primary text-white font-bold py-1.5 px-3.5 rounded text-xs hover:bg-opacity-90 transition cursor-pointer shadow-xs"
                         >
                           <FiPlus size={12} /> Add Row Line
