@@ -6,13 +6,14 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
-import { FiTrash2, FiPlus, FiArrowLeft, FiCheckCircle } from 'react-icons/fi';
+import { FiTrash2, FiPlus, FiArrowLeft, FiCheckCircle, FiPrinter } from 'react-icons/fi';
 
 const AddPurchases = () => {
   const { tenantId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [metadataLoading, setMetadataLoading] = useState(true);
   const [hasAttempted, setHasAttempted] = useState(false);
+  const [submitAction, setSubmitAction] = useState<'save' | 'print'>('save');
 
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
@@ -274,7 +275,11 @@ const AddPurchases = () => {
                 const { error } = await supabase.from('supplier_purchases').update(databasePayload).eq('id', editData.id);
                 if (error) throw error;
                 toast.success('Procurement inventory batch updated successfully!');
-                navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${editData.id}`);
+                if (submitAction === 'print') {
+                  navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${editData.id}`);
+                } else {
+                  navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/List`);
+                }
               } else {
                 const { data: insertedData, error } = await supabase.from('supplier_purchases').insert([databasePayload]).select('id').single();
                 if (error) throw error;
@@ -292,7 +297,7 @@ const AddPurchases = () => {
                 }
 
                 toast.success('Procurement inventory batch recorded successfully!');
-                if (insertedData?.id) {
+                if (submitAction === 'print' && insertedData?.id) {
                   navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${insertedData.id}`);
                 } else {
                   navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/List`);
@@ -1170,7 +1175,7 @@ const AddPurchases = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-stroke dark:border-strokedark">
+                    <div className="flex flex-wrap items-center justify-end gap-3 mt-6 pt-4 border-t border-stroke dark:border-strokedark">
                       <button
                         type="button"
                         onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/List`)}
@@ -1178,9 +1183,24 @@ const AddPurchases = () => {
                       >
                         Cancel
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
+                          setSubmitAction('print');
+                          setHasAttempted(true);
+                          submitForm();
+                        }}
+                        disabled={loading}
+                        className="rounded-xl bg-teal-600 hover:bg-teal-700 py-3 px-6 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                      >
+                        <FiPrinter size={15} /> <span>Save & Print</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSubmitAction('save');
                           setHasAttempted(true);
                           submitForm();
                         }}

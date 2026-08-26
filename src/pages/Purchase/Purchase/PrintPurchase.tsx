@@ -226,12 +226,12 @@ const PrintPurchase = () => {
   const amountInWords = numberToWords(Math.round(grandTotal));
 
   return (
-    <div className="mx-auto max-w-4xl p-3 sm:p-6 md:p-8 bg-white text-slate-900 font-sans min-h-screen relative">
+    <div className="mx-auto max-w-4xl p-2 sm:p-4 md:p-6 bg-white text-slate-900 font-sans min-h-screen relative print:p-0 print:m-0 print:max-w-full">
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm;
+            margin: 6mm 8mm;
           }
           aside, nav, header, .no-print, button {
             display: none !important;
@@ -241,22 +241,25 @@ const PrintPurchase = () => {
           body {
             background: white !important;
             color: #0f172a !important;
-            font-size: 11px !important;
+            font-size: 10.5px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           .print-card {
-            border: 1px solid #cbd5e1 !important;
+            border: none !important;
             box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
           }
-          .print-header {
-            background-color: #047857 !important;
-            color: white !important;
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
           }
           .print-table th {
             background-color: #f1f5f9 !important;
             color: #0f172a !important;
-            border-bottom: 1.5px solid #64748b !important;
+            border-bottom: 1px solid #94a3b8 !important;
           }
           .print-table td {
             border-bottom: 1px solid #e2e8f0 !important;
@@ -265,14 +268,14 @@ const PrintPurchase = () => {
       `}</style>
 
       {/* ── TOP ACTION BAR (Hidden on Print) ─────────────────────────────────── */}
-      <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-900 text-white shadow-lg">
+      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-slate-900 text-white shadow-lg">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/List`)}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition cursor-pointer"
           >
-            <FiArrowLeft size={14} /> Back to Purchases
+            <FiArrowLeft size={14} /> Back to Purchases List
           </button>
           <div>
             <h1 className="text-sm font-bold text-white leading-tight">Inbound Purchase Consignment Voucher</h1>
@@ -290,115 +293,115 @@ const PrintPurchase = () => {
       </div>
 
       {/* ── PRINTABLE DOCUMENT CONTAINER ───────────────────────────────────── */}
-      <div className="print-card border border-slate-200 rounded-xl p-6 sm:p-8 bg-white shadow-xs">
+      <div className="print-card border border-slate-200 rounded-xl p-5 sm:p-7 bg-white shadow-xs print:border-none print:p-0 print:shadow-none">
         
         {/* ── 1. CORPORATE HEADER ── */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b-2 border-emerald-600">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b-2 border-emerald-600">
           <div>
             <div className="flex items-center gap-2">
               <span className="w-8 h-8 rounded-lg bg-emerald-600 text-white font-black flex items-center justify-center text-base shadow-sm">Z</span>
               <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">ZOHAIB ALI & COMPANY</h2>
             </div>
-            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">Wholesale Tile & Sanitary Procurement Hub</p>
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600 mt-2 font-medium">
+            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-1">Wholesale Tile & Sanitary Procurement Hub</p>
+            <div className="flex flex-wrap items-center gap-3 text-[10.5px] text-slate-600 mt-1.5 font-medium">
               <span className="flex items-center gap-1"><FiMapPin className="text-emerald-600" /> Main Showroom & Warehouse Yard, Pakistan</span>
               <span className="flex items-center gap-1"><FiPhone className="text-emerald-600" /> Hotline: 03128039911</span>
             </div>
           </div>
 
-          <div className="text-left sm:text-right bg-emerald-50 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-200/80 min-w-[220px]">
-            <span className="block text-[10px] font-black text-emerald-800 uppercase tracking-widest">Document Type</span>
-            <span className="block text-sm font-black text-emerald-950 mt-0.5">GOODS RECEIVING NOTE</span>
-            <span className="block text-[11px] text-slate-500 font-semibold font-mono mt-1">PO: <strong className="text-slate-900 font-black">{purchaseNoFormatted}</strong></span>
-            <span className="block text-[11px] text-slate-500 font-semibold mt-0.5">Date: <strong className="text-slate-900">{purchaseDateFormatted}</strong></span>
+          <div className="text-left sm:text-right bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl border border-emerald-200/80 min-w-[200px]">
+            <span className="block text-[9px] font-black text-emerald-800 uppercase tracking-widest">Document Type</span>
+            <span className="block text-xs sm:text-sm font-black text-emerald-950 mt-0.5">GOODS RECEIVING NOTE</span>
+            <span className="block text-[10.5px] text-slate-500 font-semibold font-mono mt-0.5">PO: <strong className="text-slate-900 font-black">{purchaseNoFormatted}</strong></span>
+            <span className="block text-[10.5px] text-slate-500 font-semibold mt-0.5">Date: <strong className="text-slate-900">{purchaseDateFormatted}</strong></span>
           </div>
         </div>
 
         {/* ── 2. METADATA CARDS: VENDOR & INWARD SETTLEMENT ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
           {/* Vendor Card */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Supplying Factory / Wholesale Vendor</span>
-            <h3 className="text-sm font-black text-slate-900">{purchase.supplier_name || purchase.vendor_name || 'General Factory Vendor'}</h3>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block mb-1">Supplying Factory / Wholesale Vendor</span>
+            <h3 className="text-xs font-black text-slate-900">{purchase.supplier_name || purchase.vendor_name || 'General Factory Vendor'}</h3>
             {vendorInfo?.contact_name && (
-              <p className="text-xs text-slate-600 mt-0.5"><strong className="text-slate-700">Contact:</strong> {vendorInfo.contact_name}</p>
+              <p className="text-[11px] text-slate-600 mt-0.5"><strong className="text-slate-700">Contact:</strong> {vendorInfo.contact_name}</p>
             )}
             {(vendorInfo?.cell_no || vendorInfo?.phone_no || vendorInfo?.phone) && (
-              <p className="text-xs text-slate-600 mt-0.5 font-mono"><strong className="text-slate-700">Phone:</strong> {vendorInfo.cell_no || vendorInfo.phone_no || vendorInfo.phone}</p>
+              <p className="text-[11px] text-slate-600 mt-0.5 font-mono"><strong className="text-slate-700">Phone:</strong> {vendorInfo.cell_no || vendorInfo.phone_no || vendorInfo.phone}</p>
             )}
             {vendorInfo?.address && (
-              <p className="text-xs text-slate-600 mt-0.5"><strong className="text-slate-700">Address:</strong> {vendorInfo.address} {vendorInfo?.city ? `(${vendorInfo.city})` : ''}</p>
+              <p className="text-[11px] text-slate-600 mt-0.5"><strong className="text-slate-700">Address:</strong> {vendorInfo.address} {vendorInfo?.city ? `(${vendorInfo.city})` : ''}</p>
             )}
           </div>
 
           {/* Inward Details Card */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Inbound Consignment Coordinates</span>
-            <div className="space-y-1 text-xs">
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider block mb-1">Inbound Consignment Coordinates</span>
+            <div className="space-y-0.5 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-slate-500">Destination Warehouse:</span>
                 <strong className="text-slate-900 font-bold">{purchase.target_warehouse || 'Main Warehouse'}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Payment Term / Method:</span>
-                <span className="font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded text-[11px]">{purchase.payment_term || 'By Cash'}</span>
+                <span className="font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.2 rounded text-[10.5px]">{purchase.payment_term || 'By Cash'}</span>
               </div>
               {purchase.selected_bank_title && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Disbursed From Bank:</span>
-                  <strong className="text-slate-900 font-mono text-[11px]">{purchase.selected_bank_title}</strong>
+                  <strong className="text-slate-900 font-mono text-[10.5px]">{purchase.selected_bank_title}</strong>
                 </div>
               )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Consignment Status:</span>
-                <strong className="text-emerald-700 font-bold inline-flex items-center gap-1"><FiCheckCircle size={12} /> Stock Received & Added</strong>
+                <strong className="text-emerald-700 font-bold inline-flex items-center gap-1"><FiCheckCircle size={11} /> Stock Received & Added</strong>
               </div>
             </div>
           </div>
         </div>
 
         {/* ── 3. RECEIVED ITEMS INVENTORY TABLE ── */}
-        <div className="overflow-x-auto rounded-lg border border-slate-200 my-6">
+        <div className="rounded-lg border border-slate-200 my-4 overflow-hidden">
           <table className="w-full text-left border-collapse print-table">
             <thead>
-              <tr className="bg-slate-100 text-[10px] font-black uppercase text-slate-700 border-b border-slate-300">
-                <th className="py-2.5 px-3 w-10 text-center">S#</th>
-                <th className="py-2.5 px-3 w-32">SKU Code</th>
-                <th className="py-2.5 px-3">Product Description</th>
-                <th className="py-2.5 px-3 w-36">Destination</th>
-                <th className="py-2.5 px-3 text-center min-w-[180px]">Received Quantity</th>
-                <th className="py-2.5 px-3 text-right w-28">Cost Rate (PKR)</th>
-                <th className="py-2.5 px-3 text-right w-32 pr-4">Total (PKR)</th>
+              <tr className="bg-slate-100 text-[9.5px] font-black uppercase text-slate-700 border-b border-slate-300">
+                <th className="py-2 px-2 w-[5%] text-center">S#</th>
+                <th className="py-2 px-2 w-[15%]">SKU Code</th>
+                <th className="py-2 px-2 w-[30%]">Product Description</th>
+                <th className="py-2 px-2 w-[16%]">Destination</th>
+                <th className="py-2 px-2 w-[16%] text-center">Received Qty</th>
+                <th className="py-2 px-2 w-[9%] text-right">Cost Rate</th>
+                <th className="py-2 px-2 w-[9%] text-right pr-2">Total</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
+            <tbody className="divide-y divide-slate-100 text-[11px]">
               {processedItems.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50">
-                  <td className="py-3 px-3 text-center text-slate-400 font-mono text-[11px]">{idx + 1}</td>
-                  <td className="py-3 px-3 font-mono font-bold text-slate-900 text-[11px]">{item.skuCode}</td>
-                  <td className="py-3 px-3">
-                    <span className="font-bold text-slate-900 block">{item.pName}</span>
-                    {item.isTile && (
-                      <span className="text-[10px] font-mono text-emerald-700 font-semibold block mt-0.5">
-                        [Tile Metric] {item.perBoxSqm ? `1 Box = ${item.perBoxSqm.toFixed(2)} sq.m` : ''}
+                  <td className="py-2 px-2 text-center text-slate-400 font-mono text-[10.5px]">{idx + 1}</td>
+                  <td className="py-2 px-2 font-mono font-bold text-slate-900 text-[10.5px]">{item.skuCode}</td>
+                  <td className="py-2 px-2">
+                    <span className="font-bold text-slate-900 block leading-tight">{item.pName}</span>
+                    {item.isTile && item.perBoxSqm > 0 && (
+                      <span className="text-[9.5px] font-mono text-emerald-700 font-semibold block mt-0.5">
+                        [Tile Metric] 1 Box = {item.perBoxSqm.toFixed(2)} sq.m
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-3 text-slate-600 text-[11px] font-medium">{item.warehouse}</td>
-                  <td className="py-3 px-3 text-center">
+                  <td className="py-2 px-2 text-slate-600 text-[10.5px] font-medium leading-tight">{item.warehouse}</td>
+                  <td className="py-2 px-2 text-center">
                     <div className="flex flex-col items-center justify-center font-mono">
-                      <span className="font-bold text-slate-900 text-xs">{item.qtyDisplay}</span>
+                      <span className="font-bold text-slate-900 text-[11px]">{item.qtyDisplay}</span>
                       {item.isTile && item.totalLineSqm > 0 && (
-                        <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 mt-0.5">
+                        <span className="text-[9px] font-black text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 mt-0.5">
                           {item.totalLineSqm.toFixed(2)} sq.m
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-right font-mono font-semibold text-slate-800">
+                  <td className="py-2 px-2 text-right font-mono font-semibold text-slate-800 text-[10.5px]">
                     Rs. {item.rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="py-3 px-3 text-right font-mono font-black text-slate-900 pr-4">
+                  <td className="py-2 px-2 text-right font-mono font-black text-slate-900 pr-2 text-[10.5px]">
                     Rs. {item.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
@@ -408,72 +411,72 @@ const PrintPurchase = () => {
         </div>
 
         {/* ── 4. FINANCIAL SUMMARY & WORDS BREAKDOWN ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start my-6 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start my-4">
           {/* Amount in words and notes */}
-          <div className="space-y-3">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Total Amount in Words:</span>
+          <div className="space-y-2">
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px]">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Total Amount in Words:</span>
               <p className="font-bold text-slate-800 italic">{amountInWords}</p>
             </div>
 
             {(purchase.remarks || purchase.notes) && (
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Procurement / Consignment Remarks:</span>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px]">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-0.5">Procurement / Consignment Remarks:</span>
                 <p className="text-slate-700 font-medium">{purchase.remarks || purchase.notes}</p>
               </div>
             )}
           </div>
 
           {/* Payables Summary */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 font-mono text-xs">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 font-mono text-[11px]">
             <div className="flex justify-between items-center text-slate-600">
               <span className="font-sans font-semibold">Gross Total Bill:</span>
-              <strong className="font-black text-sm text-slate-900">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong className="font-black text-xs text-slate-900">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
 
             <div className="flex justify-between items-center text-emerald-700 pt-1 border-t border-slate-200">
               <span className="font-sans font-semibold">Amount Paid Upfront:</span>
-              <strong className="font-black text-sm">Rs. {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong className="font-black text-xs">Rs. {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
 
             {cashPaid > 0 && bankPaid > 0 && (
-              <div className="text-[10px] text-slate-500 flex justify-between px-2">
+              <div className="text-[9.5px] text-slate-500 flex justify-between px-2">
                 <span>(Cash: Rs. {cashPaid.toLocaleString()} + Bank: Rs. {bankPaid.toLocaleString()})</span>
               </div>
             )}
 
-            <div className="flex justify-between items-center text-rose-700 pt-2 border-t-2 border-slate-300">
+            <div className="flex justify-between items-center text-rose-700 pt-1.5 border-t-2 border-slate-300">
               <span className="font-sans font-bold">Remaining Vendor Payable:</span>
-              <strong className="font-black text-base">Rs. {remainingPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong className="font-black text-sm">Rs. {remainingPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
           </div>
         </div>
 
         {/* ── 5. VERIFICATION SIGNATURES FOOTER ── */}
-        <div className="grid grid-cols-3 gap-8 pt-12 mt-8 border-t border-slate-200 text-center text-xs">
+        <div className="grid grid-cols-3 gap-6 pt-8 mt-6 border-t border-slate-200 text-center text-[10.5px]">
           <div>
-            <div className="border-t border-slate-400 pt-1.5 font-bold text-slate-800">
+            <div className="border-t border-slate-400 pt-1 font-bold text-slate-800">
               Goods Received & Inspected
             </div>
-            <span className="text-[10px] text-slate-400">(Storekeeper / Warehouse)</span>
+            <span className="text-[9px] text-slate-400">(Storekeeper / Warehouse)</span>
           </div>
 
           <div>
-            <div className="border-t border-slate-400 pt-1.5 font-bold text-slate-800">
+            <div className="border-t border-slate-400 pt-1 font-bold text-slate-800">
               Accounts Verification
             </div>
-            <span className="text-[10px] text-slate-400">(Accountant / Ledger Entry)</span>
+            <span className="text-[9px] text-slate-400">(Accountant / Ledger Entry)</span>
           </div>
 
           <div>
-            <div className="border-t border-slate-400 pt-1.5 font-bold text-slate-800">
+            <div className="border-t border-slate-400 pt-1 font-bold text-slate-800">
               Authorized Signature
             </div>
-            <span className="text-[10px] text-slate-400">(Executive Management)</span>
+            <span className="text-[9px] text-slate-400">(Executive Management)</span>
           </div>
         </div>
 
-        <div className="text-center text-[10px] text-slate-400 font-mono mt-8 pt-4 border-t border-slate-100">
+        <div className="text-center text-[9px] text-slate-400 font-mono mt-6 pt-3 border-t border-slate-100">
           This is an official computer-generated Goods Receiving Note generated by Zohaib Ali & Company ERP.
         </div>
 
