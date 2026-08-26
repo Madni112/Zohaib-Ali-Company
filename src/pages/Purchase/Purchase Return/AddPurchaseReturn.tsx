@@ -603,7 +603,7 @@ const AddPurchaseReturn = () => {
                       type="text"
                       readOnly
                       value={values.returnNo}
-                      className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-gray-50 dark:bg-meta-4/20 font-bold font-mono text-danger outline-none text-xs"
+                      className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-gray-50 dark:bg-meta-4/20 font-bold font-mono text-primary outline-none text-xs"
                     />
                   </div>
 
@@ -1197,7 +1197,7 @@ const AddPurchaseReturn = () => {
                     {(values.paymentTerm === 'By Cash' || values.paymentTerm === 'By Bank') && (
                       <div>
                         <div className="flex justify-between items-center mb-1">
-                          <label className="block text-danger font-bold">
+                          <label className="block text-gray-600 dark:text-gray-400 font-bold">
                             Cash Refund Received (PKR):
                           </label>
                           {computedGrossTotal > 0 && (
@@ -1254,7 +1254,7 @@ const AddPurchaseReturn = () => {
                         </strong>
                       </div>
 
-                      <div className="flex justify-between items-center text-sm text-danger pt-2 border-t border-stroke dark:border-strokedark">
+                      <div className="flex justify-between items-center text-sm text-primary pt-2 border-t border-stroke dark:border-strokedark">
                         <span className="font-sans font-bold">Remaining Debit Note Credit Line:</span>
                         <strong className="font-bold text-base">
                           Rs. {formatMoney(netCreditLineDebt)}

@@ -128,7 +128,7 @@ const PurchaseReturnList = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
-            <MdReceipt className="text-rose-600" size={24} />
+            <MdReceipt className="text-primary" size={24} />
             Vendor Purchase Returns Registry (Debit Notes)
           </h2>
           <p className="text-xs text-gray-400">Trace outbound product returns, debit notes, and warehouse shelf offsets</p>
@@ -136,13 +136,13 @@ const PurchaseReturnList = () => {
         <button
           type="button"
           onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Add`)}
-          className="flex items-center gap-1.5 justify-center rounded-xl bg-rose-600 hover:bg-rose-700 py-2.5 px-4 text-xs font-bold text-white shadow-sm transition cursor-pointer"
+          className="flex items-center gap-1.5 justify-center rounded bg-primary hover:bg-opacity-90 py-2.5 px-4 text-xs font-bold text-white shadow-sm transition cursor-pointer"
         >
           <MdAdd size={16} /> Log New Return Note
         </button>
       </div>
 
-      <div className="rounded-2xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <span>Show</span>
@@ -195,7 +195,7 @@ const PurchaseReturnList = () => {
                   const aggregatedPaidValue = upfrontPaid + subsequentCollected;
 
                   let returnStatusText = 'On Credit (Debit Note)';
-                  let returnStatusColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60';
+                  let returnStatusColor = 'bg-primary/10 text-primary border-primary/20';
 
                   if (aggregatedPaidValue >= totalAmt - 1 && totalAmt > 0) {
                     returnStatusText = 'Full Cash Refund';
@@ -208,22 +208,22 @@ const PurchaseReturnList = () => {
                   return (
                     <tr key={rtn.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
                       <td className="py-3.5 px-4 text-center text-gray-400">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono font-black text-rose-600 dark:text-rose-400">{rtn.return_no}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-primary">{rtn.return_no}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5"><MdPerson className="text-gray-400" size={16} />{rtn.vendor_name}</td>
                       <td className="py-3.5 px-4">
-                        <span className="bg-slate-100 dark:bg-meta-4 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1">
-                          <MdStore size={12} className="text-rose-600" />{rtn.source_warehouse}
+                        <span className="bg-slate-100 dark:bg-meta-4 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1">
+                          <MdStore size={12} className="text-primary" />{rtn.source_warehouse}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-center text-gray-500">
                         <span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{rtn.return_date}</span>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border ${returnStatusColor}`}>
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${returnStatusColor}`}>
                           {returnStatusText}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-black text-rose-600 dark:text-rose-400 pr-6">
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-black dark:text-white pr-6">
                         Rs. {formatMoney(totalAmt)}
                       </td>
                       <td className="py-3.5 px-4 text-center">
