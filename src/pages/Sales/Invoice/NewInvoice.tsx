@@ -5,7 +5,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiTrash2 } from 'react-icons/fi';
+import { FiTrash2, FiUser, FiUserCheck, FiX, FiCheck } from 'react-icons/fi';
 
 const NewInvoice = () => {
   const navigate = useNavigate();
@@ -21,15 +21,27 @@ const NewInvoice = () => {
   const [transportList, setTransportList] = useState<any[]>([]);
   const [warehousesList, setWarehousesList] = useState<any[]>([]);
   const [banksList, setBanksList] = useState<any[]>([]);
+  const [activeSkuIndex, setActiveSkuIndex] = useState<number | null>(null);
+  const [highlightedSkuIndex, setHighlightedSkuIndex] = useState<number>(0);
+  const [activeProdNameIndex, setActiveProdNameIndex] = useState<number | null>(null);
+  const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState<number>(0);
+
+  const [showCustomerModal, setShowCustomerModal] = useState<boolean>(false);
+  const [customerModalType, setCustomerModalType] = useState<'walkin' | 'recorded'>('walkin');
+  const [walkinName, setWalkinName] = useState<string>('');
+  const [walkinPhone, setWalkinPhone] = useState<string>('');
+  const [recordWalkinCustomer, setRecordWalkinCustomer] = useState<boolean>(true);
+  const [selectedRecordedCustomer, setSelectedRecordedCustomer] = useState<string>('');
+  const [pendingFormValues, setPendingFormValues] = useState<any>(null);
 
   useEffect(() => {
     const fetchCompleteEnterpriseCatalog = async () => {
       try {
         setInitialLoading(true);
-        const { data: cust } = await supabase.from('customers').select('id, customerName');
-        const { data: prod } = await supabase.from('products').select('product_name, current_stock, retail_price');
+        const { data: cust } = await supabase.from('customers').select('id, customerName, primaryPhone');
+        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, item_sr_no, brand, category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description');
         const { data: sm } = await supabase.from('salesmen').select('id, name');
-        const { data: trans } = await supabase.from('logistics_transportation').select('id, name');
+        const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
         const { data: locMaster } = await supabase.from('inventory_locations').select('name');
         const { data: wh } = await supabase.from('opening_stocks').select('location');
         const { data: invWh } = await supabase.from('warehouse_inventory').select('warehouse_name');
@@ -56,7 +68,20 @@ const NewInvoice = () => {
       }
     };
     fetchCompleteEnterpriseCatalog();
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.sku-container')) {
+        setActiveSkuIndex(null);
+      }
+      if (!target.closest('.prod-name-container')) {
+        setActiveProdNameIndex(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
   const getFormInitialValues = () => {
     if (editData) {
       const parsedItems = Array.isArray(editData.items)
@@ -67,16 +92,22 @@ const NewInvoice = () => {
         saleDate: editData.sale_date || new Date().toISOString().split('T')[0],
         paymentTerm: editData.payment_term || 'Cash',
         dispatchWarehouse: editData.dispatch_warehouse || '',
-        fbrScenario: editData.scenario_type || 'Goods at Standard Rate to Registered Buyers',
+        applyFbrTax: Boolean(editData.apply_fbr_tax || (editData.scenario_type && editData.scenario_type !== 'Standard Retail Sale (No Tax)')),
+        taxScenario: editData.scenario_type || 'Goods at Standard Rate to Registered Buyers',
         salesman: editData.salesman || '',
         transportType: editData.transport_name || 'No Transport (Handover)',
         transportCharges: Number(editData.transport_charges || 0),
-        settlementMode: editData.selected_bank ? 'Bank' : 'Cash',
+        settlementMode: (Number(editData.cash_amount_paid || 0) > 0 && (Number(editData.bank_amount || 0) > 0 || editData.selected_bank)) 
+          ? 'Split' 
+          : (editData.selected_bank || Number(editData.bank_amount || 0) > 0 ? 'Bank' : 'Cash'),
         selectedBankTitle: editData.selected_bank || '',
-        cashAmountPaid: Number(editData.cash_amount_paid || editData.bank_amount || 0),
+        cashAmountPaid: Number(editData.cash_amount_paid || 0),
+        bankAmountPaid: Number(editData.bank_amount || 0),
         dcNo: editData.dc_no || '',
+        showDiscount: parsedItems.some((i: any) => Number(i.discountAmt || i.discount_amt || i.discount || 0) > 0),
         items: parsedItems.map((it: any) => ({
           ...it,
+          warehouse: it.warehouse || editData.dispatch_warehouse || '',
           discountPer: Number(it.discountPer ?? it.discount_per ?? 0),
           discountAmt: Number(it.discountAmt ?? it.discount_amt ?? it.discount ?? 0)
         }))
@@ -84,34 +115,35 @@ const NewInvoice = () => {
     }
     return {
       customerName: '', saleDate: new Date().toISOString().split('T')[0], paymentTerm: 'Cash',
-      dispatchWarehouse: '', fbrScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
+      dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
       transportType: 'No Transport (Handover)', transportCharges: 0, settlementMode: 'Cash',
-      selectedBankTitle: '', cashAmountPaid: 0, dcNo: '',
-      items: [{ itemName: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 18, fTaxPer: 0, amount: 0, availableQty: 0 }]
+      selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0, dcNo: '',
+      items: [{ skuCode: '', itemName: '', warehouse: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0 }]
     };
   };
 
   const validationSchema = Yup.object().shape({
-    customerName: Yup.string().required('Required Field'),
     saleDate: Yup.string().required('Required Field'),
     paymentTerm: Yup.string().oneOf(['Cash', 'Credit']).required('Required Field'),
     dispatchWarehouse: Yup.string().required('Required Field'),
-    fbrScenario: Yup.string().required('Required Field'),
+    taxScenario: Yup.string().required('Required Field'),
     salesman: Yup.string().required('Required Field'),
     transportType: Yup.string().required('Required Field'),
     transportCharges: Yup.number().min(0).required('Required Field'),
-    settlementMode: Yup.string().oneOf(['Cash', 'Bank']).required('Required Field'),
+    settlementMode: Yup.string().oneOf(['Cash', 'Bank', 'Split']).required('Required Field'),
     cashAmountPaid: Yup.number().min(0).required('Required Field'),
+    bankAmountPaid: Yup.number().min(0).nullable(),
     selectedBankTitle: Yup.string().when('settlementMode', {
-      is: 'Bank',
-      then: (schema) => schema.required('Required Field'),
+      is: (val: string) => val === 'Bank' || val === 'Split',
+      then: (schema) => schema.required('Please select corporate bank ledger profile'),
       otherwise: (schema) => schema.notRequired()
     }),
     items: Yup.array().of(
       Yup.object().shape({
-        itemName: Yup.string().required('Required Field'),
-        qty: Yup.number().min(1, 'Min Qty 1').required('Required Field'),
-        rp: Yup.number().min(0, 'Min Price 0').required('Required Field'),
+        itemName: Yup.string().required('Item Name is required'),
+        warehouse: Yup.string().nullable(),
+        qty: Yup.number().min(0.001, 'Qty must be > 0').required('Qty is required'),
+        rp: Yup.number().min(0, 'Price cannot be negative').required('Price is required'),
         discountPer: Yup.number().min(0).nullable(),
         discountAmt: Yup.number().min(0).nullable(),
         gstRate: Yup.number().min(0).required('Required Field'),
@@ -120,17 +152,35 @@ const NewInvoice = () => {
     ).min(1)
   });
 
-  const handleProductSelectionWithWH = async (selectedName: string, index: number, chosenWarehouse: string, setFieldValue: any, currentItem?: any) => {
-    const matchingProduct = productsList.find(p => p.product_name === selectedName);
-    if (!matchingProduct) {
+  const fetchStockForWarehouse = async (productName: string, chosenWarehouse: string) => {
+    if (!productName || !chosenWarehouse) return 0;
+    try {
+      const { data: whStock, error } = await supabase
+        .from('warehouse_inventory')
+        .select('quantity')
+        .ilike('product_name', productName)
+        .ilike('warehouse_name', chosenWarehouse)
+        .maybeSingle();
+
+      if (error) throw error;
+      return whStock ? Number(whStock.quantity) : 0;
+    } catch (err: any) {
+      return 0;
+    }
+  };
+
+  const handleProductSelectionWithWH = async (selectedProduct: any, index: number, chosenWarehouse: string, setFieldValue: any, currentItem?: any) => {
+    if (!selectedProduct) {
       setFieldValue(`items.${index}.itemName`, '');
+      setFieldValue(`items.${index}.skuCode`, '');
       setFieldValue(`items.${index}.availableQty`, 0);
       return;
     }
-    const newRp = Number(matchingProduct.retail_price) || 0;
-    setFieldValue(`items.${index}.itemName`, matchingProduct.product_name);
+    const newRp = Number(selectedProduct.retail_price) || 0;
+    setFieldValue(`items.${index}.itemName`, selectedProduct.product_name);
+    setFieldValue(`items.${index}.skuCode`, selectedProduct.item_sr_no || '');
     setFieldValue(`items.${index}.rp`, newRp);
-    setFieldValue(`items.${index}.hsCode`, matchingProduct.hs_code || matchingProduct.hscode || matchingProduct.hsCodeNo || matchingProduct.hs_Code || '');
+    setFieldValue(`items.${index}.hsCode`, selectedProduct.hs_code || '');
 
     if (currentItem && currentItem.discountPer) {
       const gross = newRp * (Number(currentItem.qty) || 1);
@@ -138,23 +188,13 @@ const NewInvoice = () => {
       setFieldValue(`items.${index}.discountAmt`, Number(calculatedAmt.toFixed(2)));
     }
 
-    if (!chosenWarehouse) {
+    const effectiveWarehouse = (currentItem && currentItem.warehouse) ? currentItem.warehouse : chosenWarehouse;
+    if (!effectiveWarehouse) {
       setFieldValue(`items.${index}.availableQty`, 0);
       return;
     }
-    try {
-      const { data: whStock, error } = await supabase
-        .from('warehouse_inventory')
-        .select('quantity')
-        .ilike('product_name', selectedName)
-        .ilike('warehouse_name', chosenWarehouse)
-        .maybeSingle();
-
-      if (error) throw error;
-      setFieldValue(`items.${index}.availableQty`, whStock ? Number(whStock.quantity) : 0);
-    } catch (err: any) {
-      setFieldValue(`items.${index}.availableQty`, 0);
-    }
+    const availStock = await fetchStockForWarehouse(selectedProduct.product_name, effectiveWarehouse);
+    setFieldValue(`items.${index}.availableQty`, availStock);
   };
 
   const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -163,11 +203,25 @@ const NewInvoice = () => {
     }
   };
 
-  const calculateFbrLineTotals = (item: any, scenario: string) => {
+  const calculateLineTotals = (item: any, scenario: string, applyFbrTax: boolean = false) => {
     const qty = Math.max(0, Number(item.qty) || 0);
     const rp = Math.max(0, Number(item.rp) || 0);
     const grossBase = rp * qty;
     const discountAmt = Math.max(0, Number(item.discountAmt) || 0);
+    const remainingRetail = grossBase - discountAmt;
+
+    if (!applyFbrTax) {
+      return { 
+        grossBase, 
+        activeGstRate: 0, 
+        activeFTaxPer: 0, 
+        gstAmt: 0, 
+        fTaxAmt: 0, 
+        discountAmt, 
+        remainingRetail, 
+        netTotal: remainingRetail 
+      };
+    }
 
     let activeGstRate = Number(item.gstRate || 18);
     let activeFTaxPer = Number(item.fTaxPer || 0);
@@ -206,23 +260,244 @@ const NewInvoice = () => {
       scenario === 'Sale of 3rd Schedule Goods' ||
       scenario === 'Goods Sold that are Listed in SRO 297(1)/2023';
 
-    // 3rd Schedule Goods & SRO 297(1)/2023: GST is calculated on full printed retail price (grossBase).
-    // All other scenarios: GST is calculated on retail price after deducting discount (grossBase - discountAmt).
     const gstTaxBase = isRetailBasedTax ? grossBase : Math.max(0, grossBase - discountAmt);
 
     const gstAmt = (gstTaxBase / 100) * activeGstRate;
     const fTaxAmt = (gstTaxBase / 100) * activeFTaxPer;
 
-    const remainingRetail = grossBase - discountAmt;
     const netTotal = remainingRetail + gstAmt + fTaxAmt;
 
     return { grossBase, activeGstRate, activeFTaxPer, gstAmt, fTaxAmt, discountAmt, remainingRetail, netTotal };
+  };
+
+  const executeInvoicePersistence = async (values: any, customerFinalName: string) => {
+    try {
+      setLoading(true);
+      let calculatedGrandTotal = values.items.reduce((acc: number, item: any) => {
+        return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
+      }, 0) + Number(values.transportCharges || 0);
+
+      let paidCash = 0;
+      let paidBank = 0;
+
+      if (values.settlementMode === 'Cash') {
+        paidCash = Number(values.cashAmountPaid || 0);
+        paidBank = 0;
+      } else if (values.settlementMode === 'Bank') {
+        paidCash = 0;
+        paidBank = Number(values.bankAmountPaid || values.cashAmountPaid || 0);
+      } else if (values.settlementMode === 'Split') {
+        paidCash = Number(values.cashAmountPaid || 0);
+        paidBank = Number(values.bankAmountPaid || 0);
+      }
+
+      const totalPaidCombined = paidCash + paidBank;
+      const runningBalanceTerm = totalPaidCombined >= calculatedGrandTotal ? 'Cash' : 'Credit';
+
+      const databasePayload = {
+        customer_name: customerFinalName,
+        sale_date: values.saleDate,
+        payment_term: runningBalanceTerm,
+        dispatch_warehouse: values.dispatchWarehouse,
+        salesman: values.salesman,
+        transport_name: values.transportType,
+        transport_charges: Number(values.transportCharges || 0),
+        selected_bank: (values.settlementMode === 'Bank' || values.settlementMode === 'Split') ? values.selectedBankTitle : null,
+        bank_amount: String(paidBank),
+        cash_amount_paid: paidCash,
+        total_amount: String(calculatedGrandTotal),
+        receipt_status: totalPaidCombined >= calculatedGrandTotal ? 'Paid' : 'On Credit',
+        sale_status: 'Confirm',
+        items: values.items,
+        scenario_type: values.applyFbrTax ? values.taxScenario : 'Standard Retail Sale (No Tax)'
+      };
+
+      if (editData && editData.id) {
+        const { error: invoiceUpdateError } = await supabase
+          .from('sales_invoices')
+          .update(databasePayload)
+          .eq('id', editData.id);
+
+        if (invoiceUpdateError) throw invoiceUpdateError;
+        toast.success('Sales Invoice changes compiled successfully!');
+      } else {
+        const { data: insertedInvoice, error: invoiceError } = await supabase
+          .from('sales_invoices')
+          .insert([databasePayload])
+          .select('id')
+          .single();
+
+        if (invoiceError) throw invoiceError;
+
+        const newInvoiceId = insertedInvoice?.id;
+        const formattedInvCode = newInvoiceId ? `INV-${String(newInvoiceId).padStart(4, '0')}` : 'INV-Auto';
+
+        // ── AUTO-CREATE DELIVERY CHALLANS PER UNIQUE WAREHOUSE ──
+        try {
+          // Group invoice items by warehouse destination
+          const itemsByWarehouse: Record<string, any[]> = {};
+          (values.items || []).forEach((item: any) => {
+            const wh = (item.warehouse || values.dispatchWarehouse || 'Main Warehouse').trim();
+            if (!itemsByWarehouse[wh]) itemsByWarehouse[wh] = [];
+            itemsByWarehouse[wh].push({
+              poNoSub: values.clientPoNumber || '',
+              pDescription: item.itemName || 'Product',
+              skuCode: item.skuCode || '',
+              location: wh,
+              rate: Number(item.rp) || 0,
+              qty: Number(item.qty) || 0,
+              disAmt: Number(item.discountAmt) || 0,
+              distPer: Number(item.discountPer) || 0,
+              discount: 0,
+              notes: item.notes || ''
+            });
+          });
+
+          for (const [whName, whItems] of Object.entries(itemsByWarehouse)) {
+            const whQty = whItems.reduce((acc, i) => acc + Number(i.qty || 0), 0);
+            const whBaseAmt = whItems.reduce((acc, i) => acc + (Number(i.rate || 0) * Number(i.qty || 0)), 0);
+            const whDiscAmt = whItems.reduce((acc, i) => acc + Number(i.disAmt || 0), 0);
+            const whNetAmt = whBaseAmt - whDiscAmt;
+
+            await supabase.from('delivery_challans').insert([{
+              invoice_no: formattedInvCode,
+              customer_name: finalCustomerName,
+              challan_date: values.invoiceDate || new Date().toISOString().split('T')[0],
+              dispatch_warehouse: whName,
+              transport_name: values.transportType || 'By Road Transport',
+              transportation: values.transportType || 'By Road Transport',
+              po_no: values.clientPoNumber || '',
+              po_date: values.invoiceDate || null,
+              vehicle_no: values.transportCharges ? `Pending Dispatch` : 'Counter Delivery',
+              remarks: `Awaiting warehouse approval for ${formattedInvCode} (${whName})`,
+              total_quantity: whQty,
+              total_amount: whBaseAmt,
+              total_discount: whDiscAmt,
+              total_net_amount: whNetAmt,
+              status: 'Pending Approval',
+              items: whItems.map(i => ({
+                ...i,
+                orderQty: Number(i.qty || 0),
+                dispatchedQty: 0,
+                holdQty: Number(i.qty || 0)
+              }))
+            }]);
+          }
+        } catch (dcErr: any) {
+          console.error('Delivery challan auto-generation warning:', dcErr);
+        }
+
+        for (const item of values.items) {
+          const itemWarehouse = item.warehouse || values.dispatchWarehouse;
+          const { data: p } = await supabase
+            .from('warehouse_inventory')
+            .select('id, quantity')
+            .ilike('product_name', item.itemName)
+            .ilike('warehouse_name', itemWarehouse)
+            .maybeSingle();
+          if (p) await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(item.qty) }).eq('id', p.id);
+        }
+        toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
+      }
+      setShowCustomerModal(false);
+      navigate('/sales/invoice/list');
+    } catch (err: any) { 
+      toast.error('Submission failure: ' + err.message); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
+  const handleFinalCustomerModalSubmit = async () => {
+    if (!pendingFormValues) return;
+
+    let finalCustomerName = '';
+
+    if (customerModalType === 'recorded') {
+      if (!selectedRecordedCustomer) {
+        toast.error('Please select an existing customer account from the list.');
+        return;
+      }
+      finalCustomerName = selectedRecordedCustomer;
+    } else {
+      const cleanName = walkinName.trim() || 'Walk-in Customer';
+      const cleanPhone = walkinPhone.trim();
+      finalCustomerName = cleanName;
+
+      if (recordWalkinCustomer && cleanName && cleanName.toLowerCase() !== 'walk-in customer') {
+        try {
+          const { data: existing } = await supabase
+            .from('customers')
+            .select('id')
+            .ilike('customerName', cleanName)
+            .maybeSingle();
+
+          if (!existing) {
+            const { error: custErr } = await supabase.from('customers').insert([{
+              customerName: cleanName,
+              customername: cleanName,
+              primaryPhone: cleanPhone || 'N/A',
+              phone: cleanPhone || 'N/A',
+              company: 'Retail Walk-in'
+            }]);
+
+            if (custErr) {
+              console.error('Customer insert warning:', custErr);
+            } else {
+              toast.success(`Customer "${cleanName}" saved to directory!`);
+            }
+          }
+        } catch (e: any) {
+          console.error('Customer registration error:', e);
+        }
+      }
+    }
+
+    await executeInvoicePersistence(pendingFormValues, finalCustomerName);
   };
 
   if (initialLoading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
 
   return (
     <div className="mx-auto max-w-7xl text-black dark:text-bodydark text-xs font-sans relative">
+      {/* CUSTOMER CHECKOUT MODAL */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-boxdark w-full max-w-lg rounded-2xl shadow-2xl p-6 border border-stroke dark:border-strokedark animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-bold text-black dark:text-white flex items-center gap-2"><FiUserCheck className="text-emerald-500" /> Checkout Customer</h2>
+              <button onClick={() => setShowCustomerModal(false)}><FiX className="text-xl text-gray-400 hover:text-black dark:hover:text-white" /></button>
+            </div>
+            
+            <div className="flex gap-2 mb-6 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+              <button onClick={() => setCustomerModalType('walkin')} className={`flex-1 py-2 text-xs font-bold rounded-md transition ${customerModalType === 'walkin' ? 'bg-white dark:bg-boxdark shadow-sm text-primary' : 'text-gray-500'}`}>Walk-in Sale</button>
+              <button onClick={() => setCustomerModalType('recorded')} className={`flex-1 py-2 text-xs font-bold rounded-md transition ${customerModalType === 'recorded' ? 'bg-white dark:bg-boxdark shadow-sm text-primary' : 'text-gray-500'}`}>Recorded Client</button>
+            </div>
+
+            {customerModalType === 'walkin' ? (
+              <div className="space-y-4">
+                <input type="text" placeholder="Customer Name (Optional)" value={walkinName} onChange={(e) => setWalkinName(e.target.value)} className="w-full p-3 border rounded-lg bg-transparent dark:border-strokedark" />
+                <input type="text" placeholder="Phone Number (Optional)" value={walkinPhone} onChange={(e) => setWalkinPhone(e.target.value)} className="w-full p-3 border rounded-lg bg-transparent dark:border-strokedark" />
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600 dark:text-slate-400">
+                  <input type="checkbox" checked={recordWalkinCustomer} onChange={(e) => setRecordWalkinCustomer(e.target.checked)} />
+                  Save this customer to directory
+                </label>
+              </div>
+            ) : (
+              <select value={selectedRecordedCustomer} onChange={(e) => setSelectedRecordedCustomer(e.target.value)} className="w-full p-3 border rounded-lg bg-transparent dark:border-strokedark">
+                <option value="">-- Search Customer --</option>
+                {customersList.map(c => <option key={c.id} value={c.customerName}>{c.customerName}</option>)}
+              </select>
+            )}
+            
+            <div className="mt-8 flex gap-3">
+              <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2.5 rounded-lg border border-stroke font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+              <button onClick={handleFinalCustomerModalSubmit} className="flex-1 py-2.5 rounded-lg bg-primary text-white font-bold text-xs shadow-lg shadow-primary/20 flex items-center justify-center gap-2"><FiCheck /> Finalize & Log</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
         <div className="flex items-center justify-between border-b border-stroke pb-4 mb-6 dark:border-strokedark">
           <h3 className="font-semibold text-black dark:text-white text-base">
@@ -236,81 +511,50 @@ const NewInvoice = () => {
           enableReinitialize={true}
           validationSchema={validationSchema}
           onSubmit={async (values) => {
-            try {
-              setLoading(true);
-              let calculatedGrandTotal = values.items.reduce((acc: number, item: any) => {
-                return acc + calculateFbrLineTotals(item, values.fbrScenario).netTotal;
-              }, 0) + Number(values.transportCharges || 0);
+            setPendingFormValues(values);
+            if (editData && editData.customer_name) {
+              const custName = String(editData.customer_name).trim();
+              const isExistingRecorded = customersList.some(c => (c.customerName || '').toLowerCase() === custName.toLowerCase());
 
-              const paidCash = Number(values.cashAmountPaid || 0);
-              const runningBalanceTerm = paidCash >= calculatedGrandTotal ? 'Cash' : 'Credit';
-
-              const databasePayload = {
-                customer_name: values.customerName, sale_date: values.saleDate, payment_term: runningBalanceTerm,
-                dispatch_warehouse: values.dispatchWarehouse, salesman: values.salesman, transport_name: values.transportType,
-                transport_charges: Number(values.transportCharges || 0), selected_bank: values.settlementMode === 'Bank' ? values.selectedBankTitle : null,
-                bank_amount: values.settlementMode === 'Bank' ? String(values.cashAmountPaid) : '0', cash_amount_paid: values.settlementMode === 'Cash' ? paidCash : 0,
-                total_amount: String(calculatedGrandTotal), receipt_status: paidCash >= calculatedGrandTotal ? 'Paid' : 'On Credit',
-                sale_status: 'Confirm', items: values.items, scenario_type: values.fbrScenario
-              };
-
-              if (editData && editData.id) {
-                const { error: invoiceUpdateError } = await supabase
-                  .from('sales_invoices')
-                  .update(databasePayload)
-                  .eq('id', editData.id);
-
-                if (invoiceUpdateError) throw invoiceUpdateError;
-                toast.success('Sales Invoice changes compiled successfully!');
+              if (isExistingRecorded) {
+                const found = customersList.find(c => (c.customerName || '').toLowerCase() === custName.toLowerCase());
+                setSelectedRecordedCustomer(found?.customerName || custName);
+                setCustomerModalType('recorded');
               } else {
-                const { error: invoiceError } = await supabase.from('sales_invoices').insert([databasePayload]);
-                if (invoiceError) throw invoiceError;
-
-                for (const item of values.items) {
-                  const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', values.dispatchWarehouse).maybeSingle();
-                  if (p) await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(item.qty) }).eq('id', p.id);
-                }
-                toast.success('Sales Invoice logged successfully!');
+                setCustomerModalType('walkin');
+                setWalkinName(custName);
+                setWalkinPhone('');
+                setRecordWalkinCustomer(false);
               }
-              navigate('/sales/invoice/list');
-            } catch (err: any) { toast.error('Submission failure: ' + err.message); } finally { setLoading(false); }
+            } else {
+              setCustomerModalType('walkin');
+              setWalkinName('');
+              setWalkinPhone('');
+              setRecordWalkinCustomer(true);
+            }
+            setShowCustomerModal(true);
           }}
         >
           {({ values, handleChange, setFieldValue, errors, touched, submitCount }) => {
             const hasAttempted = submitCount > 0;
             const currentSubtotalValue = values.items.reduce((acc: number, item: any) => {
-              return acc + calculateFbrLineTotals(item, values.fbrScenario).netTotal;
+              return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
             }, 0) + Number(values.transportCharges || 0);
+
             return (
               <Form className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
-                  <div>
-                    <label className="block font-bold text-gray-500 mb-1">Customer / Account Title: *</label>
-                    <select
-                      name="customerName"
-                      value={values.customerName}
-                      onChange={handleChange}
-                      className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.customerName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
-                    >
-                      <option value="">-- Select Active Customer Account --</option>
-                      {customersList.map(c => <option key={c.id} value={c.customerName}>{c.customerName}</option>)}
-                    </select>
-                    {hasAttempted && errors.customerName && <p className="text-red-500 text-[10px] font-bold mt-1">Required Field</p>}
-                  </div>
-
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Billing Date: *</label>
                     <input type="date" name="saleDate" value={values.saleDate} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.saleDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
-                    {hasAttempted && errors.saleDate && <p className="text-red-500 text-[10px] font-bold mt-1">Required Field</p>}
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-500 mb-1">Assigned salesman link: *</label>
+                    <label className="block font-bold text-gray-500 mb-1">Assigned Salesman: *</label>
                     <select name="salesman" value={values.salesman} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.salesman ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}>
                       <option value="">-- Select Officer --</option>
                       {salesmenList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                     </select>
-                    {hasAttempted && errors.salesman && <p className="text-red-500 text-[10px] font-bold mt-1">Required Field</p>}
                   </div>
 
                   <div>
@@ -331,122 +575,549 @@ const NewInvoice = () => {
                       <option value="">-- Choose Dispatch Bin --</option>
                       {warehousesList.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
                     </select>
-                    {hasAttempted && errors.dispatchWarehouse && <p className="text-red-500 text-[10px] font-bold mt-1">Required Field</p>}
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block font-bold text-primary mb-1">Taxation & Sales Tax Statutory Transaction Scenario: *</label>
-                    <select name="fbrScenario" value={values.fbrScenario} onChange={(e) => {
-                      const newScen = e.target.value;
-                      handleChange(e);
-                      if (newScen === 'Reduced Rate Sale') {
-                        values.items.forEach((_: any, idx: number) => {
-                          setFieldValue(`items.${idx}.gstRate`, 0);
-                          setFieldValue(`items.${idx}.fTaxPer`, 0);
-                        });
-                      }
-                    }} className="w-full rounded border border-primary p-2 text-sm bg-white dark:bg-boxdark font-black text-primary outline-none">
-                      <option value="Goods at Standard Rate to Registered Buyers">Goods at Standard Rate to Registered Buyers</option>
-                      <option value="Goods at Standard Rate to Unregistered Buyers">Goods at Standard Rate to Unregistered Buyers (+4% Further Tax)</option>
-                      <option value="Reduced Rate Sale">Reduced Rate Sale (Concession slab)</option>
-                      <option value="Exempt Goods Sale">Exempt Goods Sale (0% Tax)</option>
-                      <option value="Zero Rated Sale">Zero Rated Sale (0% Tax)</option>
-                      <option value="Sale of 3rd Schedule Goods">Sale of 3rd Schedule Goods</option>
-                      <option value="Goods Sold that are Listed in SRO 297(1)/2023">Goods Sold listed in SRO 297(1)/2023 (25% Premium slab)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-500 mb-1">Logistics Transport Mode: *</label>
-                    <select name="transportType" value={values.transportType} onChange={(e) => {
-                      const modeName = e.target.value; setFieldValue('transportType', modeName);
-                      if (modeName === 'No Transport (Handover)' || modeName === "Customer's Own Transport") {
-                        setFieldValue('transportCharges', 0);
-                      } else {
-                        const match = transportList.find(t => t.name === modeName);
-                        setFieldValue('transportCharges', match ? Number(match.base_charges || 0) : 0);
-                      }
-                    }} className="w-full rounded border border-stroke p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white">
-                      <option value="No Transport (Handover)">No Transport (Handover)</option>
-                      <option value="Customer's Own Transport">Customer's Own Transport</option>
-                      {transportList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-500 mb-1">Freight Transport Charges (PKR): *</label>
-                    <input type="number" onKeyDown={blockInvalidChar} name="transportCharges" value={values.transportCharges} onChange={handleChange} disabled={values.transportType === 'No Transport (Handover)' || values.transportType === "Customer's Own Transport"} className={`w-full rounded border p-2 text-sm bg-transparent font-mono text-right font-black text-black dark:text-white outline-none ${values.transportType === 'No Transport (Handover)' || values.transportType === "Customer's Own Transport" ? 'bg-gray-100 dark:bg-meta-4/20 cursor-not-allowed border-stroke text-gray-400' : 'border-stroke focus:border-primary'}`} />
                   </div>
                 </div>
-                <div className="border border-stroke dark:border-strokedark rounded-sm overflow-hidden mt-6">
+
+                {/* 🌟 TAX & DISCOUNT TOGGLE BAR: CLEAN & UNCLUTTERED DEFAULT UI */}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark rounded-sm">
+                  <div className="flex flex-wrap items-center gap-6">
+                    {/* Tax Invoicing Toggle (Commented out - ready to be re-enabled if client requests GST/FBR Tax Invoicing) */}
+                    {/*
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={values.applyFbrTax}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setFieldValue('applyFbrTax', isChecked);
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded cursor-pointer accent-emerald-600"
+                      />
+                      <span className="font-bold text-xs text-black dark:text-white">Enable GST / FBR Tax Invoicing</span>
+                    </label>
+                    */}
+
+                    {/* Discount Column Toggle */}
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={values.showDiscount}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setFieldValue('showDiscount', isChecked);
+                          if (!isChecked) {
+                            values.items.forEach((_: any, idx: number) => {
+                              setFieldValue(`items.${idx}.discountPer`, 0);
+                              setFieldValue(`items.${idx}.discountAmt`, 0);
+                            });
+                          }
+                        }}
+                        className="w-4 h-4 text-amber-600 rounded cursor-pointer accent-amber-600"
+                      />
+                      <span className="font-bold text-xs text-black dark:text-white">Enable Line Discounts (%)</span>
+                    </label>
+                  </div>
+
+                  {values.applyFbrTax && (
+                    <div className="w-full sm:w-auto">
+                      <select
+                        name="taxScenario"
+                        value={values.taxScenario}
+                        onChange={handleChange}
+                        className="w-full sm:w-auto text-xs font-bold bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-black dark:text-white"
+                      >
+                        <option value="Goods at Standard Rate to Registered Buyers">Standard Rate to Registered Buyers (18% GST)</option>
+                        <option value="Goods at Standard Rate to Unregistered Buyers">Standard Rate to Unregistered Buyers (18% GST + 4% F.Tax)</option>
+                        <option value="Reduced Rate Sale">Custom / Reduced Rate Sale</option>
+                        <option value="Sale of 3rd Schedule Goods">3rd Schedule Goods (18% Retail GST)</option>
+                        <option value="Goods Sold that are Listed in SRO 297(1)/2023">SRO 297(1)/2023 (25% GST)</option>
+                        <option value="Exempt Goods Sale">Exempt Goods Sale (0% Tax)</option>
+                        <option value="Zero Rated Sale">Zero Rated Sale (0% Tax)</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border border-stroke dark:border-strokedark rounded-sm mt-4 relative z-30 overflow-visible">
                   <FieldArray name="items">
                     {({ push, remove }) => {
-                      const showDiscount = true;
+                      const showDiscount = values.showDiscount;
                       return (
-                        <div className="w-full overflow-x-auto">
-                          <table className={`w-full table-auto border-collapse text-left whitespace-nowrap ${showDiscount ? 'min-w-[1450px]' : 'min-w-[1250px]'}`}>
+                        <div className="w-full overflow-visible">
+                          <table className="w-full table-auto border-collapse text-left">
                             <thead className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b">
                               <tr>
-                                <th className="p-2 w-12 text-center">S#</th>
-                                <th className="p-2">Item Product Description</th>
-                                <th className="p-2 w-44 text-center bg-blue-50/50 dark:bg-meta-4/20 text-primary font-bold">{values.dispatchWarehouse ? `Stock in ${values.dispatchWarehouse}` : 'Stock in'}</th>
-                                <th className="p-2 w-24 text-center">Qty</th>
-                                <th className="p-2 w-32 text-right">Unit Retail Price</th>
+                                <th className="p-2 w-8 text-center">S#</th>
+                                <th className="p-2 w-36">SKU Code (Search)</th>
+                                <th className="p-2 min-w-[200px]">Item Product Description</th>
+                                <th className="p-2 w-40">Warehouse Zone Source</th>
+                                <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Stock In Warehouse</th>
+                                <th className="p-2 w-48 text-center">Qty (UOM)</th>
+                                <th className="p-2 w-24 text-right">Sale Price</th>
                                 {showDiscount && (
                                   <>
                                     <th className="p-2 w-24 text-center bg-amber-50/80 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Discount %</th>
                                     <th className="p-2 w-32 text-right bg-amber-50/80 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Discount Amt</th>
                                   </>
                                 )}
-                                <th className="p-2 w-16 text-center">GST %</th>
-                                <th className="p-2 w-16 text-center">F.Tax %</th>
-                                <th className="p-2 w-24 text-right">GST Amt</th>
-                                <th className="p-2 w-24 text-right">F.Tax Amt</th>
+                                {values.applyFbrTax && (
+                                  <>
+                                    <th className="p-2 w-16 text-center">GST %</th>
+                                    <th className="p-2 w-16 text-center">F.Tax %</th>
+                                    <th className="p-2 w-24 text-right">GST Amt</th>
+                                    <th className="p-2 w-24 text-right">F.Tax Amt</th>
+                                  </>
+                                )}
                                 <th className="p-2 w-36 text-right pr-4">Net Total Line</th>
-                                <th className="p-2 w-12 text-center">Action</th>
+                                <th className="p-2 w-8 text-center"></th>
                               </tr>
                             </thead>
                             <tbody>
                               {values.items.map((item: any, idx: number) => {
-                                const fbr = calculateFbrLineTotals(item, values.fbrScenario);
+                                const lineCalc = calculateLineTotals(item, values.taxScenario, values.applyFbrTax);
                                 const hasItemError = hasAttempted && errors.items && (errors.items as any)[idx]?.itemName;
+                                const isCurrentActive = activeSkuIndex === idx;
+                                const isCurrentProdNameActive = activeProdNameIndex === idx;
+
+                                const selectedProd = productsList.find(p => p.product_name === item.itemName || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
+                                const isTile = Boolean(
+                                  selectedProd && (
+                                    String(selectedProd.category || '').toLowerCase().includes('tile')
+                                  )
+                                );
+                                const rawPcs = Number(selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 0);
+                                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+                                const uomName = selectedProd?.uom ? selectedProd.uom : (isTile ? 'BOX' : 'PCS');
+
+                                // Calculate available stock breakdown
+                                const totalAvailStock = Number(item.availableQty || 0);
+                                const totalPieces = isTile && pcsPerBox > 1 ? Math.round(totalAvailStock * pcsPerBox) : 0;
+                                const availBoxes = isTile && pcsPerBox > 1 ? Math.floor(totalPieces / pcsPerBox) : Math.floor(totalAvailStock);
+                                const availLoosePcs = isTile && pcsPerBox > 1 ? (totalPieces % pcsPerBox) : 0;
+
                                 return (
-                                  <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${hasItemError ? 'bg-red-50/5' : ''}`}>
+                                  <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${isCurrentActive || isCurrentProdNameActive ? 'relative z-30' : 'relative z-10'} ${hasItemError ? 'bg-red-50/5' : ''}`}>
                                     <td className="p-2 text-center font-sans text-gray-400">{idx + 1}</td>
-                                    <td className="p-2">
-                                      <select
-                                        name={`items.${idx}.itemName`}
-                                        value={item.itemName}
-                                        onChange={(e) => handleProductSelectionWithWH(e.target.value, idx, values.dispatchWarehouse, setFieldValue, item)}
-                                        className={`w-full bg-transparent font-sans font-bold border rounded p-1 outline-none text-xs text-black dark:text-white ${hasItemError ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
-                                      >
-                                        <option value="">-- Choose Product Stock Asset --</option>
-                                        {productsList.map((p, i) => <option key={i} value={p.product_name}>{p.product_name}</option>)}
-                                      </select>
-                                      {hasItemError && <p className="text-red-500 text-[9px] font-bold mt-0.5">Required Field</p>}
+                                    
+                                    {/* SKU CODE REALTIME SEARCH / TYPEABLE INPUT IDENTICAL TO OPENING STOCK */}
+                                    <td className="p-2 relative sku-container">
+                                      {(() => {
+                                        const filteredProds = productsList.filter(p => {
+                                          if (!item.skuCode) return true;
+                                          const query = item.skuCode.toLowerCase().trim();
+                                          const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
+                                          const name = (p.product_name || '').toLowerCase();
+                                          return sku.includes(query) || name.includes(query);
+                                        });
+
+                                        return (
+                                          <>
+                                            <input
+                                              type="text"
+                                              autoComplete="off"
+                                              value={item.skuCode || ''}
+                                              onFocus={() => {
+                                                setActiveSkuIndex(idx);
+                                                setHighlightedSkuIndex(0);
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'ArrowDown') {
+                                                  e.preventDefault();
+                                                  setHighlightedSkuIndex((prev) => 
+                                                    prev < filteredProds.length - 1 ? prev + 1 : 0
+                                                  );
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  setHighlightedSkuIndex((prev) => 
+                                                    prev > 0 ? prev - 1 : filteredProds.length - 1
+                                                  );
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  if (filteredProds.length > 0) {
+                                                    const selected = filteredProds[highlightedSkuIndex] || filteredProds[0];
+                                                    handleProductSelectionWithWH(selected, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                    setActiveSkuIndex(null);
+                                                  }
+                                                } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                                  setActiveSkuIndex(null);
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const typed = e.target.value;
+                                                setFieldValue(`items.${idx}.skuCode`, typed);
+                                                setActiveSkuIndex(idx);
+                                                setHighlightedSkuIndex(0);
+                                                
+                                                // Only auto-fill if the user has typed the EXACT FULL SKU code (e.g. SKU-002)
+                                                const matched = productsList.find(
+                                                  p => p.item_sr_no && p.item_sr_no.toLowerCase() === typed.trim().toLowerCase()
+                                                );
+                                                if (matched) {
+                                                  handleProductSelectionWithWH(matched, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                }
+                                              }}
+                                              placeholder="Type SKU..."
+                                              className="w-full bg-slate-50 dark:bg-slate-800 font-mono font-bold border border-stroke dark:border-strokedark rounded p-2 outline-none text-xs text-primary focus:border-primary uppercase shadow-inner"
+                                            />
+
+                                            {/* RICH FULL-WIDTH SKU DROPDOWN (UPPER LAYER ON Z-AXIS) */}
+                                            {isCurrentActive && (
+                                              <div className="absolute left-2 right-2 top-full mt-1.5 z-[99999] min-w-[320px] max-w-[380px] max-h-[290px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                                                {filteredProds.map((p, pIdx) => {
+                                                  const displaySku = p.item_sr_no || `SKU-${p.id}`;
+                                                  const isHighlighted = pIdx === highlightedSkuIndex;
+                                                  return (
+                                                    <div
+                                                      key={p.id}
+                                                      onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
+                                                      onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                        setActiveSkuIndex(null);
+                                                      }}
+                                                      className={`p-3 cursor-pointer transition flex items-center justify-between group ${
+                                                        isHighlighted 
+                                                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500' 
+                                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                                                      }`}
+                                                    >
+                                                      <div className="flex flex-col gap-0.5 text-left">
+                                                        <span className="font-mono font-bold text-xs text-primary group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                                                          {displaySku}
+                                                        </span>
+                                                        <span className="text-xs font-medium text-slate-700 dark:text-slate-200 line-clamp-1">
+                                                          {p.product_name}
+                                                        </span>
+                                                      </div>
+                                                      <div className="text-right font-mono text-[11px] text-slate-400 dark:text-slate-500 pl-2">
+                                                        <span className="font-bold text-slate-800 dark:text-white">Rs. {Number(p.retail_price || 0).toLocaleString()}</span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                                {filteredProds.length === 0 && (
+                                                  <div className="p-4 text-center text-xs text-slate-400 italic">
+                                                    No matching products or SKUs
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </>
+                                        );
+                                      })()}
                                     </td>
-                                    <td className="p-2 text-center font-mono font-black text-success bg-success/5 text-xs w-[130px]">{Number(item.availableQty || 0).toLocaleString()}</td>
-                                    <td className="p-2">
-                                       <input
-                                         type="number"
-                                         min="1"
-                                         onKeyDown={blockInvalidChar}
-                                         onInput={(e: any) => { if (Number(e.target.value) < 1 && e.target.value !== '') e.target.value = 1; }}
-                                         name={`items.${idx}.qty`}
-                                         value={item.qty}
-                                         onChange={(e) => {
-                                           const newQty = Math.max(0, Number(e.target.value) || 0);
-                                           setFieldValue(`items.${idx}.qty`, newQty);
-                                           const currentRp = Math.max(0, Number(item.rp) || 0);
-                                           const gross = newQty * currentRp;
-                                           const disPer = Math.max(0, Number(item.discountPer) || 0);
-                                           if (disPer > 0) {
-                                             setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
-                                           }
-                                         }}
-                                         className={`w-full bg-transparent text-center font-bold text-primary outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.qty || item.qty < 1) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
-                                       />
-                                     </td>
+
+                                     {/* PRODUCT NAME & DESCRIPTION (SEARCHABLE TWO-WAY INPUT WITH RICH DROPDOWN) */}
+                                     <td className="p-2 relative prod-name-container min-w-[220px] max-w-[320px]">
+                                       {(() => {
+                                         const query = (item.itemName || '').toLowerCase().trim();
+                                         const filteredByName = productsList.filter(p => {
+                                           if (!query) return true;
+                                           const name = (p.product_name || '').toLowerCase();
+                                           const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
+                                           const brand = (p.brand || '').toLowerCase();
+                                           const cat = (p.category || '').toLowerCase();
+                                           return name.includes(query) || sku.includes(query) || brand.includes(query) || cat.includes(query);
+                                         });
+
+                                         return (
+                                           <div className="relative">
+                                             <input
+                                               type="text"
+                                               autoComplete="off"
+                                               value={item.itemName || ''}
+                                               onFocus={() => {
+                                                 setActiveProdNameIndex(idx);
+                                                 setActiveSkuIndex(null);
+                                                 setHighlightedProdNameIndex(0);
+                                               }}
+                                               onKeyDown={(e) => {
+                                                 if (e.key === 'ArrowDown') {
+                                                   e.preventDefault();
+                                                   setHighlightedProdNameIndex((prev) =>
+                                                     prev < filteredByName.length - 1 ? prev + 1 : 0
+                                                   );
+                                                 } else if (e.key === 'ArrowUp') {
+                                                   e.preventDefault();
+                                                   setHighlightedProdNameIndex((prev) =>
+                                                     prev > 0 ? prev - 1 : filteredByName.length - 1
+                                                   );
+                                                 } else if (e.key === 'Enter') {
+                                                   e.preventDefault();
+                                                   if (filteredByName.length > 0) {
+                                                     const selected = filteredByName[highlightedProdNameIndex] || filteredByName[0];
+                                                     handleProductSelectionWithWH(selected, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                     setActiveProdNameIndex(null);
+                                                   }
+                                                 } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                                   setActiveProdNameIndex(null);
+                                                 }
+                                               }}
+                                               onChange={(e) => {
+                                                 const typed = e.target.value;
+                                                 setFieldValue(`items.${idx}.itemName`, typed);
+                                                 setActiveProdNameIndex(idx);
+                                                 setHighlightedProdNameIndex(0);
+
+                                                 // Exact product name match auto-sync
+                                                 const matched = productsList.find(
+                                                   p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
+                                                 );
+                                                 if (matched) {
+                                                   handleProductSelectionWithWH(matched, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                 }
+                                               }}
+                                               placeholder="Search Product Name..."
+                                               className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
+                                             />
+
+                                             {selectedProd?.brand && (
+                                               <div className="text-[10px] text-gray-500 dark:text-gray-400 font-sans mt-0.5 truncate">
+                                                 Brand: <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedProd.brand}</span> {selectedProd.category ? `• ${selectedProd.category}` : ''}
+                                               </div>
+                                             )}
+
+                                             {/* SEARCHABLE PRODUCT DROPDOWN (UPPER LAYER ON Z-AXIS) */}
+                                             {isCurrentProdNameActive && (
+                                               <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                                                 {filteredByName.map((p, pIdx) => {
+                                                   const displaySku = p.item_sr_no || `SKU-${p.id}`;
+                                                   const isHighlighted = pIdx === highlightedProdNameIndex;
+                                                   return (
+                                                     <div
+                                                       key={p.id}
+                                                       onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
+                                                       onMouseDown={(e) => {
+                                                         e.preventDefault();
+                                                         handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                         setActiveProdNameIndex(null);
+                                                       }}
+                                                       className={`p-3 cursor-pointer transition flex items-center justify-between group ${
+                                                         isHighlighted 
+                                                           ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500' 
+                                                           : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                                                       }`}
+                                                     >
+                                                       <div className="flex flex-col gap-0.5 text-left pr-2">
+                                                         <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 leading-tight">
+                                                           {p.product_name}
+                                                         </span>
+                                                         <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                                           <span className="bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded font-bold text-primary">
+                                                             {displaySku}
+                                                           </span>
+                                                           {p.brand && <span>{p.brand}</span>}
+                                                           {p.category && <span>• {p.category}</span>}
+                                                         </div>
+                                                       </div>
+                                                       <div className="text-right font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
+                                                         Rs. {Number(p.retail_price || 0).toLocaleString()}
+                                                       </div>
+                                                     </div>
+                                                   );
+                                                 })}
+                                                 {filteredByName.length === 0 && (
+                                                   <div className="p-4 text-center text-xs text-slate-400 italic">
+                                                     No matching products found
+                                                   </div>
+                                                 )}
+                                               </div>
+                                             )}
+                                           </div>
+                                         );
+                                       })()}
+                                       {hasItemError && <p className="text-red-500 text-[9px] font-bold mt-0.5">Required Field</p>}
+                                      </td>
+
+                                      {/* ROW-LEVEL WAREHOUSE ZONE SOURCE */}
+                                      <td className="p-2 w-44">
+                                        <select
+                                          value={item.warehouse || values.dispatchWarehouse || ''}
+                                          onChange={async (e) => {
+                                            const newWh = e.target.value;
+                                            setFieldValue(`items.${idx}.warehouse`, newWh);
+                                            if (item.itemName) {
+                                              const stock = await fetchStockForWarehouse(item.itemName, newWh);
+                                              setFieldValue(`items.${idx}.availableQty`, stock);
+                                            }
+                                          }}
+                                          className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-sm"
+                                        >
+                                          <option value="">Default ({values.dispatchWarehouse || 'None'})</option>
+                                          {warehousesList.map((wh) => (
+                                            <option key={wh} value={wh}>
+                                              {wh}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </td>
+
+                                    {/* STOCK IN WAREHOUSE WITH LOOSE PIECES BREAKDOWN */}
+                                    <td className="p-2 text-center bg-success/5 text-xs w-[140px]">
+                                      <div className="flex flex-col items-center justify-center font-mono">
+                                        <span className="font-black text-success text-xs">
+                                          {isTile && pcsPerBox > 1 ? `${availBoxes.toLocaleString()} Boxes` : totalAvailStock.toLocaleString()}
+                                        </span>
+                                        {isTile && pcsPerBox > 1 && (
+                                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
+                                            {availLoosePcs > 0 ? `+ ${availLoosePcs} pcs loose` : `(0 loose pcs)`}
+                                          </span>
+                                        )}
+                                        {!isTile && uomName && (
+                                          <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
+                                            {uomName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* QTY (UOM) WITH DEDICATED BOXES & LOOSE PIECES INPUTS FOR TILES */}
+                                    <td className="p-2 min-w-[250px]">
+                                      {isTile ? (
+                                        (() => {
+                                          // Parse tile dimensions from product description or SKU (e.g. "60 × 60 cm" or "Size: 60 × 60 cm")
+                                          let tileWidthCm = 60;
+                                          let tileHeightCm = 60;
+                                          const desc = selectedProd?.product_description || '';
+                                          const sku = selectedProd?.item_sr_no || '';
+                                          const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
+                                                            sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+                                          if (sizeMatch) {
+                                            tileHeightCm = Number(sizeMatch[1]) || 60;
+                                            tileWidthCm = Number(sizeMatch[2]) || 60;
+                                          }
+                                          const perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
+                                          const perBoxSqm = perPieceSqm * pcsPerBox;
+
+                                          const currentQty = Number(item.qty || 0);
+                                          const boxes = Math.floor(currentQty);
+                                          const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
+                                          const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
+
+                                          return (
+                                            <div className="flex flex-col gap-1">
+                                              {/* ── TOP BADGES: Per Box Sq.Mtr & Per Piece Sq.Mtr ── */}
+                                              <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono">
+                                                <span className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800/60 font-bold">
+                                                  Box: {perBoxSqm.toFixed(2)} sq.m
+                                                </span>
+                                                <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
+                                                  Pc: {perPieceSqm.toFixed(4)} sq.m
+                                                </span>
+                                              </div>
+
+                                              {/* ── INPUTS CONTAINER ── */}
+                                              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
+                                                {/* BOXES INPUT */}
+                                                <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
+                                                  <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    onKeyDown={blockInvalidChar}
+                                                    value={(() => {
+                                                      const b = Math.floor(Number(item.qty || 0));
+                                                      return b === 0 ? '' : b;
+                                                    })()}
+                                                    placeholder="0"
+                                                    onChange={(e) => {
+                                                      const val = e.target.value.trim();
+                                                      const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                      const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                      const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
+                                                      setFieldValue(`items.${idx}.qty`, combinedQty);
+
+                                                      const currentRp = Math.max(0, Number(item.rp) || 0);
+                                                      const gross = combinedQty * currentRp;
+                                                      const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                                      if (disPer > 0) {
+                                                        setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                                      }
+                                                    }}
+                                                    className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
+                                                  />
+                                                  <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Box</span>
+                                                </div>
+
+                                                <span className="text-gray-400 font-black text-sm select-none">+</span>
+
+                                                {/* LOOSE PIECES INPUT */}
+                                                <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
+                                                  <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    onKeyDown={blockInvalidChar}
+                                                    value={(() => {
+                                                      const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                      return currentLoose === 0 ? '' : currentLoose;
+                                                    })()}
+                                                    placeholder={`${pcsPerBox}`}
+                                                    onChange={(e) => {
+                                                      const val = e.target.value.trim();
+                                                      const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                      const currentBoxes = Math.floor(Number(item.qty || 0));
+
+                                                      // Automatic carryover if loose pieces >= pieces_per_box
+                                                      const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
+                                                      const remLoose = enteredLoose % pcsPerBox;
+                                                      const finalBoxes = currentBoxes + extraBoxes;
+                                                      const combinedQty = remLoose > 0 
+                                                        ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3)) 
+                                                        : finalBoxes;
+
+                                                      setFieldValue(`items.${idx}.qty`, combinedQty);
+
+                                                      const currentRp = Math.max(0, Number(item.rp) || 0);
+                                                      const gross = combinedQty * currentRp;
+                                                      const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                                      if (disPer > 0) {
+                                                        setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                                      }
+                                                    }}
+                                                    className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
+                                                  />
+                                                  <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Pcs</span>
+                                                </div>
+                                              </div>
+
+                                              {/* ── BOTTOM TOTAL SQ.MTR CALCULATION ── */}
+                                              <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
+                                                Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
+                                                <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()
+                                      ) : (
+                                        /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
+                                        <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
+                                          <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            onKeyDown={blockInvalidChar}
+                                            name={`items.${idx}.qty`}
+                                            value={item.qty === 0 ? '' : item.qty}
+                                            onChange={(e) => {
+                                              const val = e.target.value.trim();
+                                              const newQty = val === '' ? 0 : Math.max(0, Number(val) || 0);
+                                              setFieldValue(`items.${idx}.qty`, val === '' ? '' : newQty);
+                                              const currentRp = Math.max(0, Number(item.rp) || 0);
+                                              const gross = newQty * currentRp;
+                                              const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                              if (disPer > 0) {
+                                                setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                              }
+                                            }}
+                                            placeholder="1"
+                                            className="w-full bg-transparent text-center font-black text-sm text-primary outline-none"
+                                          />
+                                          {uomName && (
+                                            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase whitespace-nowrap select-none">
+                                              {uomName}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </td>
                                      <td className="p-2">
                                        <input
                                          type="number"
@@ -512,45 +1183,49 @@ const NewInvoice = () => {
                                        </>
                                      )}
 
-                                      {values.fbrScenario === 'Reduced Rate Sale' ? (
+                                      {values.applyFbrTax && (
                                         <>
-                                          <td className="p-2 w-20">
-                                            <input
-                                              type="number"
-                                              min="0"
-                                              onKeyDown={blockInvalidChar}
-                                              onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                              name={`items.${idx}.gstRate`}
-                                              value={item.gstRate ?? 0}
-                                              onChange={(e) => setFieldValue(`items.${idx}.gstRate`, Math.max(0, Number(e.target.value) || 0))}
-                                              placeholder="0"
-                                              className="w-full bg-blue-50/40 dark:bg-blue-900/10 text-blue-700 dark:text-blue-400 text-center font-black outline-none border border-blue-300 dark:border-blue-700 rounded p-1 text-xs focus:border-blue-500"
-                                            />
-                                          </td>
-                                          <td className="p-2 w-20">
-                                            <input
-                                              type="number"
-                                              min="0"
-                                              onKeyDown={blockInvalidChar}
-                                              onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                              name={`items.${idx}.fTaxPer`}
-                                              value={item.fTaxPer ?? 0}
-                                              onChange={(e) => setFieldValue(`items.${idx}.fTaxPer`, Math.max(0, Number(e.target.value) || 0))}
-                                              placeholder="0"
-                                              className="w-full bg-blue-50/40 dark:bg-blue-900/10 text-blue-700 dark:text-blue-400 text-center font-black outline-none border border-blue-300 dark:border-blue-700 rounded p-1 text-xs focus:border-blue-500"
-                                            />
-                                          </td>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <td className="p-2 text-center text-gray-400 font-sans">{fbr.activeGstRate}%</td>
-                                          <td className="p-2 text-center text-gray-400 font-sans">{fbr.activeFTaxPer}%</td>
+                                          {values.taxScenario === 'Reduced Rate Sale' ? (
+                                            <>
+                                              <td className="p-2 w-20">
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  onKeyDown={blockInvalidChar}
+                                                  onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                                  name={`items.${idx}.gstRate`}
+                                                  value={item.gstRate ?? 0}
+                                                  onChange={(e) => setFieldValue(`items.${idx}.gstRate`, Math.max(0, Number(e.target.value) || 0))}
+                                                  placeholder="0"
+                                                  className="w-full bg-emerald-50/40 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-center font-black outline-none border border-emerald-300 dark:border-emerald-700 rounded p-1 text-xs focus:border-emerald-500"
+                                                />
+                                              </td>
+                                              <td className="p-2 w-20">
+                                                <input
+                                                  type="number"
+                                                  min="0"
+                                                  onKeyDown={blockInvalidChar}
+                                                  onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                                  name={`items.${idx}.fTaxPer`}
+                                                  value={item.fTaxPer ?? 0}
+                                                  onChange={(e) => setFieldValue(`items.${idx}.fTaxPer`, Math.max(0, Number(e.target.value) || 0))}
+                                                  placeholder="0"
+                                                  className="w-full bg-emerald-50/40 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-center font-black outline-none border border-emerald-300 dark:border-emerald-700 rounded p-1 text-xs focus:border-emerald-500"
+                                                />
+                                              </td>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <td className="p-2 text-center text-gray-400 font-sans">{lineCalc.activeGstRate}%</td>
+                                              <td className="p-2 text-center text-gray-400 font-sans">{lineCalc.activeFTaxPer}%</td>
+                                            </>
+                                          )}
+                                          <td className="p-2 text-right pr-2 text-gray-400">Rs. {lineCalc.gstAmt.toFixed(2)}</td>
+                                          <td className="p-2 text-right pr-2 text-gray-400">Rs. {lineCalc.fTaxAmt.toFixed(2)}</td>
                                         </>
                                       )}
-                                    <td className="p-2 text-right pr-2 text-gray-400">Rs. {fbr.gstAmt.toFixed(2)}</td>
-                                    <td className="p-2 text-right pr-2 text-gray-400">Rs. {fbr.fTaxAmt.toFixed(2)}</td>
-                                    <td className="p-2 text-right pr-4 text-success font-black">Rs. {fbr.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                    <td className="p-2 text-center">{values.items.length > 1 && <button type="button" onClick={() => remove(idx)} className="text-gray-400 hover:text-danger cursor-pointer"><FiTrash2 size={14} /></button>}</td>
+                                    <td className="p-2 text-right pr-4 text-success font-black">Rs. {lineCalc.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-1 w-8 text-center">{values.items.length > 1 && <button type="button" onClick={() => remove(idx)} className="text-gray-400 hover:text-danger cursor-pointer"><FiTrash2 size={14} /></button>}</td>
                                   </tr>
                                 );
                               })}
@@ -562,32 +1237,136 @@ const NewInvoice = () => {
                     }}
                   </FieldArray>
                 </div>
-                <div className="flex flex-col md:flex-row justify-between items-start gap-6 border border-stroke p-4 rounded-sm bg-slate-50/10 mt-6">
-                  <div className="w-full md:w-1/2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-start gap-6 border border-stroke p-4 rounded-sm bg-slate-50/10 mt-6 relative z-0">
+                  <div className="w-full md:w-1/2 space-y-4">
                     <div>
-                      <span className="font-bold text-gray-500 block mb-1">Counter Cash-Box Settlement Mode: *</span>
-                      <select name="settlementMode" value={values.settlementMode} onChange={(e) => { handleChange(e); if (e.target.value === 'Cash') setFieldValue('selectedBankTitle', ''); }} className={`w-full border rounded p-2 text-xs bg-white dark:bg-boxdark font-black outline-none text-black dark:text-white ${hasAttempted && errors.settlementMode ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}><option value="Cash">By Cash</option><option value="Bank">By Bank (Online)</option></select>
+                      <span className="font-bold text-gray-500 block mb-1">Payment Method / Settlement Mode: *</span>
+                      <select
+                        name="settlementMode"
+                        value={values.settlementMode}
+                        onChange={(e) => {
+                          handleChange(e);
+                          if (e.target.value === 'Cash') {
+                            setFieldValue('selectedBankTitle', '');
+                            setFieldValue('bankAmountPaid', 0);
+                          }
+                        }}
+                        className={`w-full border rounded p-2 text-xs bg-white dark:bg-boxdark font-black outline-none text-black dark:text-white ${hasAttempted && errors.settlementMode ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                      >
+                        <option value="Cash">Cash Only</option>
+                        <option value="Bank">Bank Transfer Only</option>
+                        <option value="Split">Cash & Bank Combined</option>
+                      </select>
                       {hasAttempted && errors.settlementMode && <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.settlementMode)}</p>}
                     </div>
 
-                    {values.settlementMode === 'Bank' && (
+                    {(values.settlementMode === 'Bank' || values.settlementMode === 'Split') && (
                       <div>
                         <span className="font-bold text-gray-500 block mb-1">Corporate Bank Ledger Profile: *</span>
-                        <select name="selectedBankTitle" value={values.selectedBankTitle} onChange={handleChange} className={`w-full border rounded p-2 text-xs bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.selectedBankTitle ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}><option value="">-- Choose Account Wire Registry --</option>{banksList.map(b => <option key={b.id} value={b.accountTitle}>{b.bankName} - {b.accountTitle}</option>)}</select>
+                        <select
+                          name="selectedBankTitle"
+                          value={values.selectedBankTitle}
+                          onChange={handleChange}
+                          className={`w-full border rounded p-2 text-xs bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.selectedBankTitle ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                        >
+                          <option value="">-- Choose Account Wire Registry --</option>
+                          {banksList.map(b => (
+                            <option key={b.id} value={b.accountTitle}>{b.bankName} - {b.accountTitle}</option>
+                          ))}
+                        </select>
                         {hasAttempted && errors.selectedBankTitle && <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.selectedBankTitle)}</p>}
                       </div>
                     )}
 
-                    <div className="sm:col-span-2">
-                      <span className="font-bold text-danger block mb-1">Counter Incoming Cash Flow Amount Paid Now (PKR): *</span>
-                      <input type="number" onKeyDown={blockInvalidChar} name="cashAmountPaid" value={values.cashAmountPaid} onChange={handleChange} placeholder="Type amount customer is handing over..." className={`w-full rounded border p-2 bg-transparent text-right font-black text-danger text-sm outline-none text-black dark:text-white ${hasAttempted && errors.cashAmountPaid ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
-                      {hasAttempted && errors.cashAmountPaid && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.cashAmountPaid}</p>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {(values.settlementMode === 'Cash' || values.settlementMode === 'Split') && (
+                        <div>
+                          <span className="font-bold text-danger block mb-1">Cash Payment Amount (PKR): *</span>
+                          <input
+                            type="number"
+                            min="0"
+                            onKeyDown={blockInvalidChar}
+                            onWheel={(e: any) => e.target.blur()}
+                            name="cashAmountPaid"
+                            value={values.cashAmountPaid === 0 ? '' : values.cashAmountPaid}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const num = val === '' ? 0 : Math.max(0, Number(val) || 0);
+                              setFieldValue('cashAmountPaid', num);
+                            }}
+                            placeholder="0"
+                            className={`w-full rounded border p-2 bg-transparent text-right font-black text-danger text-sm outline-none text-black dark:text-white ${hasAttempted && errors.cashAmountPaid ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                          />
+                          {hasAttempted && errors.cashAmountPaid && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.cashAmountPaid}</p>}
+                        </div>
+                      )}
+
+                      {(values.settlementMode === 'Bank' || values.settlementMode === 'Split') && (
+                        <div>
+                          <span className="font-bold text-primary block mb-1">Bank Payment Amount (PKR): *</span>
+                          <input
+                            type="number"
+                            min="0"
+                            onKeyDown={blockInvalidChar}
+                            onWheel={(e: any) => e.target.blur()}
+                            name="bankAmountPaid"
+                            value={values.bankAmountPaid === 0 ? '' : values.bankAmountPaid}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const num = val === '' ? 0 : Math.max(0, Number(val) || 0);
+                              setFieldValue('bankAmountPaid', num);
+                            }}
+                            placeholder="0"
+                            className={`w-full rounded border p-2 bg-transparent text-right font-black text-primary text-sm outline-none text-black dark:text-white ${hasAttempted && errors.bankAmountPaid ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                          />
+                          {hasAttempted && errors.bankAmountPaid && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.bankAmountPaid}</p>}
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* FINANCIAL AUDIT SUMMARY CARD */}
                   <div className="w-full md:w-1/3 space-y-2 font-mono font-bold text-xs text-black dark:text-white">
-                    <div className="flex justify-between border-b pb-1 dark:border-strokedark"><span>Net Invoice Value Total:</span><span>Rs. {currentSubtotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                    <div className="flex justify-between border-b pb-1 dark:border-strokedark text-success"><span>Received Cash flow:</span><span>Rs. {Number(values.cashAmountPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                    <div className="flex justify-between pt-1 border-double border-b-4 border-stroke dark:border-strokedark"><span className="font-sans text-[11px]">Un-invoiced Remaining Balance (On Credit Debt):</span><b className={`text-sm ${currentSubtotalValue - Number(values.cashAmountPaid || 0) > 0 ? 'text-danger' : 'text-success'}`}>Rs. {Math.max(0, currentSubtotalValue - Number(values.cashAmountPaid || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b></div>
+                    <div className="flex justify-between border-b pb-1 dark:border-strokedark">
+                      <span>Net Invoice Value Total:</span>
+                      <span>Rs. {currentSubtotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+
+                    {(values.settlementMode === 'Cash' || values.settlementMode === 'Split') && (
+                      <div className="flex justify-between border-b pb-1 dark:border-strokedark text-emerald-600">
+                        <span>Received Cash Flow:</span>
+                        <span>Rs. {Number(values.cashAmountPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+
+                    {(values.settlementMode === 'Bank' || values.settlementMode === 'Split') && (
+                      <div className="flex justify-between border-b pb-1 dark:border-strokedark text-primary">
+                        <span>Received Bank Wire:</span>
+                        <span>Rs. {Number(values.bankAmountPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+
+                    {values.settlementMode === 'Split' && (
+                      <div className="flex justify-between border-b pb-1 dark:border-strokedark text-success font-black">
+                        <span>Total Paid (Cash + Bank):</span>
+                        <span>Rs. {(Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const totalPaidNow = values.settlementMode === 'Cash' 
+                        ? Number(values.cashAmountPaid || 0) 
+                        : (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)));
+                      const remBalance = Math.max(0, currentSubtotalValue - totalPaidNow);
+                      return (
+                        <div className="flex justify-between pt-1 border-double border-b-4 border-stroke dark:border-strokedark">
+                          <span className="font-sans text-[11px]">Un-invoiced Remaining Balance:</span>
+                          <b className={`text-sm ${remBalance > 0 ? 'text-danger' : 'text-success'}`}>
+                            Rs. {remBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </b>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
