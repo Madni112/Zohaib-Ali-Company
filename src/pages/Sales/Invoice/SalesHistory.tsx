@@ -3,9 +3,9 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate } from 'react-router-dom';
-import { FiRotateCcw, FiEdit, FiSend, FiTrash2, FiPrinter } from 'react-icons/fi';
-import { buildFBRInvoicePayload, syncWithFBR } from '../../../service/fbrService';
+import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
+import { FiTruck, FiX, FiCheckCircle, FiClock, FiDollarSign, FiActivity, FiShield } from 'react-icons/fi';
 
 const SalesHistory = () => {
   const navigate = useNavigate();
@@ -14,27 +14,48 @@ const SalesHistory = () => {
 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [syncingId, setSyncingId] = useState<string | number | null>(null);
   const [openActionId, setOpenActionId] = useState<any | null>(null);
   const [dropdownCoords, setDropdownCoords] = useState({ top: 0, right: 0 });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [returnedInvoiceNos, setReturnedInvoiceNos] = useState<string[]>([]);
+  const [deliveryChallansMap, setDeliveryChallansMap] = useState<Record<string, any[]>>({});
+
+  // 🌟 Realtime Delivery Challan & Freight Approval Modal State
+  const [selectedDcForModal, setSelectedDcForModal] = useState<any | null>(null);
+  const [activeModalTab, setActiveModalTab] = useState<'tracking' | 'payment'>('tracking');
+  const [isApprovingPayment, setIsApprovingPayment] = useState(false);
 
   useEffect(() => {
     fetchInvoices();
   }, []);
 
-  useEffect(() => {
-    const handleOutsideClick = () => setOpenActionId(null);
-    const handleScrollResize = () => setOpenActionId(null);
-    window.addEventListener('click', handleOutsideClick);
-    window.addEventListener('scroll', handleScrollResize, true);
-    return () => {
-      window.removeEventListener('click', handleOutsideClick);
-      window.removeEventListener('scroll', handleScrollResize, true);
-    };
-  }, []);
+  const openDcModal = (dc: any, defaultTab: 'tracking' | 'payment' = 'tracking') => {
+    setSelectedDcForModal(dc);
+    setActiveModalTab(defaultTab);
+  };
+
+  const handleApproveFreightPayment = async (dcId: number) => {
+    setIsApprovingPayment(true);
+    try {
+      const { error } = await supabase
+        .from('delivery_challans')
+        .update({
+          freight_payment_status: 'Approved'
+        })
+        .eq('id', dcId);
+
+      if (error) throw error;
+
+      toast.success('Freight charges approved successfully!');
+      setSelectedDcForModal((prev: any) => prev ? { ...prev, freight_payment_status: 'Approved' } : null);
+      fetchInvoices();
+    } catch (err: any) {
+      toast.error('Failed to approve payment: ' + err.message);
+    } finally {
+      setIsApprovingPayment(false);
+    }
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -58,38 +79,25 @@ const SalesHistory = () => {
         setReturnedInvoiceNos(cleanList);
       }
 
+      const { data: dcRows } = await supabase
+        .from('delivery_challans')
+        .select('*');
+
+      const dcMap: Record<string, any[]> = {};
+      (dcRows || []).forEach((dc: any) => {
+        const invKey = String(dc.invoice_no || '').trim().toLowerCase();
+        if (invKey) {
+          if (!dcMap[invKey]) dcMap[invKey] = [];
+          dcMap[invKey].push(dc);
+        }
+      });
+      setDeliveryChallansMap(dcMap);
+
       setInvoices(invoicesData || []);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-  const handleSync = async (invoice: any) => {
-    setSyncingId(invoice.id);
-    try {
-      const fbrPayload = buildFBRInvoicePayload(invoice);
-      const fbrRes = await syncWithFBR(fbrPayload, true);
-
-      if (!fbrRes || !fbrRes.fbrFiscalNumber) {
-        throw new Error('FBR API validation rejected the invoice payload.');
-      }
-
-      const { error } = await supabase
-        .from('sales_invoices')
-        .update({
-          fbr_fiscal_number: fbrRes.fbrFiscalNumber,
-          fbr_qr_code: fbrRes.fbrQrCode
-        })
-        .eq('id', invoice.id);
-
-      if (error) throw error;
-      toast.success(`FBR Synced Successfully! Code: ${fbrRes.fbrFiscalNumber}`);
-      fetchInvoices();
-    } catch (err: any) {
-      toast.error('FBR Sync Error: ' + err.message);
-    } finally {
-      setSyncingId(null);
     }
   };
 
@@ -111,7 +119,7 @@ const SalesHistory = () => {
       String(targetInv?.sale_status).trim().toLowerCase() === 'returned';
 
     if (isReturnedStatus) {
-      toast.error('first delete sale return entry to delete this for same invoice');
+      toast.error('First delete sale return entry to delete this for same invoice');
       return;
     }
 
@@ -173,54 +181,289 @@ const SalesHistory = () => {
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
   const paginatedInvoices = filteredInvoices.slice(startIndex, startIndex + pageSize);
+
   return (
-    <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
+    <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-slate-800 dark:text-slate-100 text-xs">
+      
+      {/* ── POPUP MODAL: REALTIME WAREHOUSE ACTIVITY & FREIGHT SETTLEMENT APPROVAL ── */}
+      {selectedDcForModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-boxdark w-full max-w-2xl rounded-2xl shadow-2xl border border-stroke dark:border-strokedark overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center bg-slate-900 text-white p-5 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center text-xl font-bold">
+                  <FiTruck />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold flex items-center gap-2">
+                    Delivery Challan Hub
+                    <span className="font-mono text-xs px-2 py-0.5 rounded bg-emerald-600 text-white font-black">
+                      {selectedDcForModal.challan_no || `DC-${selectedDcForModal.id}`}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Invoice: <span className="text-white font-bold">{selectedDcForModal.invoice_no || 'Direct DC'}</span> • Customer: <span className="text-white font-bold">{selectedDcForModal.customer_name}</span>
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedDcForModal(null)} className="text-slate-400 hover:text-white text-xl">
+                <FiX />
+              </button>
+            </div>
+
+            {/* 2 Tabs Switcher */}
+            <div className="flex border-b border-stroke dark:border-strokedark bg-slate-100 dark:bg-slate-800">
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('tracking')}
+                className={`flex-1 py-3 px-4 font-bold text-xs flex items-center justify-center gap-2 transition ${
+                  activeModalTab === 'tracking'
+                    ? 'bg-white dark:bg-boxdark text-primary border-b-2 border-primary shadow-xs'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <FiActivity /> 1. Realtime Warehouse Activity
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('payment')}
+                className={`flex-1 py-3 px-4 font-bold text-xs flex items-center justify-center gap-2 transition ${
+                  activeModalTab === 'payment'
+                    ? 'bg-white dark:bg-boxdark text-emerald-600 border-b-2 border-emerald-600 shadow-xs'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <FiDollarSign /> 2. Freight Charges & Payment Approval
+                {Number(selectedDcForModal.freight_charges || 0) > 0 && selectedDcForModal.freight_payment_status !== 'Approved' && (
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                )}
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="p-6 max-h-[70vh] overflow-y-auto space-y-4 text-xs">
+              
+              {/* TAB 1: REALTIME WAREHOUSE ACTIVITY */}
+              {activeModalTab === 'tracking' && (
+                <div className="space-y-4">
+                  {/* Status Banner */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark">
+                    <div>
+                      <span className="text-gray-500 block text-[10px] uppercase font-black">Warehouse Status</span>
+                      <strong className="text-sm font-bold text-black dark:text-white">{selectedDcForModal.status || 'Pending Approval'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px] uppercase font-black">Warehouse Location</span>
+                      <span className="font-bold text-emerald-600">{selectedDcForModal.dispatch_warehouse || 'Main Warehouse'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px] uppercase font-black">Vehicle / Truck Plate</span>
+                      <span className="font-bold text-black dark:text-white">{selectedDcForModal.vehicle_no || 'Not Assigned'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px] uppercase font-black">Driver</span>
+                      <span className="font-bold text-black dark:text-white">{selectedDcForModal.driver_name || 'Direct Handover'}</span>
+                    </div>
+                  </div>
+
+                  {/* Items Live Breakdown */}
+                  <div className="border border-stroke dark:border-strokedark rounded-xl overflow-hidden shadow-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b border-stroke dark:border-strokedark">
+                          <th className="p-2.5">Product Description</th>
+                          <th className="p-2.5 text-center">Ordered</th>
+                          <th className="p-2.5 text-center text-emerald-600">Dispatched (Truck)</th>
+                          <th className="p-2.5 text-center text-amber-600">On Hold (Warehouse)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
+                        {(selectedDcForModal.items || []).map((item: any, i: number) => {
+                          const ord = Number(item.orderQty ?? item.qty ?? 0);
+                          const disp = Number(item.dispatchedQty ?? (selectedDcForModal.status === 'Dispatched' ? item.qty : 0));
+                          const hld = Number(item.holdQty ?? (selectedDcForModal.status === 'Pending Approval' ? ord : 0));
+
+                          return (
+                            <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                              <td className="p-2.5 font-bold text-black dark:text-white">{item.pDescription}</td>
+                              <td className="p-2.5 text-center font-mono font-bold">{ord}</td>
+                              <td className="p-2.5 text-center font-mono font-bold text-emerald-600">
+                                {selectedDcForModal.status === 'Pending Approval' ? '0 (Pending)' : disp}
+                              </td>
+                              <td className="p-2.5 text-center font-mono font-bold text-amber-600">
+                                {hld > 0 ? `${hld} Hold` : '0 (Cleared)'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {selectedDcForModal.remarks && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-stroke dark:border-strokedark">
+                      <span className="text-[10px] font-bold uppercase text-gray-500 block">Warehouse Gate Remarks:</span>
+                      <p className="text-black dark:text-white font-medium mt-0.5">{selectedDcForModal.remarks}</p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={() => navigate(`/Delivery-Challan/Print/${selectedDcForModal.id}`)}
+                      disabled={selectedDcForModal.status === 'Pending Approval'}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 transition"
+                    >
+                      🖨️ Open Gate Pass Document
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: FREIGHT CHARGES & PAYMENT APPROVAL */}
+              {activeModalTab === 'payment' && (
+                <div className="space-y-5">
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark space-y-3">
+                    <div className="flex justify-between items-center pb-3 border-b border-stroke dark:border-strokedark">
+                      <span className="text-gray-500 font-bold uppercase text-[11px]">Transportation Service / Carrier:</span>
+                      <strong className="text-black dark:text-white text-sm">
+                        {selectedDcForModal.transport_name || selectedDcForModal.transportation || 'Customer\'s Own Transport'}
+                      </strong>
+                    </div>
+
+                    <div className="flex justify-between items-center pb-3 border-b border-stroke dark:border-strokedark">
+                      <span className="text-gray-500 font-bold uppercase text-[11px]">Freight Charges Claimed:</span>
+                      <strong className="text-emerald-600 font-mono text-base font-black">
+                        Rs. {Number(selectedDcForModal.freight_charges || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </strong>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500 font-bold uppercase text-[11px]">Payment Authorization Status:</span>
+                      {selectedDcForModal.freight_payment_status === 'Approved' ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-black text-xs">
+                          <FiCheckCircle /> Authorized & Paid
+                        </span>
+                      ) : Number(selectedDcForModal.freight_charges || 0) === 0 ? (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-bold text-xs">
+                          No Charges (Direct Handover)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-black text-xs animate-pulse">
+                          <FiClock /> Verification Pending
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {Number(selectedDcForModal.freight_charges || 0) > 0 && selectedDcForModal.freight_payment_status !== 'Approved' && (
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 rounded-xl flex items-start gap-3">
+                      <FiShield className="text-amber-600 text-lg shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="font-bold text-amber-900 dark:text-amber-200">Payment Authorization Required</h5>
+                        <p className="text-amber-800/80 dark:text-amber-300/80 text-[11px] mt-1">
+                          The warehouse has entered <strong>Rs. {Number(selectedDcForModal.freight_charges || 0).toLocaleString()}</strong> as the freight charge for this shipment. As Admin / Billing Officer, click below to confirm and authorize this payment.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={isApprovingPayment}
+                          onClick={() => handleApproveFreightPayment(selectedDcForModal.id)}
+                          className="mt-3 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition cursor-pointer"
+                        >
+                          {isApprovingPayment ? <Spinner /> : <><FiCheckCircle /> Authorize & Approve Freight Payment</>}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-stroke dark:border-strokedark">
+              <button
+                onClick={() => setSelectedDcForModal(null)}
+                className="px-5 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 font-bold text-xs transition"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-black dark:text-white">Sales Log History</h2>
-        <button onClick={() => navigate('/sales/invoice/add')} className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer" >
-          + Add New
+        <div>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Sales Invoices History</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage customer billing records, print commercial vouchers & process returns</p>
+        </div>
+        <button
+          onClick={() => navigate('/sales/invoice/add')}
+          className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 px-4 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-sm hover:shadow-md cursor-pointer"
+        >
+          <span>+ Add New Invoice</span>
         </button>
       </div>
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+      <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-[#111827] p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-5">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
             <span>Show</span>
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded border border-stroke py-1 px-2 bg-transparent text-sm font-medium text-black dark:text-white outline-none focus:border-primary" >
-              {[10, 25, 50, 100].map((size) => <option key={size} value={size} className="dark:bg-boxdark">{size}</option>)}
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-lg border border-slate-200 py-1.5 px-2.5 bg-slate-50 dark:bg-slate-800 dark:border-slate-700 outline-none focus:border-emerald-600 text-xs font-bold text-slate-800 dark:text-white transition"
+            >
+              {[10, 25, 50, 100].map((size) => <option key={size} value={size} className="dark:bg-slate-800">{size}</option>)}
             </select>
             <span>entries</span>
           </div>
-          <div className="flex items-center gap-2 text-sm w-full sm:w-auto text-gray-500 dark:text-gray-400">
-            <span>Search:</span>
-            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search invoices, customers, or quotation IDs..." className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent text-sm text-black dark:text-white outline-none focus:border-primary" />
+          <div className="flex items-center gap-2 text-xs w-full sm:w-auto text-slate-500 dark:text-slate-400">
+            <span className="font-semibold">Search:</span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search invoices, customers, or quotation IDs..."
+              className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-800 dark:text-white transition"
+            />
           </div>
         </div>
 
-        <div className="w-full overflow-x-auto">
-          <table className="w-full border-collapse text-[11px] text-left">
+        <div className="max-w-full overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+          <table className="w-full border-collapse text-xs text-left">
             <thead>
-              <tr className="bg-gray-2 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                <th className="py-3 px-2 text-center font-bold w-16">Invoice No</th>
-                {/* --- ✅ NEW COLUMN INFRASTRUCTURE FIELD INSERTED INTO HEADERS MATRIX --- */}
-                <th className="py-3 px-2 font-bold text-center w-24">Quotation ID</th>
-                <th className="py-3 px-2 font-bold text-center">Dc No</th>
-                <th className="py-3 px-2 font-bold">Sale Date</th>
-                <th className="py-3 px-2 font-bold text-center">Sale Type</th>
-                <th className="py-3 px-2 font-bold">Salesman</th>
-                <th className="py-3 px-2 font-bold">Customer</th>
-                <th className="py-3 px-2 font-bold text-center">Receipt Status</th>
-                <th className="py-3 px-2 font-bold text-center">Tax Invoice Code</th>
-                <th className="py-3 px-2 font-bold text-right pr-2">Amount Received</th>
-                <th className="py-3 px-2 font-bold text-right pr-2">Total Amount</th>
-                <th className="py-3 px-2 font-bold text-center w-14">Action</th>
+              <tr className="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
+                <th className="py-3.5 px-4 text-center w-16">Invoice No</th>
+                <th className="py-3.5 px-4 text-center w-24">Quotation ID</th>
+                <th className="py-3.5 px-4 text-center">DC No</th>
+                <th className="py-3.5 px-4">Sale Date</th>
+                <th className="py-3.5 px-4 text-center">Sale Type</th>
+                <th className="py-3.5 px-4">Salesman</th>
+                <th className="py-3.5 px-4">Customer</th>
+                <th className="py-3.5 px-4 text-center">Status</th>
+                <th className="py-3.5 px-4 text-right pr-3">Amount Received</th>
+                <th className="py-3.5 px-4 text-right pr-3">Total Net Amount</th>
+                <th className="py-3.5 px-4 text-center w-14">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={12} className="text-center py-12"><Spinner /></td></tr>
+                <tr>
+                  <td colSpan={11} className="text-center py-14">
+                    <div className="flex flex-col items-center justify-center gap-2.5">
+                      <Spinner size="w-8 h-8" color="border-primary" />
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 animate-pulse">
+                        Loading sales invoices...
+                      </span>
+                    </div>
+                  </td>
+                </tr>
               ) : paginatedInvoices.length === 0 ? (
-                <tr><td colSpan={12} className="text-center py-10 text-xs text-gray-500">No records located.</td></tr>
+                <tr><td colSpan={11} className="text-center py-10 text-xs text-slate-400 italic">No invoice records found.</td></tr>
               ) : (
                 paginatedInvoices.map((inv) => {
                   const rawInvoiceIdString = String(inv.id).trim().toLowerCase();
@@ -234,56 +477,92 @@ const SalesHistory = () => {
                     );
                   });
 
-                  // Sanitizes quotation presentation format cleanly
                   const rawQuotationVal = String(inv.quotation_id || '').trim();
                   const displayQuotationId = rawQuotationVal && rawQuotationVal !== 'null' && rawQuotationVal !== 'undefined'
                     ? (rawQuotationVal.toUpperCase().startsWith('QTN-') ? rawQuotationVal : `QTN-${rawQuotationVal.padStart(4, '0')}`)
                     : '-';
 
+                  const invoiceKey = `inv-${String(inv.id).padStart(4, '0')}`;
+                  const linkedDCs = deliveryChallansMap[invoiceKey] || deliveryChallansMap[`inv-${inv.id}`] || [];
+
                   return (
-                    <tr key={inv.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150">
-                      <td className="py-2.5 px-2 text-black dark:text-white font-bold text-center font-mono">{inv.id}</td>
+                    <tr key={inv.id} className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150">
+                      <td className="py-3 px-4 text-slate-900 dark:text-white font-bold text-center font-mono">
+                        {`INV-${String(inv.id).padStart(4, '0')}`}
+                      </td>
+                      <td className="py-3 px-4 text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold">{displayQuotationId}</td>
+                      <td className="py-3 px-4 text-center font-mono">
+                        {linkedDCs.length > 0 ? (
+                          <div className="flex flex-col items-center gap-1">
+                            {linkedDCs.map((dc: any) => {
+                              const isPend = dc.status === 'Pending Approval';
+                              const isPart = dc.status === 'Partially Dispatched';
+                              const isDisp = dc.status === 'Dispatched' || dc.status === 'Fully Dispatched';
+                              const hasFreightPending = Number(dc.freight_charges || 0) > 0 && dc.freight_payment_status !== 'Approved';
 
-                      {/* --- ✅ NEW RENDER ROW CELL: DISPLAYS ACCURATE SYSTEM QUOTATION POOLS LINKS --- */}
-                      <td className="py-2.5 px-2 text-center text-primary font-mono font-bold">{displayQuotationId}</td>
-
-                      <td className="py-2.5 px-2 text-gray-500 text-center font-mono">{inv.dc_no || '-'}</td>
-                      <td className="py-2.5 px-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">{inv.sale_date || new Date(inv.created_at).toLocaleDateString()}</td>
-                      <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-flex rounded-sm py-0.5 px-1.5 text-[9px] font-black text-white uppercase tracking-wide ${inv.payment_term === 'Cash' ? 'bg-success' : 'bg-danger'}`}>
+                              return (
+                                <button
+                                  key={dc.id}
+                                  type="button"
+                                  onClick={() => openDcModal(dc, hasFreightPending ? 'payment' : 'tracking')}
+                                  title="Click to view Realtime Warehouse Activity & Approve Freight"
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-500 hover:shadow-xs transition cursor-pointer"
+                                >
+                                  <span className="text-primary font-bold">{dc.challan_no || `DC-${dc.id}`}</span>
+                                  {isPend && <span className="bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 px-1.5 py-0.5 rounded text-[9px]">Pending</span>}
+                                  {isPart && <span className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 px-1.5 py-0.5 rounded text-[9px]">Partial</span>}
+                                  {isDisp && <span className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 px-1.5 py-0.5 rounded text-[9px]">Dispatched</span>}
+                                  {hasFreightPending && (
+                                    <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded text-[9px] font-bold animate-pulse">
+                                      Pay Req
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">{inv.sale_date || new Date(inv.created_at).toLocaleDateString()}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-flex rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide ${inv.payment_term === 'Cash' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
                           {inv.payment_term === 'Cash' ? 'Cash' : 'On Credit'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-2 text-gray-700 dark:text-gray-300 font-medium whitespace-nowrap">{inv.salesman || 'General'}</td>
-                      <td className="py-2.5 px-2 font-bold text-black dark:text-white whitespace-nowrap">{inv.customer_name}</td>
+                      <td className="py-3 px-4 text-slate-700 dark:text-slate-300 font-medium whitespace-nowrap">{inv.salesman || 'General'}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">{inv.customer_name}</td>
 
-                      <td className="py-2.5 px-2 text-center">
+                      <td className="py-3 px-4 text-center">
                         {isReturned ? (
-                          <span className="text-[10px] font-black uppercase tracking-wide bg-amber-500 text-white px-2 py-0.5 rounded-sm shadow-xs">
+                          <span className="text-[10px] font-black uppercase tracking-wide bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
                             Returned
                           </span>
                         ) : (
-                          <span className={`text-[10px] font-bold uppercase ${inv.receipt_status === 'Paid' || inv.receipt_status === 'Confirm' ? 'text-success' : 'text-danger'}`}>
+                          <span className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${inv.receipt_status === 'Paid' || inv.receipt_status === 'Confirm' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
                             {inv.receipt_status || 'Unpaid'}
                           </span>
                         )}
                       </td>
 
-                      <td className="py-2.5 px-2 text-center whitespace-nowrap"><span className={`font-bold ${inv.fbr_fiscal_number ? 'text-success' : 'text-brand'}`}>{inv.fbr_fiscal_number || 'Unposted'}</span></td>
-                      <td className="py-2.5 px-2 text-right font-bold text-success font-mono pr-2">Rs. {Number(inv.cash_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td className="py-2.5 px-2 text-right font-black text-black dark:text-white font-mono pr-2">Rs. {Number(inv.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      <td className="py-2.5 px-2 text-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setDropdownCoords({ top: rect.bottom + window.scrollY, right: window.innerWidth - rect.right - window.scrollX });
-                            setOpenActionId(openActionId === inv.id ? null : inv.id);
-                          }}
-                          className="border border-stroke dark:border-strokedark rounded px-2 py-0.5 text-primary bg-slate-50 dark:bg-meta-4 hover:bg-slate-100 transition font-black tracking-widest text-[10px] cursor-pointer"
-                        >
-                          ...
-                        </button>
+                      <td className="py-3 px-4 text-right font-bold text-emerald-600 dark:text-emerald-400 font-mono pr-3">
+                        Rs. {Number(inv.cash_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white font-mono pr-3">
+                        Rs. {Number(inv.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <TableActions
+                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/print/${inv.id}`)}
+                          onReturn={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales-Return/Debit-Notes/Add`, { state: { invoice: inv } })}
+                          onEdit={() => navigate('/sales/invoice/add', { state: { invoice: inv } })}
+                          onDelete={() => handleDeleteInvoice(inv.id)}
+                          printTitle="Print Invoice"
+                          returnTitle="Sale Return"
+                          editTitle="Edit Invoice"
+                          deleteTitle="Delete Invoice"
+                        />
                       </td>
                     </tr>
                   );
@@ -292,82 +571,39 @@ const SalesHistory = () => {
             </tbody>
           </table>
         </div>
-        {openActionId && (() => {
-          const selectedInvoice = invoices.find(i => i.id === openActionId);
-          if (!selectedInvoice) return null;
 
-          const rawSelId = String(selectedInvoice.id).trim().toLowerCase();
-          const isSelectedInvoiceReturned = returnedInvoiceNos.some(retNo => {
-            return (
-              retNo === rawSelId ||
-              retNo === `inv-${rawSelId}` ||
-              retNo === `inv-${rawSelId.padStart(4, '0')}` ||
-              retNo.includes(rawSelId)
-            );
-          }) || String(selectedInvoice.receipt_status).toLowerCase() === 'returned' || String(selectedInvoice.sale_status).toLowerCase() === 'returned';
-
-          const isAlreadyPostedToFBR = !!(selectedInvoice.fbr_fiscal_number && String(selectedInvoice.fbr_fiscal_number).trim() !== 'Unposted');
-
-          return (
-            <div
-              style={{ position: 'fixed', top: `${dropdownCoords.top - window.scrollY}px`, right: `${dropdownCoords.right}px` }}
-              className="z-99999 w-44 rounded border border-stroke bg-white py-1 shadow-2xl dark:border-strokedark dark:bg-boxdark text-left text-xs"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ul className="flex flex-col font-medium text-gray-700 dark:text-gray-300">
-                {!isAlreadyPostedToFBR && !isSelectedInvoiceReturned && (
-                  <li>
-                    <button
-                      type="button"
-                      disabled={syncingId === selectedInvoice.id}
-                      onClick={() => { setOpenActionId(null); handleSync(selectedInvoice); }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-meta-4 transition border-b border-stroke dark:border-strokedark text-success cursor-pointer font-bold disabled:opacity-50"
-                    >
-                      <FiSend size={13} /> {syncingId === selectedInvoice.id ? 'Posting...' : 'Post to FBR'}
-                    </button>
-                  </li>
-                )}
-                {isAlreadyPostedToFBR && (
-                  <li>
-                    <button
-                      type="button"
-                      onClick={() => { setOpenActionId(null); navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/print/${selectedInvoice.id}`); }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-meta-4 transition border-b border-stroke dark:border-strokedark text-primary cursor-pointer font-bold"
-                    >
-                      <FiPrinter size={13} /> Print Invoice
-                    </button>
-                  </li>
-                )}
-                <li>
-                  <button type="button" onClick={() => { setOpenActionId(null); navigate(`${tenantId ? `/${tenantId}` : ''}/Sales-Return/Debit-Notes/Add`, { state: { invoice: selectedInvoice } }); }} className="flex items-center gap-2.5 w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-meta-4 transition border-b border-stroke dark:border-strokedark text-blue-500 cursor-pointer">
-                    <FiRotateCcw size={13} /> Sale Return
-                  </button>
-                </li>
-
-                <li>
-                  <button onClick={() => { setOpenActionId(null); navigate('/sales/invoice/add', { state: { invoice: selectedInvoice } }); }} className="flex items-center gap-2.5 w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-meta-4 transition text-yellow-600 cursor-pointer">
-                    <FiEdit size={13} /> Edit Record
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => { setOpenActionId(null); handleDeleteInvoice(selectedInvoice.id); }} className="flex items-center gap-2.5 w-full px-4 py-2 hover:bg-gray-100 dark:hover:bg-meta-4 transition text-danger border-t border-stroke dark:border-strokedark mt-1 pt-1.5 cursor-pointer">
-                    <FiTrash2 size={13} /> Delete Record
-                  </button>
-                </li>
-              </ul>
-            </div>
-          );
-        })()}
-
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
-          <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+          <div className="text-slate-500 dark:text-slate-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
           {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 transition disabled:opacity-30 cursor-pointer">Previous</button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-30 cursor-pointer font-semibold"
+              >
+                Previous
+              </button>
               {Array.from({ length: totalPages }, (_, i) => (
-                <button type="button" key={i + 1} onClick={() => setCurrentPage(i + 1)} className={`px-3 py-1.5 rounded text-xs border transition ${currentPage === i + 1 ? 'bg-primary text-white border-primary' : 'border-stroke dark:border-strokedark text-gray-500 hover:bg-gray-50'}`}>{i + 1}</button>
+                <button
+                  type="button"
+                  key={i + 1}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`px-3 py-1.5 rounded-lg border transition font-bold cursor-pointer ${
+                    currentPage === i + 1 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {i + 1}
+                </button>
               ))}
-              <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 transition disabled:opacity-30 cursor-pointer">Next</button>
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-30 cursor-pointer font-semibold"
+              >
+                Next
+              </button>
             </div>
           )}
         </div>

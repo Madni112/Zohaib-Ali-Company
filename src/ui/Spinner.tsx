@@ -6,8 +6,8 @@ type SpinnerProps = {
 };
 
 const Spinner: React.FC<SpinnerProps> = ({
-  size = 'w-6 h-6',
-  color = 'border-white',
+  size = 'w-7 h-7',
+  color = 'border-primary',
 }) => {
   return (
     <div role="status" className="flex items-center justify-center">
