@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
+import TableActions from '../../../ui/TableActions';
 import { MdEdit, MdDelete, MdMoreVert, MdEmail, MdPhone, MdPerson, MdBusiness } from 'react-icons/md';
 
 const VendorList = () => {
@@ -119,50 +120,75 @@ const VendorList = () => {
                         <thead>
                             <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                                 <th className="py-4 px-4 font-semibold w-16">S#</th>
-                                <th className="py-4 px-4 font-semibold">Vendor Name</th>
-                                <th className="py-4 px-4 font-semibold">Contact Name</th>
-                                <th className="py-4 px-4 font-semibold">Email</th>
-                                <th className="py-4 px-4 font-semibold">Phone No</th>
+                                <th className="py-4 px-4 font-semibold">Vendor / Factory Name</th>
+                                <th className="py-4 px-4 font-semibold">Supply Category</th>
+                                <th className="py-4 px-4 font-semibold">Contact Person</th>
+                                <th className="py-4 px-4 font-semibold">City & Phone</th>
+                                <th className="py-4 px-4 font-semibold text-right">Opening Balance</th>
                                 <th className="py-4 px-4 font-semibold w-24 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={6} className="text-center py-12 text-sm"><Spinner /></td></tr>
+                                <tr><td colSpan={7} className="text-center py-12 text-sm"><Spinner /></td></tr>
                             ) : paginatedVendors.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No business merchant vendors registered yet.</td></tr>
+                                <tr><td colSpan={7} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No business merchant vendors registered yet.</td></tr>
                             ) : (
                                 paginatedVendors.map((vendor, idx) => {
                                     const serialNumber = startIndex + idx + 1;
+                                    const openBal = Number(vendor.opening_balance ?? vendor.balance ?? 0);
+                                    const balType = vendor.balance_type || 'Payable';
 
                                     return (
                                         <tr key={vendor.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
                                             <td className="py-3.5 px-4 text-gray-400">{serialNumber}</td>
-                                            <td className="py-3.5 px-4 font-bold text-primary dark:text-white flex items-center gap-1.5"><MdBusiness className="text-gray-400" size={16} />{vendor.vendor_name}</td>
-                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300"><span className="inline-flex items-center gap-1"><MdPerson size={14} className="text-gray-400" />{vendor.contact_name || '-'}</span></td>
-                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400"><span className="inline-flex items-center gap-1 font-mono">{vendor.email ? <><MdEmail size={14} className="text-gray-400" />{vendor.email}</> : '-'}</span></td>
-                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400"><span className="inline-flex items-center gap-1 font-mono">{vendor.phone_no ? <><MdPhone size={14} className="text-gray-400" />{vendor.phone_no}</> : vendor.cell_no ? <><MdPhone size={14} className="text-gray-400" />{vendor.cell_no}</> : '-'}</span></td>
-                                            <td className="py-3.5 px-4 text-center">
-                                                <div className="flex items-center justify-center space-x-3.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate('/Purchase/Vendor/Add', { state: { vendorRecord: vendor } })}
-                                                        className="text-gray-500 hover:text-primary transition duration-150 cursor-pointer"
-                                                        title="Edit Profile"
-                                                    >
-                                                        <MdEdit size={18} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteVendorRecord(vendor.id)}
-                                                        className="text-gray-500 hover:text-danger transition duration-150 cursor-pointer"
-                                                        title="Remove Account"
-                                                    >
-                                                        <MdDelete size={18} />
-                                                    </button>
+                                            <td className="py-3.5 px-4 font-bold text-primary dark:text-white">
+                                                <div className="flex items-center gap-1.5">
+                                                    <MdBusiness className="text-gray-400 shrink-0" size={16} />
+                                                    <span>{vendor.vendor_name || vendor.name}</span>
                                                 </div>
                                             </td>
-
+                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300">
+                                                <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                    {vendor.category || 'Tiles & Ceramics'}
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300">
+                                                <span className="inline-flex items-center gap-1">
+                                                    <MdPerson size={14} className="text-gray-400" />
+                                                    {vendor.contact_name || '-'}
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400">
+                                                <div className="flex flex-col gap-0.5">
+                                                    {vendor.city && <span className="font-bold text-slate-800 dark:text-slate-200">{vendor.city}</span>}
+                                                    <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                                                        {vendor.cell_no || vendor.phone_no || vendor.phone || '-'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3.5 px-4 text-right font-mono font-bold">
+                                                {openBal > 0 ? (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className={balType === 'Payable' ? 'text-rose-600' : 'text-emerald-600'}>
+                                                            Rs. {openBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 font-sans">
+                                                            {balType === 'Payable' ? 'Payable' : 'Advance'}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400">Rs. 0.00</span>
+                                                )}
+                                            </td>
+                                            <td className="py-3.5 px-4 text-center">
+                                                <TableActions
+                                                    onEdit={() => navigate('/Purchase/Vendor/Add', { state: { vendor } })}
+                                                    onDelete={() => handleDeleteVendorRecord(vendor.id)}
+                                                    editTitle="Edit Supplier"
+                                                    deleteTitle="Delete Supplier"
+                                                />
+                                            </td>
                                         </tr>
                                     );
                                 })
