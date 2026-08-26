@@ -130,7 +130,7 @@ const PurchaseReceiptList = () => {
           onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Receipt/Add`)}
           className="flex items-center gap-1.5 justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition shadow-sm cursor-pointer"
         >
-          <MdAdd size={18} /> + Add Purchase Receipt
+          <MdAdd size={18} /> Add Purchase Receipt
         </button>
       </div>
 
