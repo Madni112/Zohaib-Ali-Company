@@ -5,15 +5,18 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiTrash2, FiUser, FiUserCheck, FiX, FiCheck } from 'react-icons/fi';
+import { FiTrash2, FiUser, FiUserCheck, FiX, FiCheck, FiPrinter } from 'react-icons/fi';
+import { useAuth } from '../../../Context/Auth';
 
 const NewInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { tenantId } = useAuth();
   const editData = location.state?.invoice || location.state?.record || null;
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
+  const [submitAction, setSubmitAction] = useState<'save' | 'print'>('save');
 
   const [customersList, setCustomersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
@@ -312,6 +315,8 @@ const NewInvoice = () => {
         scenario_type: values.applyFbrTax ? values.taxScenario : 'Standard Retail Sale (No Tax)'
       };
 
+      let finalInvoiceId = editData?.id;
+
       if (editData && editData.id) {
         const { error: invoiceUpdateError } = await supabase
           .from('sales_invoices')
@@ -329,8 +334,8 @@ const NewInvoice = () => {
 
         if (invoiceError) throw invoiceError;
 
-        const newInvoiceId = insertedInvoice?.id;
-        const formattedInvCode = newInvoiceId ? `INV-${String(newInvoiceId).padStart(4, '0')}` : 'INV-Auto';
+        finalInvoiceId = insertedInvoice?.id;
+        const formattedInvCode = finalInvoiceId ? `INV-${String(finalInvoiceId).padStart(4, '0')}` : 'INV-Auto';
 
         // ── AUTO-CREATE DELIVERY CHALLANS PER UNIQUE WAREHOUSE ──
         try {
@@ -400,7 +405,11 @@ const NewInvoice = () => {
         toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
       }
       setShowCustomerModal(false);
-      navigate('/sales/invoice/list');
+      if (submitAction === 'print' && finalInvoiceId) {
+        navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/print/${finalInvoiceId}`);
+      } else {
+        navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/list`);
+      }
     } catch (err: any) { 
       toast.error('Submission failure: ' + err.message); 
     } finally { 
@@ -535,7 +544,7 @@ const NewInvoice = () => {
             setShowCustomerModal(true);
           }}
         >
-          {({ values, handleChange, setFieldValue, errors, touched, submitCount }) => {
+          {({ values, handleChange, setFieldValue, errors, touched, submitCount, submitForm }) => {
             const hasAttempted = submitCount > 0;
             const currentSubtotalValue = values.items.reduce((acc: number, item: any) => {
               return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
@@ -1384,16 +1393,33 @@ const NewInvoice = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-6 mt-6 border-t border-stroke dark:border-strokedark">
+                <div className="flex flex-wrap items-center justify-end gap-3 pt-6 mt-6 border-t border-stroke dark:border-strokedark">
                   <button
                     type="button"
-                    onClick={() => navigate('/sales/invoice/list')}
+                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/list`)}
                     className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                   >
                     Cancel
                   </button>
+
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={() => {
+                      setSubmitAction('print');
+                      submitForm();
+                    }}
+                    disabled={loading}
+                    className="rounded-xl bg-teal-600 hover:bg-teal-700 py-3 px-6 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                  >
+                    <FiPrinter size={15} /> <span>Save & Print</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitAction('save');
+                      submitForm();
+                    }}
                     disabled={loading}
                     className="rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 px-8 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                   >

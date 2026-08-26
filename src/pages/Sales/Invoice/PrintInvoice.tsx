@@ -234,12 +234,12 @@ const PrintInvoice = () => {
   const amountInWords = numberToWords(Math.round(grandTotal));
 
   return (
-    <div className="mx-auto max-w-4xl p-3 sm:p-6 md:p-8 bg-white text-slate-900 font-sans min-h-screen relative">
+    <div className="mx-auto max-w-4xl p-2 sm:p-4 md:p-6 bg-white text-slate-900 font-sans min-h-screen relative print:p-0 print:m-0 print:max-w-full">
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm;
+            margin: 6mm 8mm;
           }
           aside, nav, header, .no-print, button {
             display: none !important;
@@ -249,8 +249,24 @@ const PrintInvoice = () => {
           body {
             background: white !important;
             color: #0f172a !important;
+            font-size: 10.5px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+          .print-card {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+          }
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
+          }
+          th {
+            background-color: #0f172a !important;
+            color: white !important;
           }
         }
       `}</style>
@@ -272,7 +288,7 @@ const PrintInvoice = () => {
       </div>
 
       {/* ── Printable Invoice Document ─────────────────────────────────────────────── */}
-      <div className="border border-slate-300 rounded-2xl p-6 sm:p-8 bg-white shadow-sm print:border-none print:p-0">
+      <div className="print-card border border-slate-300 rounded-2xl p-5 sm:p-7 bg-white shadow-sm print:border-none print:p-0 print:shadow-none">
 
         {/* ── Top Header Brand ────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-slate-900 pb-5 mb-5 gap-4">
