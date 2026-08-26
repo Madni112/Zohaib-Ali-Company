@@ -16,10 +16,8 @@ import {
   MdSearch, 
   MdClear, 
   MdArrowBack, 
-  MdCheckCircle, 
   MdAccountBalance, 
-  MdKeyboardArrowDown,
-  MdWarning
+  MdKeyboardArrowDown
 } from 'react-icons/md';
 
 const AddPurchaseReturn = () => {
@@ -36,7 +34,7 @@ const AddPurchaseReturn = () => {
   const [bankAccountsList, setBankAccountsList] = useState<any[]>([]);
   const [purchaseOrdersList, setPurchaseOrdersList] = useState<any[]>([]);
 
-  // Warehouse Autocomplete State
+  // Warehouse Autocomplete State (Top Filter)
   const [warehouseSearchQuery, setWarehouseSearchQuery] = useState('');
   const [isWarehouseDropdownOpen, setIsWarehouseDropdownOpen] = useState(false);
   const [highlightedWarehouseIndex, setHighlightedWarehouseIndex] = useState(0);
@@ -45,7 +43,6 @@ const AddPurchaseReturn = () => {
   const [vendorSearchQuery, setVendorSearchQuery] = useState('');
   const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
   const [highlightedVendorIndex, setHighlightedVendorIndex] = useState(0);
-  const [selectedVendorObj, setSelectedVendorObj] = useState<any>(null);
 
   // PO Autocomplete State
   const [poSearchQuery, setPoSearchQuery] = useState('');
@@ -54,9 +51,12 @@ const AddPurchaseReturn = () => {
   const [selectedPoNo, setSelectedPoNo] = useState('');
   const [selectedPoObj, setSelectedPoObj] = useState<any>(null);
 
-  // Product Autocomplete per Row
-  const [activeItemSearchIdx, setActiveItemSearchIdx] = useState<number | null>(null);
-  const [highlightedProdIdx, setHighlightedProdIdx] = useState(0);
+  // SKU & Product Search States per row
+  const [activeSkuIndex, setActiveSkuIndex] = useState<number | null>(null);
+  const [highlightedSkuIndex, setHighlightedSkuIndex] = useState(0);
+
+  const [activeProdNameIndex, setActiveProdNameIndex] = useState<number | null>(null);
+  const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState(0);
 
   const warehouseContainerRef = useRef<HTMLDivElement>(null);
   const vendorContainerRef = useRef<HTMLDivElement>(null);
@@ -88,8 +88,10 @@ const AddPurchaseReturn = () => {
       if (poContainerRef.current && !poContainerRef.current.contains(e.target as Node)) {
         setIsPoDropdownOpen(false);
       }
-      if (!(e.target as HTMLElement).closest('.product-search-cell')) {
-        setActiveItemSearchIdx(null);
+      const target = e.target as HTMLElement;
+      if (!target.closest('.sku-container') && !target.closest('.prod-name-container')) {
+        setActiveSkuIndex(null);
+        setActiveProdNameIndex(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -139,8 +141,6 @@ const AddPurchaseReturn = () => {
         if (isEditMode && editData) {
           const vName = editData.vendor_name || '';
           setVendorSearchQuery(vName);
-          const matchedVendor = normalizedVendors.find(v => v.vendor_name.toLowerCase() === vName.toLowerCase());
-          if (matchedVendor) setSelectedVendorObj(matchedVendor);
 
           const whName = editData.source_warehouse || '';
           setWarehouseSearchQuery(whName);
@@ -155,6 +155,8 @@ const AddPurchaseReturn = () => {
           } else {
             setPoSearchQuery('-- General Return (Manual Items) --');
           }
+        } else if (normalizedLocs.length > 0) {
+          setWarehouseSearchQuery(normalizedLocs[0].name);
         }
       } catch (err: any) {
         toast.error('Failed to load return lookup metadata: ' + err.message);
@@ -193,7 +195,7 @@ const AddPurchaseReturn = () => {
     );
   });
 
-  // Helper to extract products bought from the selected vendor
+  // Extract products bought from the selected vendor
   const getVendorBoughtProducts = (vendorName: string) => {
     const vTrim = (vendorName || '').trim().toLowerCase();
     if (!vTrim) return [];
@@ -203,7 +205,6 @@ const AddPurchaseReturn = () => {
       return sName === vTrim || sName.includes(vTrim) || vTrim.includes(sName);
     });
 
-    // If a specific PO is selected, show items from that PO
     if (selectedPoNo && selectedPoObj && selectedPoObj.items) {
       return (selectedPoObj.items || []).map((item: any) => {
         const pName = item.itemName || item.product_name || '';
@@ -221,7 +222,6 @@ const AddPurchaseReturn = () => {
       });
     }
 
-    // Otherwise, collect all distinct items purchased from this vendor across all their POs
     const prodMap: Record<string, any> = {};
     matchedPurchases.forEach(pur => {
       (pur.items || []).forEach((item: any) => {
@@ -299,439 +299,473 @@ const AddPurchaseReturn = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl text-xs text-slate-800 dark:text-slate-200">
+    <div className="mx-auto max-w-full text-xs text-black dark:text-bodydark">
       
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <MdStore className="text-rose-600" size={24} />
-            {isEditMode ? 'Modify Purchase Return (Debit Note)' : 'Create Outbound Purchase Return (Debit Note)'}
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Return damaged or excess inventory to wholesale supplier and generate balanced debit note credit line
-          </p>
+      {/* Top Breadcrumb & Actions */}
+      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark mb-6">
+        <div className="border-b border-stroke py-4 px-6.5 dark:border-strokedark flex justify-between items-center">
+          <div>
+            <h3 className="font-semibold text-black dark:text-white text-base">
+              {isEditMode ? 'Modify Purchase Return (Debit Note)' : 'Create Outbound Purchase Return (Debit Note)'}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Return damaged or excess inventory to wholesale supplier and generate balanced debit note credit line
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-stroke rounded dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4 transition cursor-pointer text-primary"
+          >
+            <MdArrowBack size={15} /> Back to Log Registry
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`)}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer shadow-xs"
-        >
-          <MdArrowBack size={16} /> Back to Log Registry
-        </button>
-      </div>
 
-      <Formik
-        initialValues={isEditMode && editData ? {
-          returnNo: editData.return_no || '',
-          vendorName: editData.vendor_name || '',
-          sourceWarehouse: editData.source_warehouse || '',
-          purchaseNo: editData.purchase_no || editData.original_purchase_no || editData.metadata?.linkedPurchaseNo || '',
-          returnDate: editData.return_date || new Date().toISOString().split('T')[0],
-          paymentTerm: editData.payment_term || (editData.metadata?.cashAmount && editData.metadata?.bankAmount ? 'Split' : 'By Cash'),
-          selectedBankId: editData.metadata?.selectedBankId || '',
-          amountPaid: editData.amount_paid || 0,
-          cashAmountPaid: editData.metadata?.cashAmount || '',
-          bankAmountPaid: editData.metadata?.bankAmount || '',
-          remarks: editData.remarks || '',
-          items: editData.items || [{ itemName: '', sku: '', qty: 1, rate: 0, uom: 'Nos', maxQty: 99999 }]
-        } : {
-          returnNo: `RTN-${Date.now().toString().slice(-6)}`,
-          vendorName: '',
-          sourceWarehouse: '',
-          purchaseNo: '',
-          returnDate: new Date().toISOString().split('T')[0],
-          paymentTerm: 'On Credit',
-          selectedBankId: '',
-          amountPaid: 0,
-          cashAmountPaid: '',
-          bankAmountPaid: '',
-          remarks: '',
-          items: [{ itemName: '', sku: '', qty: 1, rate: 0, uom: 'Nos', maxQty: 99999 }]
-        }}
-        enableReinitialize={true}
-        validationSchema={validationSchema}
-        onSubmit={async (values) => {
-          if (!values.vendorName) {
-            toast.error('Validation Error: Please select a wholesale vendor first!');
-            return;
-          }
-          if (!values.sourceWarehouse) {
-            toast.error('Validation Error: Please select the source warehouse location!');
-            return;
-          }
-
-          let grossReturnSum = 0;
-          values.items.forEach((item: any) => {
-            grossReturnSum += (Number(item.qty || 0) * Number(item.rate || 0));
-          });
-
-          if (grossReturnSum <= 0) {
-            toast.error('Validation Error: Return items total value must be greater than 0 PKR!');
-            return;
-          }
-
-          let cashRefund = 0;
-          let bankRefund = 0;
-          let totalRefundCollected = 0;
-
-          if (values.paymentTerm === 'By Cash') {
-            cashRefund = Number(values.amountPaid) || 0;
-            totalRefundCollected = cashRefund;
-          } else if (values.paymentTerm === 'By Bank') {
-            bankRefund = Number(values.amountPaid) || 0;
-            totalRefundCollected = bankRefund;
-            if (!values.selectedBankId && bankRefund > 0) {
-              toast.error('Please select the receiving bank account.');
+        <Formik
+          initialValues={isEditMode && editData ? {
+            returnNo: editData.return_no || '',
+            vendorName: editData.vendor_name || '',
+            sourceWarehouse: editData.source_warehouse || (locations[0]?.name || 'Main Warehouse'),
+            purchaseNo: editData.purchase_no || editData.original_purchase_no || editData.metadata?.linkedPurchaseNo || '',
+            returnDate: editData.return_date || new Date().toISOString().split('T')[0],
+            paymentTerm: editData.payment_term || (editData.metadata?.cashAmount && editData.metadata?.bankAmount ? 'Split' : 'By Cash'),
+            selectedBankId: editData.metadata?.selectedBankId || '',
+            amountPaid: editData.amount_paid || 0,
+            cashAmountPaid: editData.metadata?.cashAmount || '',
+            bankAmountPaid: editData.metadata?.bankAmount || '',
+            remarks: editData.remarks || '',
+            items: (editData.items || []).map((i: any) => ({
+              skuCode: i.sku || i.skuCode || '',
+              itemName: i.itemName || i.product_name || '',
+              warehouse: i.warehouse || editData.source_warehouse || (locations[0]?.name || 'Main Warehouse'),
+              qty: Number(i.qty || i.quantity || 1),
+              rate: Number(i.rate || i.cost_price || 0),
+              uom: i.uom || 'Nos'
+            }))
+          } : {
+            returnNo: `RTN-${Date.now().toString().slice(-6)}`,
+            vendorName: '',
+            sourceWarehouse: locations[0]?.name || 'Central Warehouse A',
+            purchaseNo: '',
+            returnDate: new Date().toISOString().split('T')[0],
+            paymentTerm: 'On Credit',
+            selectedBankId: '',
+            amountPaid: 0,
+            cashAmountPaid: '',
+            bankAmountPaid: '',
+            remarks: '',
+            items: [{
+              skuCode: '',
+              itemName: '',
+              warehouse: locations[0]?.name || 'Central Warehouse A',
+              qty: 1,
+              rate: 0,
+              uom: 'Nos'
+            }]
+          }}
+          enableReinitialize={true}
+          validationSchema={validationSchema}
+          onSubmit={async (values) => {
+            if (!values.vendorName) {
+              toast.error('Validation Error: Please select a wholesale vendor first!');
               return;
             }
-          } else if (values.paymentTerm === 'Split') {
-            cashRefund = Number(values.cashAmountPaid) || 0;
-            bankRefund = Number(values.bankAmountPaid) || 0;
-            totalRefundCollected = cashRefund + bankRefund;
-            if (!values.selectedBankId && bankRefund > 0) {
-              toast.error('Please select the receiving bank account for the bank transfer refund.');
+            if (!values.sourceWarehouse) {
+              toast.error('Validation Error: Please select the source warehouse location!');
               return;
             }
-          }
 
-          if (totalRefundCollected > grossReturnSum) {
-            toast.error(`Validation Error: Refund collected (Rs. ${formatMoney(totalRefundCollected)}) cannot exceed the total return value (Rs. ${formatMoney(grossReturnSum)}).`);
-            return;
-          }
+            let grossReturnSum = 0;
+            values.items.forEach((item: any) => {
+              grossReturnSum += (Number(item.qty || 0) * Number(item.rate || 0));
+            });
 
-          try {
-            setLoading(true);
+            if (grossReturnSum <= 0) {
+              toast.error('Validation Error: Return items total value must be greater than 0 PKR!');
+              return;
+            }
 
-            // 1. Verify and check warehouse stock
-            for (const item of values.items) {
-              const reqQty = Number(item.qty || 0);
-              const pName = item.itemName;
+            let cashRefund = 0;
+            let bankRefund = 0;
+            let totalRefundCollected = 0;
 
-              const { data: whStock } = await supabase
-                .from('warehouse_inventory')
-                .select('id, quantity')
-                .ilike('product_name', pName)
-                .ilike('warehouse_name', values.sourceWarehouse)
-                .maybeSingle();
-
-              const availableQty = Number(whStock?.quantity || 0);
-
-              if (!isEditMode && reqQty > availableQty) {
-                toast.error(`Stock Shortage Alert: '${pName}' only has ${availableQty} units available in ${values.sourceWarehouse}.`);
-                setLoading(false);
+            if (values.paymentTerm === 'By Cash') {
+              cashRefund = Number(values.amountPaid) || 0;
+              totalRefundCollected = cashRefund;
+            } else if (values.paymentTerm === 'By Bank') {
+              bankRefund = Number(values.amountPaid) || 0;
+              totalRefundCollected = bankRefund;
+              if (!values.selectedBankId && bankRefund > 0) {
+                toast.error('Please select the receiving bank account.');
+                return;
+              }
+            } else if (values.paymentTerm === 'Split') {
+              cashRefund = Number(values.cashAmountPaid) || 0;
+              bankRefund = Number(values.bankAmountPaid) || 0;
+              totalRefundCollected = cashRefund + bankRefund;
+              if (!values.selectedBankId && bankRefund > 0) {
+                toast.error('Please select the receiving bank account for the bank transfer refund.');
                 return;
               }
             }
 
-            const databasePayload = {
-              return_no: values.returnNo,
-              vendor_name: values.vendorName,
-              source_warehouse: values.sourceWarehouse,
-              purchase_no: values.purchaseNo || selectedPoNo || null,
-              return_date: values.returnDate,
-              payment_term: values.paymentTerm,
-              remarks: values.remarks.trim(),
-              total_amount: grossReturnSum,
-              amount_paid: totalRefundCollected,
-              items: values.items,
-              metadata: { 
-                selectedBankId: (values.paymentTerm === 'By Bank' || values.paymentTerm === 'Split') ? values.selectedBankId : null,
-                linkedPurchaseNo: values.purchaseNo || selectedPoNo || null,
-                cashAmount: values.paymentTerm === 'Split' ? cashRefund : (values.paymentTerm === 'By Cash' ? totalRefundCollected : 0),
-                bankAmount: values.paymentTerm === 'Split' ? bankRefund : (values.paymentTerm === 'By Bank' ? totalRefundCollected : 0),
-                paymentTerm: values.paymentTerm
-              }
-            };
-
-            // 2. Process Stock Adjustments
-            if (isEditMode) {
-              // Roll back old return stock (+)
-              const { data: oldRtn } = await supabase
-                .from('purchase_returns')
-                .select('items, source_warehouse')
-                .eq('id', editData.id)
-                .single();
-
-              if (oldRtn?.items) {
-                for (const oldItem of oldRtn.items) {
-                  const oQty = Number(oldItem.qty || 0);
-                  const oName = oldItem.itemName;
-
-                  // Restore product master
-                  const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', oName).maybeSingle();
-                  if (prod) {
-                    await supabase.from('products').update({ current_stock: (Number(prod.current_stock) || 0) + oQty }).ilike('product_name', oName);
-                  }
-
-                  // Restore warehouse stock
-                  const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', oName).ilike('warehouse_name', oldRtn.source_warehouse).maybeSingle();
-                  if (whRow) {
-                    await supabase.from('warehouse_inventory').update({ quantity: (Number(whRow.quantity) || 0) + oQty }).eq('id', whRow.id);
-                  }
-                }
-              }
-
-              // Update record
-              const { error: updateErr } = await supabase
-                .from('purchase_returns')
-                .update(databasePayload)
-                .eq('id', editData.id);
-              if (updateErr) throw updateErr;
-
-              // Deduct new return stock (-)
-              for (const newItem of values.items) {
-                const nQty = Number(newItem.qty || 0);
-                const nName = newItem.itemName;
-
-                const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', nName).maybeSingle();
-                if (prod) {
-                  await supabase.from('products').update({ current_stock: Math.max(0, (Number(prod.current_stock) || 0) - nQty) }).ilike('product_name', nName);
-                }
-
-                const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', nName).ilike('warehouse_name', values.sourceWarehouse).maybeSingle();
-                if (whRow) {
-                  await supabase.from('warehouse_inventory').update({ quantity: Math.max(0, (Number(whRow.quantity) || 0) - nQty) }).eq('id', whRow.id);
-                }
-              }
-
-            } else {
-              // Insert new return record
-              const { error: insertErr } = await supabase
-                .from('purchase_returns')
-                .insert([databasePayload]);
-              if (insertErr) throw insertErr;
-
-              // Deduct stock (-)
-              for (const item of values.items) {
-                const qty = Number(item.qty || 0);
-                const pName = item.itemName;
-
-                const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', pName).maybeSingle();
-                if (prod) {
-                  await supabase.from('products').update({ current_stock: Math.max(0, (Number(prod.current_stock) || 0) - qty) }).ilike('product_name', pName);
-                }
-
-                const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', values.sourceWarehouse).maybeSingle();
-                if (whRow) {
-                  await supabase.from('warehouse_inventory').update({ quantity: Math.max(0, (Number(whRow.quantity) || 0) - qty) }).eq('id', whRow.id);
-                }
-              }
+            if (totalRefundCollected > grossReturnSum) {
+              toast.error(`Validation Error: Refund collected (Rs. ${formatMoney(totalRefundCollected)}) cannot exceed the total return value (Rs. ${formatMoney(grossReturnSum)}).`);
+              return;
             }
 
-            toast.success(isEditMode ? 'Purchase Return updated successfully!' : 'Purchase Return (Debit Note) logged successfully!');
-            navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`);
+            try {
+              setLoading(true);
 
-          } catch (err: any) {
-            toast.error('Submission Error: ' + err.message);
-          } finally {
-            setLoading(false);
-          }
-        }}
-      >
-        {({ handleChange, values, setFieldValue, errors, touched }) => {
-          let computedGrossTotal = 0;
-          values.items.forEach((i: any) => {
-            computedGrossTotal += (Number(i.qty || 0) * Number(i.rate || 0));
-          });
+              // 1. Verify and check warehouse stock
+              for (const item of values.items) {
+                const reqQty = Number(item.qty || 0);
+                const pName = item.itemName;
+                const effectiveWh = item.warehouse || values.sourceWarehouse;
 
-          const currentLiquidRefund = values.paymentTerm === 'Split'
-            ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0))
-            : (values.paymentTerm === 'On Credit' ? 0 : Number(values.amountPaid || 0));
+                const { data: whStock } = await supabase
+                  .from('warehouse_inventory')
+                  .select('id, quantity')
+                  .ilike('product_name', pName)
+                  .ilike('warehouse_name', effectiveWh)
+                  .maybeSingle();
 
-          const netCreditLineDebt = Math.max(0, computedGrossTotal - currentLiquidRefund);
+                const availableQty = Number(whStock?.quantity || 0);
 
-          return (
-            <Form className="space-y-6">
-              
-              {/* ── TOP SECTION: 4 SEARCHABLE HEADER CONTROLS ── */}
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs grid grid-cols-1 md:grid-cols-12 gap-4">
+                if (!isEditMode && reqQty > availableQty) {
+                  toast.error(`Stock Shortage Alert: '${pName}' only has ${availableQty} units available in ${effectiveWh}.`);
+                  setLoading(false);
+                  return;
+                }
+              }
+
+              const databasePayload = {
+                return_no: values.returnNo,
+                vendor_name: values.vendorName,
+                source_warehouse: values.sourceWarehouse,
+                purchase_no: values.purchaseNo || selectedPoNo || null,
+                return_date: values.returnDate,
+                payment_term: values.paymentTerm,
+                remarks: values.remarks.trim(),
+                total_amount: grossReturnSum,
+                amount_paid: totalRefundCollected,
+                items: values.items.map((i: any) => ({
+                  sku: i.skuCode || '',
+                  itemName: i.itemName,
+                  warehouse: i.warehouse || values.sourceWarehouse,
+                  qty: Number(i.qty || 0),
+                  rate: Number(i.rate || 0),
+                  uom: i.uom || 'Nos'
+                })),
+                metadata: { 
+                  selectedBankId: (values.paymentTerm === 'By Bank' || values.paymentTerm === 'Split') ? values.selectedBankId : null,
+                  linkedPurchaseNo: values.purchaseNo || selectedPoNo || null,
+                  cashAmount: values.paymentTerm === 'Split' ? cashRefund : (values.paymentTerm === 'By Cash' ? totalRefundCollected : 0),
+                  bankAmount: values.paymentTerm === 'Split' ? bankRefund : (values.paymentTerm === 'By Bank' ? totalRefundCollected : 0),
+                  paymentTerm: values.paymentTerm
+                }
+              };
+
+              // 2. Process Stock Adjustments
+              if (isEditMode) {
+                // Roll back old return stock (+)
+                const { data: oldRtn } = await supabase
+                  .from('purchase_returns')
+                  .select('items, source_warehouse')
+                  .eq('id', editData.id)
+                  .single();
+
+                if (oldRtn?.items) {
+                  for (const oldItem of oldRtn.items) {
+                    const oQty = Number(oldItem.qty || oldItem.quantity || 0);
+                    const oName = oldItem.itemName || oldItem.product_name;
+                    const oWh = oldItem.warehouse || oldRtn.source_warehouse;
+
+                    // Restore product master
+                    const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', oName).maybeSingle();
+                    if (prod) {
+                      await supabase.from('products').update({ current_stock: (Number(prod.current_stock) || 0) + oQty }).ilike('product_name', oName);
+                    }
+
+                    // Restore warehouse stock
+                    const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', oName).ilike('warehouse_name', oWh).maybeSingle();
+                    if (whRow) {
+                      await supabase.from('warehouse_inventory').update({ quantity: (Number(whRow.quantity) || 0) + oQty }).eq('id', whRow.id);
+                    }
+                  }
+                }
+
+                // Update record
+                const { error: updateErr } = await supabase
+                  .from('purchase_returns')
+                  .update(databasePayload)
+                  .eq('id', editData.id);
+                if (updateErr) throw updateErr;
+
+                // Deduct new return stock (-)
+                for (const newItem of values.items) {
+                  const nQty = Number(newItem.qty || 0);
+                  const nName = newItem.itemName;
+                  const nWh = newItem.warehouse || values.sourceWarehouse;
+
+                  const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', nName).maybeSingle();
+                  if (prod) {
+                    await supabase.from('products').update({ current_stock: Math.max(0, (Number(prod.current_stock) || 0) - nQty) }).ilike('product_name', nName);
+                  }
+
+                  const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', nName).ilike('warehouse_name', nWh).maybeSingle();
+                  if (whRow) {
+                    await supabase.from('warehouse_inventory').update({ quantity: Math.max(0, (Number(whRow.quantity) || 0) - nQty) }).eq('id', whRow.id);
+                  }
+                }
+
+              } else {
+                // Insert new return record
+                const { error: insertErr } = await supabase
+                  .from('purchase_returns')
+                  .insert([databasePayload]);
+                if (insertErr) throw insertErr;
+
+                // Deduct stock (-)
+                for (const item of values.items) {
+                  const qty = Number(item.qty || 0);
+                  const pName = item.itemName;
+                  const effWh = item.warehouse || values.sourceWarehouse;
+
+                  const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', pName).maybeSingle();
+                  if (prod) {
+                    await supabase.from('products').update({ current_stock: Math.max(0, (Number(prod.current_stock) || 0) - qty) }).ilike('product_name', pName);
+                  }
+
+                  const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', effWh).maybeSingle();
+                  if (whRow) {
+                    await supabase.from('warehouse_inventory').update({ quantity: Math.max(0, (Number(whRow.quantity) || 0) - qty) }).eq('id', whRow.id);
+                  }
+                }
+              }
+
+              toast.success(isEditMode ? 'Purchase Return updated successfully!' : 'Purchase Return (Debit Note) logged successfully!');
+              navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`);
+
+            } catch (err: any) {
+              toast.error('Submission Error: ' + err.message);
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          {({ handleChange, values, setFieldValue, errors, touched }) => {
+            let computedGrossTotal = 0;
+            values.items.forEach((i: any) => {
+              computedGrossTotal += (Number(i.qty || 0) * Number(i.rate || 0));
+            });
+
+            const currentLiquidRefund = values.paymentTerm === 'Split'
+              ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0))
+              : (values.paymentTerm === 'On Credit' ? 0 : Number(values.amountPaid || 0));
+
+            const netCreditLineDebt = Math.max(0, computedGrossTotal - currentLiquidRefund);
+
+            const activeVendor = (values.vendorName || vendorSearchQuery || '').trim();
+            const boughtProducts = getVendorBoughtProducts(activeVendor);
+
+            const handleProductSelection = (p: any, rowIndex: number) => {
+              const displaySku = p.item_sr_no || p.sku || `SKU-${p.id || ''}`;
+              const price = Number(p.purchase_price ?? p.cost_price ?? p.rate ?? 0);
+              const updatedItems = [...values.items];
+              const cur = updatedItems[rowIndex] || {};
+
+              updatedItems[rowIndex] = {
+                ...cur,
+                skuCode: displaySku,
+                itemName: p.product_name,
+                rate: price,
+                uom: p.uom || 'Nos'
+              };
+
+              setFieldValue('items', updatedItems);
+              setActiveProdNameIndex(null);
+              setActiveSkuIndex(null);
+            };
+
+            return (
+              <Form className="p-6.5 space-y-6">
                 
-                {/* 1. Debit Note # (2 cols) */}
-                <div className="md:col-span-2">
-                  <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                    Debit Note Return #:
-                  </label>
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl font-mono font-black text-rose-600 dark:text-rose-400 border border-slate-200 dark:border-slate-700 text-xs">
-                    {values.returnNo}
-                  </div>
-                </div>
-
-                {/* 2. Target Wholesale Vendor (Searchable Autocomplete - 4 cols) */}
-                <div className="md:col-span-4 relative" ref={vendorContainerRef}>
-                  <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1 flex items-center gap-1.5">
-                    <MdPerson size={15} className="text-rose-600" /> Target Vendor Profile: *
-                  </label>
+                {/* ── TOP METADATA BAR ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   
-                  <div className="relative">
+                  {/* Return Memo ID */}
+                  <div>
+                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
+                      Debit Note Return #:
+                    </label>
                     <input
                       type="text"
-                      disabled={isEditMode}
-                      value={vendorSearchQuery}
-                      onFocus={() => setIsVendorDropdownOpen(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setHighlightedVendorIndex(prev => Math.min(prev + 1, filteredVendors.length - 1));
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setHighlightedVendorIndex(prev => Math.max(prev - 1, 0));
-                        } else if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (filteredVendors[highlightedVendorIndex]) {
-                            const v = filteredVendors[highlightedVendorIndex];
-                            setFieldValue('vendorName', v.vendor_name);
-                            setVendorSearchQuery(v.vendor_name);
-                            setSelectedVendorObj(v);
+                      readOnly
+                      value={values.returnNo}
+                      className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-gray-50 dark:bg-meta-4/20 font-bold font-mono text-danger outline-none text-xs"
+                    />
+                  </div>
+
+                  {/* Processing Date */}
+                  <div>
+                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
+                      Processing Return Date: *
+                    </label>
+                    <input
+                      type="date"
+                      name="returnDate"
+                      onChange={handleChange}
+                      value={values.returnDate}
+                      className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-white dark:bg-boxdark font-semibold outline-none text-black dark:text-white text-xs focus:border-primary"
+                    />
+                  </div>
+
+                  {/* Wholesale Vendor (Searchable Autocomplete) */}
+                  <div className="relative" ref={vendorContainerRef}>
+                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1 flex items-center justify-between">
+                      <span>Wholesale Vendor: *</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled={isEditMode}
+                        value={vendorSearchQuery}
+                        onFocus={() => setIsVendorDropdownOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setHighlightedVendorIndex(prev => Math.min(prev + 1, filteredVendors.length - 1));
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setHighlightedVendorIndex(prev => Math.max(prev - 1, 0));
+                          } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (filteredVendors[highlightedVendorIndex]) {
+                              const v = filteredVendors[highlightedVendorIndex];
+                              setFieldValue('vendorName', v.vendor_name);
+                              setVendorSearchQuery(v.vendor_name);
+                              setIsVendorDropdownOpen(false);
+                            }
+                          } else if (e.key === 'Escape') {
                             setIsVendorDropdownOpen(false);
                           }
-                        } else if (e.key === 'Escape') {
-                          setIsVendorDropdownOpen(false);
-                        }
-                      }}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setVendorSearchQuery(val);
-                        setFieldValue('vendorName', val);
-                        setIsVendorDropdownOpen(true);
-                        setHighlightedVendorIndex(0);
-                        if (!val) setSelectedVendorObj(null);
-                      }}
-                      placeholder="Type to search vendor name, contact, or city..."
-                      className={`w-full border rounded-xl p-2.5 pr-9 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs ${
-                        touched.vendorName && errors.vendorName ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-rose-600'
-                      }`}
-                    />
+                        }}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setVendorSearchQuery(val);
+                          setFieldValue('vendorName', val);
+                          setIsVendorDropdownOpen(true);
+                          setHighlightedVendorIndex(0);
+                        }}
+                        placeholder="Type to search vendor..."
+                        className={`w-full rounded border p-2 bg-white dark:bg-boxdark font-bold text-black dark:text-white text-xs outline-none ${
+                          touched.vendorName && errors.vendorName ? 'border-red-500' : 'border-stroke dark:border-strokedark focus:border-primary'
+                        }`}
+                      />
 
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      {values.vendorName && !isEditMode && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFieldValue('vendorName', '');
-                            setVendorSearchQuery('');
-                            setSelectedVendorObj(null);
-                          }}
-                          className="text-slate-400 hover:text-rose-500"
-                        >
-                          <MdClear size={15} />
-                        </button>
-                      )}
-                      <MdSearch className="text-slate-400" size={16} />
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {values.vendorName && !isEditMode && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFieldValue('vendorName', '');
+                              setVendorSearchQuery('');
+                            }}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <MdClear size={14} />
+                          </button>
+                        )}
+                        <MdSearch className="text-gray-400" size={16} />
+                      </div>
                     </div>
+
+                    {/* Vendor Dropdown */}
+                    {isVendorDropdownOpen && !isEditMode && (
+                      <div className="absolute left-0 top-full mt-1 z-[99999] w-full max-h-56 overflow-y-auto bg-white dark:bg-[#1A222C] border border-stroke dark:border-strokedark rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredVendors.length > 0 ? (
+                          filteredVendors.map((v, vIdx) => (
+                            <div
+                              key={v.id}
+                              onMouseEnter={() => setHighlightedVendorIndex(vIdx)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setFieldValue('vendorName', v.vendor_name);
+                                setVendorSearchQuery(v.vendor_name);
+                                setIsVendorDropdownOpen(false);
+                              }}
+                              className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${
+                                highlightedVendorIndex === vIdx || values.vendorName === v.vendor_name
+                                  ? 'bg-primary/10 text-primary font-bold'
+                                  : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-black dark:text-white'
+                              }`}
+                            >
+                              <div>
+                                <p className="font-bold">{v.vendor_name}</p>
+                                <p className="text-[10px] text-gray-400">{v.contact_name} {v.phone ? `• ${v.phone}` : ''}</p>
+                              </div>
+                              {v.city && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-500 font-mono">{v.city}</span>}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-3 text-center text-xs text-gray-400 italic">No matching vendors found</div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Vendor Dropdown */}
-                  {isVendorDropdownOpen && !isEditMode && (
-                    <div className="absolute left-0 top-full mt-1.5 z-[9999] w-full max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                      {filteredVendors.length > 0 ? (
-                        filteredVendors.map((vendor, vIdx) => (
-                          <div
-                            key={vendor.id}
-                            onMouseEnter={() => setHighlightedVendorIndex(vIdx)}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setFieldValue('vendorName', vendor.vendor_name);
-                              setVendorSearchQuery(vendor.vendor_name);
-                              setSelectedVendorObj(vendor);
-                              setIsVendorDropdownOpen(false);
-                            }}
-                            className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                              highlightedVendorIndex === vIdx || values.vendorName === vendor.vendor_name
-                                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                                : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-xs">{vendor.vendor_name}</span>
-                              {(vendor.contact_name || vendor.phone) && (
-                                <span className="text-[10px] text-slate-400">
-                                  {vendor.contact_name} {vendor.phone ? `• ${vendor.phone}` : ''}
-                                </span>
-                              )}
-                            </div>
-                            {vendor.city && (
-                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">
-                                {vendor.city}
-                              </span>
-                            )}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-3 text-center text-xs text-slate-400 italic">No matching vendors found</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Source Warehouse (Searchable Autocomplete - 3 cols) */}
-                <div className="md:col-span-3 relative" ref={warehouseContainerRef}>
-                  <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1 flex items-center gap-1.5">
-                    <MdStore size={15} className="text-rose-600" /> Source Warehouse / Location: *
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={warehouseSearchQuery}
-                      onFocus={(e) => {
-                        setIsWarehouseDropdownOpen(true);
-                        e.target.select();
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setHighlightedWarehouseIndex(prev => Math.min(prev + 1, filteredWarehouses.length - 1));
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setHighlightedWarehouseIndex(prev => Math.max(prev - 1, 0));
-                        } else if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (filteredWarehouses[highlightedWarehouseIndex]) {
-                            const wh = filteredWarehouses[highlightedWarehouseIndex];
-                            setFieldValue('sourceWarehouse', wh.name);
-                            setWarehouseSearchQuery(wh.name);
+                  {/* Primary Pull Warehouse Location */}
+                  <div className="relative" ref={warehouseContainerRef}>
+                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
+                      Source Warehouse / Location: *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={warehouseSearchQuery}
+                        onFocus={(e) => {
+                          setIsWarehouseDropdownOpen(true);
+                          e.target.select();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setHighlightedWarehouseIndex(prev => Math.min(prev + 1, filteredWarehouses.length - 1));
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setHighlightedWarehouseIndex(prev => Math.max(prev - 1, 0));
+                          } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (filteredWarehouses[highlightedWarehouseIndex]) {
+                              const wh = filteredWarehouses[highlightedWarehouseIndex];
+                              setFieldValue('sourceWarehouse', wh.name);
+                              setWarehouseSearchQuery(wh.name);
+                              setIsWarehouseDropdownOpen(false);
+                            }
+                          } else if (e.key === 'Escape') {
                             setIsWarehouseDropdownOpen(false);
                           }
-                        } else if (e.key === 'Escape') {
-                          setIsWarehouseDropdownOpen(false);
-                        }
-                      }}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setWarehouseSearchQuery(val);
-                        setFieldValue('sourceWarehouse', val);
-                        setIsWarehouseDropdownOpen(true);
-                        setHighlightedWarehouseIndex(0);
-                      }}
-                      placeholder="Type or select pull location..."
-                      className={`w-full border rounded-xl p-2.5 pr-9 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs ${
-                        touched.sourceWarehouse && errors.sourceWarehouse ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-rose-600'
-                      }`}
-                    />
-
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      {values.sourceWarehouse && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFieldValue('sourceWarehouse', '');
-                            setWarehouseSearchQuery('');
-                          }}
-                          className="text-slate-400 hover:text-rose-500"
-                        >
-                          <MdClear size={15} />
-                        </button>
-                      )}
-                      <MdKeyboardArrowDown className="text-slate-400" size={16} />
+                        }}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWarehouseSearchQuery(val);
+                          setFieldValue('sourceWarehouse', val);
+                          setIsWarehouseDropdownOpen(true);
+                          setHighlightedWarehouseIndex(0);
+                        }}
+                        placeholder="Type pull location..."
+                        className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-white dark:bg-boxdark font-bold text-black dark:text-white text-xs outline-none focus:border-primary"
+                      />
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                        <MdKeyboardArrowDown className="text-gray-400" size={16} />
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Warehouse Dropdown */}
-                  {isWarehouseDropdownOpen && (
-                    <div className="absolute left-0 top-full mt-1.5 z-[9999] w-full max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                      {filteredWarehouses.length > 0 ? (
-                        filteredWarehouses.map((wh, wIdx) => (
+                    {/* Warehouse Dropdown */}
+                    {isWarehouseDropdownOpen && (
+                      <div className="absolute left-0 top-full mt-1 z-[99999] w-full max-h-52 overflow-y-auto bg-white dark:bg-[#1A222C] border border-stroke dark:border-strokedark rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredWarehouses.map((wh, wIdx) => (
                           <div
                             key={wh.id}
                             onMouseEnter={() => setHighlightedWarehouseIndex(wIdx)}
@@ -741,511 +775,349 @@ const AddPurchaseReturn = () => {
                               setWarehouseSearchQuery(wh.name);
                               setIsWarehouseDropdownOpen(false);
                             }}
-                            className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                            className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${
                               highlightedWarehouseIndex === wIdx || values.sourceWarehouse === wh.name
-                                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                                : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                ? 'bg-primary/10 text-primary font-bold'
+                                : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-black dark:text-white'
                             }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <MdStore className="text-rose-600" size={15} />
-                              <span className="font-bold text-xs">{wh.name}</span>
-                            </div>
-                            {wh.code && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-mono">
-                                {wh.code}
-                              </span>
-                            )}
+                            <span className="font-bold">{wh.name}</span>
+                            {wh.code && <span className="text-[10px] text-gray-400 font-mono">{wh.code}</span>}
                           </div>
-                        ))
-                      ) : (
-                        <div className="p-3 text-center text-xs text-slate-400 italic">No matching warehouses found</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. Processing Return Date (3 cols) */}
-                <div className="md:col-span-3">
-                  <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                    Processing Return Date: *
-                  </label>
-                  <input
-                    type="date"
-                    name="returnDate"
-                    onChange={handleChange}
-                    value={values.returnDate}
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 font-bold outline-none text-slate-900 dark:text-white text-xs focus:border-rose-600"
-                  />
-                </div>
-
-              </div>
-
-              {/* ── MIDDLE SECTION: OPTIONAL LINKED PURCHASE ORDER ── */}
-              {values.vendorName && (
-                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 relative" ref={poContainerRef}>
-                  <label className="block text-slate-700 dark:text-slate-300 font-bold uppercase text-[11px] mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <MdReceipt size={15} className="text-rose-600" /> Link to Specific Purchase Consignment (Optional):
-                    </span>
-                    {selectedPoNo && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedPoNo('');
-                          setSelectedPoObj(null);
-                          setPoSearchQuery('-- General Return (Manual Items) --');
-                          setFieldValue('purchaseNo', '');
-                        }}
-                        className="text-[10px] text-rose-600 hover:underline font-bold"
-                      >
-                        Clear Selection (General Return)
-                      </button>
+                        ))}
+                      </div>
                     )}
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={poSearchQuery}
-                      onFocus={(e) => {
-                        setIsPoDropdownOpen(true);
-                        e.target.select();
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setHighlightedPoIndex(prev => Math.min(prev + 1, filteredPurchases.length));
-                        } else if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setHighlightedPoIndex(prev => Math.max(prev - 1, 0));
-                        } else if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (highlightedPoIndex === 0) {
-                            setSelectedPoNo('');
-                            setSelectedPoObj(null);
-                            setPoSearchQuery('-- General Return (Manual Items) --');
-                            setFieldValue('purchaseNo', '');
-                            setIsPoDropdownOpen(false);
-                          } else if (filteredPurchases[highlightedPoIndex - 1]) {
-                            const p = filteredPurchases[highlightedPoIndex - 1];
-                            setSelectedPoNo(p.purchase_no);
-                            setSelectedPoObj(p);
-                            setPoSearchQuery(p.purchase_no);
-                            setFieldValue('purchaseNo', p.purchase_no);
-                            if (p.target_warehouse) {
-                              setFieldValue('sourceWarehouse', p.target_warehouse);
-                              setWarehouseSearchQuery(p.target_warehouse);
-                            }
-                            if (p.items && p.items.length > 0) {
-                              setFieldValue('items', p.items.map((i: any) => ({
-                                itemName: i.itemName || i.product_name,
-                                sku: i.sku || '',
-                                qty: Number(i.qty || i.quantity || 1),
-                                rate: Number(i.rate || i.cost_price || 0),
-                                uom: i.uom || 'Nos',
-                                maxQty: Number(i.qty || i.quantity || 9999)
-                              })));
-                            }
-                            setIsPoDropdownOpen(false);
-                          }
-                        } else if (e.key === 'Escape') {
-                          setIsPoDropdownOpen(false);
-                        }
-                      }}
-                      onChange={(e) => {
-                        setPoSearchQuery(e.target.value);
-                        setIsPoDropdownOpen(true);
-                        setHighlightedPoIndex(0);
-                      }}
-                      placeholder="Search PO # (e.g. PUR-275918), date, or warehouse..."
-                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 pr-9 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-rose-600"
-                    />
-
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      <MdKeyboardArrowDown className="text-slate-400" size={16} />
-                    </div>
                   </div>
 
-                  {/* PO Dropdown */}
-                  {isPoDropdownOpen && (
-                    <div className="absolute left-4 right-4 top-full mt-1 z-[9999] max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                      <div
-                        onMouseEnter={() => setHighlightedPoIndex(0)}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setSelectedPoNo('');
-                          setSelectedPoObj(null);
-                          setPoSearchQuery('-- General Return (Manual Items) --');
-                          setFieldValue('purchaseNo', '');
-                          setIsPoDropdownOpen(false);
-                        }}
-                        className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                          highlightedPoIndex === 0 || !selectedPoNo
-                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                        }`}
-                      >
-                        <span className="font-bold">-- General Return (Manual Line Entry) --</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">
-                          General
-                        </span>
-                      </div>
-
-                      {filteredPurchases.map((pur, pIdx) => (
-                        <div
-                          key={pur.id}
-                          onMouseEnter={() => setHighlightedPoIndex(pIdx + 1)}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setSelectedPoNo(pur.purchase_no);
-                            setSelectedPoObj(pur);
-                            setPoSearchQuery(pur.purchase_no);
-                            setFieldValue('purchaseNo', pur.purchase_no);
-                            if (pur.target_warehouse) {
-                              setFieldValue('sourceWarehouse', pur.target_warehouse);
-                              setWarehouseSearchQuery(pur.target_warehouse);
-                            }
-                            if (pur.items && pur.items.length > 0) {
-                              setFieldValue('items', pur.items.map((i: any) => ({
-                                itemName: i.itemName || i.product_name,
-                                sku: i.sku || '',
-                                qty: Number(i.qty || i.quantity || 1),
-                                rate: Number(i.rate || i.cost_price || 0),
-                                uom: i.uom || 'Nos',
-                                maxQty: Number(i.qty || i.quantity || 9999)
-                              })));
-                            }
-                            setIsPoDropdownOpen(false);
-                            toast.success(`Consignment ${pur.purchase_no} items loaded!`);
-                          }}
-                          className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                            highlightedPoIndex === (pIdx + 1) || selectedPoNo === pur.purchase_no
-                              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                              : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                          }`}
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-mono font-black text-rose-600 dark:text-rose-400 text-xs">{pur.purchase_no}</span>
-                            <span className="text-[10px] text-slate-400">{pur.purchase_date || 'N/A'} • {pur.target_warehouse || 'Warehouse'}</span>
-                          </div>
-                          <strong className="font-mono font-black text-slate-900 dark:text-white">Rs. {formatMoney(pur.total_amount)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}
-              <div className="bg-white dark:bg-boxdark rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <h3 className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                    <MdReceipt className="text-rose-600" size={18} /> Returned Product Inventory Manifest
-                  </h3>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    Total Return Line Items: <strong>{values.items.length}</strong>
-                  </span>
                 </div>
 
-                <FieldArray name="items">
-                  {({ push, remove }) => (
-                    <div className="overflow-x-auto overflow-y-visible min-h-[280px] pb-20">
-                      <table className="w-full table-auto border-collapse text-left text-xs">
-                        <thead>
-                          <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-black uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                            <th className="p-3 w-12 text-center">S#</th>
-                            <th className="p-3 min-w-[280px]">Product / Item Description (Search)</th>
-                            <th className="p-3 w-28 text-center">UOM Unit</th>
-                            <th className="p-3 w-36 text-center">Return Quantity</th>
-                            <th className="p-3 w-40 text-right">Cost Price (PKR)</th>
-                            <th className="p-3 w-44 text-right pr-4">Net Offset (PKR)</th>
-                            <th className="p-3 w-16 text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                          {values.items.map((item: any, idx: number) => {
-                            const lineTotal = (Number(item.qty || 0) * Number(item.rate || 0));
+                {/* ── RETURNED PRODUCT INVENTORY MANIFEST TABLE (EXACT MATCH TO PURCHASES PAGE) ── */}
+                <div className="overflow-visible">
+                  <FieldArray name="items">
+                    {({ push, remove }) => (
+                      <div className="border border-stroke dark:border-strokedark rounded-sm overflow-visible bg-white dark:bg-boxdark">
+                        <table className="w-full table-auto border-collapse text-left text-xs">
+                          <thead>
+                            <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
+                              <th className="p-3 w-10 text-center">S#</th>
+                              <th className="p-3 w-48">SKU Code (Search)</th>
+                              <th className="p-3 min-w-[280px]">Product Description</th>
+                              <th className="p-3 w-44">Destination Warehouse</th>
+                              <th className="p-3 w-36 text-center">Arrived Qty (Boxes / Pcs / Sq.M)</th>
+                              <th className="p-3 w-32 text-right">Cost Price (PKR)</th>
+                              <th className="p-3 w-36 text-right pr-4">Net Total Line</th>
+                              <th className="p-3 w-12 text-center">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-stroke dark:divide-strokedark">
+                            {values.items.map((item: any, idx: number) => {
+                              const lineTotal = (Number(item.qty || 0) * Number(item.rate || 0));
 
-                            const activeVendor = (values.vendorName || vendorSearchQuery || '').trim();
-                            const boughtProducts = getVendorBoughtProducts(activeVendor);
+                              const isCurrentSkuActive = activeSkuIndex === idx;
+                              const isCurrentProdNameActive = activeProdNameIndex === idx;
 
-                            const filteredBought = boughtProducts.filter(p =>
-                              (p.product_name || '').toLowerCase().includes((item.itemName || '').toLowerCase()) ||
-                              (p.item_sr_no || p.sku || '').toLowerCase().includes((item.itemName || '').toLowerCase())
-                            );
+                              // All candidate products: prioritize vendor products, and include general catalog
+                              const candidateProducts = boughtProducts.length > 0 ? boughtProducts : productList;
 
-                            const otherCatalogProds = productList.filter(p => {
-                              const isAlreadyInBought = boughtProducts.some(bp => (bp.product_name || '').toLowerCase() === (p.product_name || '').toLowerCase());
-                              if (isAlreadyInBought) return false;
                               return (
-                                (p.product_name || '').toLowerCase().includes((item.itemName || '').toLowerCase()) ||
-                                (p.item_sr_no || p.sku || '').toLowerCase().includes((item.itemName || '').toLowerCase())
-                              );
-                            });
+                                <tr 
+                                  key={idx} 
+                                  className={`text-xs transition ${
+                                    isCurrentSkuActive || isCurrentProdNameActive 
+                                      ? 'relative z-50 bg-slate-50/90 dark:bg-meta-4/20' 
+                                      : 'relative z-10 bg-white dark:bg-boxdark hover:bg-slate-50 dark:hover:bg-meta-4/10'
+                                  }`}
+                                >
+                                  <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
 
-                            const totalMatchingCount = filteredBought.length + otherCatalogProds.length;
+                                  {/* 1. Searchable SKU Code */}
+                                  <td className="p-3 relative sku-container">
+                                    {(() => {
+                                      const query = (item.skuCode || '').toLowerCase().trim();
+                                      const filteredBySku = candidateProducts.filter(p => {
+                                        if (!query) return true;
+                                        const sku = (p.item_sr_no || p.sku || `SKU-${p.id || ''}`).toLowerCase();
+                                        const name = (p.product_name || '').toLowerCase();
+                                        return sku.includes(query) || name.includes(query);
+                                      });
 
-                            return (
-                              <tr key={idx} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition relative ${activeItemSearchIdx === idx ? 'z-50' : 'z-1'}`}>
-                                <td className="p-3 text-center text-slate-400 font-bold">{idx + 1}</td>
+                                      return (
+                                        <div className="relative">
+                                          <input
+                                            type="text"
+                                            autoComplete="off"
+                                            value={item.skuCode || ''}
+                                            onFocus={() => {
+                                              setActiveSkuIndex(idx);
+                                              setActiveProdNameIndex(null);
+                                              setHighlightedSkuIndex(0);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setHighlightedSkuIndex(prev => prev < filteredBySku.length - 1 ? prev + 1 : 0);
+                                              } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setHighlightedSkuIndex(prev => prev > 0 ? prev - 1 : filteredBySku.length - 1);
+                                              } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (filteredBySku[highlightedSkuIndex]) {
+                                                  handleProductSelection(filteredBySku[highlightedSkuIndex], idx);
+                                                }
+                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                                setActiveSkuIndex(null);
+                                              }
+                                            }}
+                                            onChange={(e) => {
+                                              setFieldValue(`items.${idx}.skuCode`, e.target.value);
+                                              setActiveSkuIndex(idx);
+                                            }}
+                                            placeholder="TYPE SKU..."
+                                            className="w-full rounded border border-stroke dark:border-strokedark p-1.5 bg-transparent font-mono font-bold text-xs uppercase outline-none focus:border-primary"
+                                          />
 
-                                {/* Product Search Cell */}
-                                <td className={`p-2 relative product-search-cell ${activeItemSearchIdx === idx ? 'z-50' : 'z-10'}`}>
-                                  <div className="relative">
+                                          {/* Floating SKU Dropdown */}
+                                          {isCurrentSkuActive && filteredBySku.length > 0 && (
+                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] w-72 max-h-56 overflow-y-auto bg-white dark:bg-[#1A222C] border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                                              {filteredBySku.map((prod, pIdx) => {
+                                                const displaySku = prod.item_sr_no || prod.sku || `SKU-${prod.id || ''}`;
+                                                return (
+                                                  <div
+                                                    key={prod.id || pIdx}
+                                                    onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      handleProductSelection(prod, idx);
+                                                    }}
+                                                    className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${
+                                                      highlightedSkuIndex === pIdx 
+                                                        ? 'bg-primary/10 text-primary font-bold' 
+                                                        : 'hover:bg-gray-50 dark:hover:bg-slate-800'
+                                                    }`}
+                                                  >
+                                                    <div>
+                                                      <p className="font-bold text-black dark:text-white">{prod.product_name}</p>
+                                                      <p className="text-[10px] font-mono text-gray-400">{displaySku}</p>
+                                                    </div>
+                                                    <span className="font-mono font-bold text-emerald-600">
+                                                      Rs. {formatMoney(prod.purchase_price || prod.price || 0)}
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </td>
+
+                                  {/* 2. Product Name / Description (Rich Two-Way Dropdown matching Purchases page) */}
+                                  <td className="p-3 relative prod-name-container min-w-[280px]">
+                                    {(() => {
+                                      const query = (item.itemName || '').toLowerCase().trim();
+                                      const filteredByName = candidateProducts.filter(p => {
+                                        if (!query) return true;
+                                        const name = (p.product_name || '').toLowerCase();
+                                        const sku = (p.item_sr_no || p.sku || `SKU-${p.id || ''}`).toLowerCase();
+                                        return name.includes(query) || sku.includes(query);
+                                      });
+
+                                      return (
+                                        <div className="relative">
+                                          <input
+                                            type="text"
+                                            autoComplete="off"
+                                            value={item.itemName || ''}
+                                            onFocus={() => {
+                                              setActiveProdNameIndex(idx);
+                                              setActiveSkuIndex(null);
+                                              setHighlightedProdNameIndex(0);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setHighlightedProdNameIndex(prev => prev < filteredByName.length - 1 ? prev + 1 : 0);
+                                              } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setHighlightedProdNameIndex(prev => prev > 0 ? prev - 1 : filteredByName.length - 1);
+                                              } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (filteredByName[highlightedProdNameIndex]) {
+                                                  handleProductSelection(filteredByName[highlightedProdNameIndex], idx);
+                                                }
+                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                                setActiveProdNameIndex(null);
+                                              }
+                                            }}
+                                            onChange={(e) => {
+                                              const typed = e.target.value;
+                                              setFieldValue(`items.${idx}.itemName`, typed);
+                                              setActiveProdNameIndex(idx);
+                                              setHighlightedProdNameIndex(0);
+
+                                              const matched = candidateProducts.find(
+                                                p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
+                                              );
+                                              if (matched) {
+                                                handleProductSelection(matched, idx);
+                                              }
+                                            }}
+                                            placeholder="Search Product Name..."
+                                            className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
+                                          />
+
+                                          {/* Rich Dropdown (Pixel-perfect matching Purchases page) */}
+                                          {isCurrentProdNameActive && filteredByName.length > 0 && (
+                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[290px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300">
+                                              {filteredByName.map((p, pIdx) => {
+                                                const displaySku = p.item_sr_no || p.sku || `SKU-${p.id || ''}`;
+                                                const isHighlighted = pIdx === highlightedProdNameIndex;
+                                                return (
+                                                  <div
+                                                    key={p.id || pIdx}
+                                                    onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      handleProductSelection(p, idx);
+                                                    }}
+                                                    className={`p-3 cursor-pointer transition flex items-center justify-between group ${
+                                                      isHighlighted
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                                                    }`}
+                                                  >
+                                                    <div className="flex flex-col gap-0.5 text-left pr-2">
+                                                      <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 leading-tight">
+                                                        {p.product_name}
+                                                      </span>
+                                                      <div className="flex items-center gap-2 font-mono text-[10px] text-slate-400">
+                                                        <span>{displaySku}</span>
+                                                        {p.totalBoughtQty && (
+                                                          <span className="text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded">
+                                                            Bought: {p.totalBoughtQty} {p.uom || 'Nos'}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                    <div className="text-right font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
+                                                      Rs. {formatMoney(p.purchase_price || p.price || 0)}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </td>
+
+                                  {/* 3. Destination Warehouse */}
+                                  <td className="p-3">
+                                    <select
+                                      value={item.warehouse || values.sourceWarehouse}
+                                      onChange={(e) => setFieldValue(`items.${idx}.warehouse`, e.target.value)}
+                                      className="w-full text-xs font-semibold bg-transparent border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-black dark:text-white focus:border-primary"
+                                    >
+                                      {locations.map((loc) => (
+                                        <option key={loc.id} value={loc.name} className="dark:bg-boxdark">
+                                          {loc.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+
+                                  {/* 4. Arrived Qty */}
+                                  <td className="p-3">
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        min="0.01"
+                                        step="any"
+                                        name={`items.${idx}.qty`}
+                                        onKeyDown={blockInvalidChar}
+                                        onChange={handleChange}
+                                        value={item.qty}
+                                        className="w-full rounded border border-stroke dark:border-strokedark p-1.5 text-center font-bold font-mono text-xs outline-none focus:border-primary text-black dark:text-white"
+                                      />
+                                      <span className="text-[10px] font-mono text-gray-400 uppercase select-none w-8">
+                                        {item.uom || 'NOS'}
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* 5. Cost Price (PKR) */}
+                                  <td className="p-3">
                                     <input
-                                      type="text"
-                                      value={item.itemName || ''}
-                                      onFocus={() => {
-                                        setActiveItemSearchIdx(idx);
-                                        setHighlightedProdIdx(0);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'ArrowDown') {
-                                          e.preventDefault();
-                                          setHighlightedProdIdx(prev => Math.min(prev + 1, totalMatchingCount - 1));
-                                        } else if (e.key === 'ArrowUp') {
-                                          e.preventDefault();
-                                          setHighlightedProdIdx(prev => Math.max(prev - 1, 0));
-                                        } else if (e.key === 'Enter') {
-                                          e.preventDefault();
-                                          let chosen: any = null;
-                                          if (highlightedProdIdx < filteredBought.length) {
-                                            chosen = filteredBought[highlightedProdIdx];
-                                          } else {
-                                            chosen = otherCatalogProds[highlightedProdIdx - filteredBought.length];
-                                          }
-                                          if (chosen) {
-                                            setFieldValue(`items.${idx}.itemName`, chosen.product_name);
-                                            setFieldValue(`items.${idx}.rate`, Number(chosen.purchase_price || chosen.price || 0));
-                                            setFieldValue(`items.${idx}.uom`, chosen.uom || 'Nos');
-                                            setFieldValue(`items.${idx}.sku`, chosen.item_sr_no || chosen.sku || '');
-                                            setActiveItemSearchIdx(null);
-                                          }
-                                        } else if (e.key === 'Escape') {
-                                          setActiveItemSearchIdx(null);
-                                        }
-                                      }}
-                                      onChange={(e) => {
-                                        setFieldValue(`items.${idx}.itemName`, e.target.value);
-                                        setActiveItemSearchIdx(idx);
-                                        setHighlightedProdIdx(0);
-                                      }}
-                                      placeholder={activeVendor ? `Search products bought from ${activeVendor}...` : "Search products catalog..."}
-                                      className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
+                                      type="number"
+                                      min="0"
+                                      step="any"
+                                      name={`items.${idx}.rate`}
+                                      onKeyDown={blockInvalidChar}
+                                      onChange={handleChange}
+                                      value={item.rate}
+                                      className="w-full rounded border border-stroke dark:border-strokedark p-1.5 text-right font-bold font-mono text-xs outline-none focus:border-primary text-black dark:text-white"
                                     />
+                                  </td>
 
-                                    {item.itemName && (
+                                  {/* 6. Net Total Line */}
+                                  <td className="p-3 text-right font-mono font-bold text-success pr-4 text-xs">
+                                    Rs. {formatMoney(lineTotal)}
+                                  </td>
+
+                                  {/* 7. Action */}
+                                  <td className="p-3 text-center">
+                                    {values.items.length > 1 && (
                                       <button
                                         type="button"
-                                        onClick={() => {
-                                          setFieldValue(`items.${idx}.itemName`, '');
-                                          setFieldValue(`items.${idx}.rate`, 0);
-                                        }}
-                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"
+                                        onClick={() => remove(idx)}
+                                        className="text-danger hover:opacity-80 p-1 cursor-pointer"
                                       >
-                                        <MdClear size={14} />
+                                        <MdDelete size={16} />
                                       </button>
                                     )}
-                                  </div>
-
-                                  {/* Floating Product Dropdown */}
-                                  {activeItemSearchIdx === idx && (
-                                    <div className="absolute left-2 right-2 top-full mt-1 z-[999999] min-w-[320px] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                                      {/* 1. Products Purchased from Selected Vendor */}
-                                      {filteredBought.length > 0 && (
-                                        <div>
-                                          {activeVendor && (
-                                            <div className="px-3 py-1.5 bg-rose-50/90 dark:bg-rose-950/40 text-[10px] font-black uppercase text-rose-700 dark:text-rose-300 border-b border-rose-100 dark:border-rose-900/60 flex items-center justify-between">
-                                              <span>🛒 Products Purchased from {activeVendor}</span>
-                                              <span className="font-mono">{filteredBought.length} items</span>
-                                            </div>
-                                          )}
-                                          {filteredBought.map((prod, pIdx) => (
-                                            <div
-                                              key={prod.id || pIdx}
-                                              onMouseEnter={() => setHighlightedProdIdx(pIdx)}
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                setFieldValue(`items.${idx}.rate`, Number(prod.purchase_price || prod.price || 0));
-                                                setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
-                                                setFieldValue(`items.${idx}.sku`, prod.item_sr_no || prod.sku || '');
-                                                setActiveItemSearchIdx(null);
-                                              }}
-                                              className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                                highlightedProdIdx === pIdx
-                                                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                                                  : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                                              }`}
-                                            >
-                                              <div className="flex flex-col gap-0.5">
-                                                <span className="font-bold text-xs">{prod.product_name}</span>
-                                                <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                                                  {(prod.item_sr_no || prod.sku) && (
-                                                    <span className="font-mono">SKU: {prod.item_sr_no || prod.sku}</span>
-                                                  )}
-                                                  {prod.totalBoughtQty && (
-                                                    <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded">
-                                                      Bought from Vendor: {prod.totalBoughtQty} {prod.uom || 'Nos'}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                              <div className="text-right">
-                                                <span className="text-[10px] font-mono block text-rose-600 dark:text-rose-400 font-black">
-                                                  Inward Cost: Rs. {formatMoney(prod.purchase_price || prod.price || 0)}
-                                                </span>
-                                                <span className="text-[9px] text-slate-400">
-                                                  Total Stock: {prod.current_stock || 0} {prod.uom || 'Nos'}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-
-                                      {/* 2. Other Catalog Products */}
-                                      {otherCatalogProds.length > 0 && (
-                                        <div>
-                                          {activeVendor && filteredBought.length > 0 && (
-                                            <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700/60 text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700">
-                                              Other General Products
-                                            </div>
-                                          )}
-                                          {otherCatalogProds.map((prod, pIdx) => {
-                                            const overallIdx = filteredBought.length + pIdx;
-                                            return (
-                                              <div
-                                                key={prod.id || overallIdx}
-                                                onMouseEnter={() => setHighlightedProdIdx(overallIdx)}
-                                                onMouseDown={(e) => {
-                                                  e.preventDefault();
-                                                  setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                  setFieldValue(`items.${idx}.rate`, Number(prod.purchase_price || prod.price || 0));
-                                                  setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
-                                                  setFieldValue(`items.${idx}.sku`, prod.item_sr_no || prod.sku || '');
-                                                  setActiveItemSearchIdx(null);
-                                                }}
-                                                className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                                  highlightedProdIdx === overallIdx
-                                                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 font-bold'
-                                                    : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                                                }`}
-                                              >
-                                                <div className="flex flex-col gap-0.5">
-                                                  <span className="font-bold text-xs">{prod.product_name}</span>
-                                                  {(prod.item_sr_no || prod.sku) && (
-                                                    <span className="text-[10px] text-slate-400 font-mono">SKU: {prod.item_sr_no || prod.sku}</span>
-                                                  )}
-                                                </div>
-                                                <div className="text-right">
-                                                  <span className="text-[10px] font-mono block text-slate-600 dark:text-slate-300 font-bold">
-                                                    Cost: Rs. {formatMoney(prod.purchase_price || prod.price || 0)}
-                                                  </span>
-                                                  <span className="text-[9px] text-slate-400">
-                                                    Total Stock: {prod.current_stock || 0} {prod.uom || 'Nos'}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-
-                                      {filteredBought.length === 0 && otherCatalogProds.length === 0 && (
-                                        <div className="p-3 text-center text-xs text-slate-400 italic">No matching products found</div>
-                                      )}
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* UOM Unit */}
-                                <td className="p-2 text-center font-bold text-slate-600 dark:text-slate-400 uppercase font-mono">
-                                  {item.uom || 'Nos'}
-                                </td>
-
-                                {/* Return Qty */}
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    min="0.01"
-                                    step="any"
-                                    name={`items.${idx}.qty`}
-                                    onKeyDown={blockInvalidChar}
-                                    onChange={handleChange}
-                                    value={item.qty}
-                                    placeholder="Qty"
-                                    className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-center font-mono font-black text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
-                                  />
-                                </td>
-
-                                {/* Rate */}
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="any"
-                                    name={`items.${idx}.rate`}
-                                    onKeyDown={blockInvalidChar}
-                                    onChange={handleChange}
-                                    value={item.rate}
-                                    placeholder="Rate"
-                                    className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-right font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
-                                  />
-                                </td>
-
-                                {/* Net Total */}
-                                <td className="p-3 text-right font-mono font-black text-rose-600 dark:text-rose-400 pr-4 text-xs">
-                                  Rs. {formatMoney(lineTotal)}
-                                </td>
-
-                                {/* Delete Action */}
-                                <td className="p-2 text-center">
-                                  {values.items.length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => remove(idx)}
-                                      className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition cursor-pointer"
-                                      title="Remove item row"
-                                    >
-                                      <MdDelete size={16} />
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-
-                      <div className="pt-3">
-                        <button
-                          type="button"
-                          onClick={() => push({ itemName: '', sku: '', qty: 1, rate: 0, uom: 'Nos', maxQty: 99999 })}
-                          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl hover:bg-rose-100 transition cursor-pointer"
-                        >
-                          <MdAdd size={16} /> Add Another Return Item Row
-                        </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                    </div>
-                  )}
-                </FieldArray>
-              </div>
+                    )}
+                  </FieldArray>
 
-              {/* ── BOTTOM SECTION: REIMBURSEMENT & FINANCIAL BREAKDOWN ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                {/* Left Side: Reimbursement Source & Notes (7 cols) */}
-                <div className="lg:col-span-7 bg-white dark:bg-boxdark rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
-                  <h3 className="font-black text-slate-900 dark:text-white text-sm border-b border-slate-100 dark:border-slate-800 pb-2 flex items-center gap-2">
-                    <MdAccountBalance className="text-rose-600" size={18} /> Vendor Settlement & Refund Channel
-                  </h3>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newRow = {
+                          skuCode: '',
+                          itemName: '',
+                          warehouse: values.sourceWarehouse || (locations[0]?.name || 'Central Warehouse A'),
+                          qty: 1,
+                          rate: 0,
+                          uom: 'Nos'
+                        };
+                        setFieldValue('items', [...values.items, newRow]);
+                      }}
+                      className="rounded bg-primary py-2 px-4 text-xs font-medium text-white hover:bg-opacity-90 transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <MdAdd size={16} /> Add Row Line
+                    </button>
+                  </div>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* ── BOTTOM SECTION: REIMBURSEMENT & TOTAL BILL VALUE ── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-stroke dark:border-strokedark">
+                  
+                  {/* Left Side: Settlement Mode & Notes */}
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                        Reimbursement Channel: *
+                      <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
+                        Payment Method / Settlement Mode: *
                       </label>
                       <select
                         name="paymentTerm"
@@ -1259,27 +1131,27 @@ const AddPurchaseReturn = () => {
                           }
                         }}
                         value={values.paymentTerm}
-                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-rose-600"
+                        className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-transparent text-xs text-black dark:text-white font-bold outline-none focus:border-primary dark:bg-boxdark"
                       >
-                        <option value="On Credit">📝 On Credit (Deduct from Vendor Payable Ledger)</option>
-                        <option value="By Cash">💵 Cash Refund Received from Vendor</option>
-                        <option value="By Bank">🏦 Bank Wire Refund from Vendor</option>
-                        <option value="Split">💳 Split Refund (Cash + Bank)</option>
+                        <option value="On Credit">On Credit (Deduct from Vendor Payable Ledger)</option>
+                        <option value="By Cash">Cash Only (Refund Received)</option>
+                        <option value="By Bank">Bank Wire Only</option>
+                        <option value="Split">Split (Cash + Bank Combined)</option>
                       </select>
                     </div>
 
                     {(values.paymentTerm === 'By Bank' || values.paymentTerm === 'Split') && (
                       <div>
-                        <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                          Deposited Bank Account: *
+                        <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
+                          Receiving Bank Account: *
                         </label>
                         <select
                           name="selectedBankId"
                           onChange={handleChange}
                           value={values.selectedBankId}
-                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-rose-600"
+                          className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-transparent text-xs text-black dark:text-white font-bold outline-none focus:border-primary dark:bg-boxdark"
                         >
-                          <option value="">-- Choose Receiving Bank --</option>
+                          <option value="">-- Select Bank Account --</option>
                           {bankAccountsList.map(b => (
                             <option key={b.id} value={b.bankName}>
                               {b.bankName} - {b.accountTitle} ({b.accountNumber || '-'})
@@ -1288,61 +1160,56 @@ const AddPurchaseReturn = () => {
                         </select>
                       </div>
                     )}
-                  </div>
 
-                  {/* Split Refund Inputs */}
-                  {values.paymentTerm === 'Split' && (
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">
-                          Cash Refund (PKR):
-                        </label>
-                        <input
-                          type="number"
-                          name="cashAmountPaid"
-                          placeholder="0"
-                          onKeyDown={blockInvalidChar}
-                          onChange={handleChange}
-                          value={values.cashAmountPaid}
-                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-3 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
-                        />
+                    {values.paymentTerm === 'Split' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1 text-[11px]">
+                            Cash Portion (PKR):
+                          </label>
+                          <input
+                            type="number"
+                            name="cashAmountPaid"
+                            placeholder="0"
+                            onKeyDown={blockInvalidChar}
+                            onChange={handleChange}
+                            value={values.cashAmountPaid}
+                            className="w-full rounded border border-stroke dark:border-strokedark p-2 text-xs font-bold font-mono outline-none focus:border-primary text-black dark:text-white bg-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1 text-[11px]">
+                            Bank Portion (PKR):
+                          </label>
+                          <input
+                            type="number"
+                            name="bankAmountPaid"
+                            placeholder="0"
+                            onKeyDown={blockInvalidChar}
+                            onChange={handleChange}
+                            value={values.bankAmountPaid}
+                            className="w-full rounded border border-stroke dark:border-strokedark p-2 text-xs font-bold font-mono outline-none focus:border-primary text-black dark:text-white bg-transparent"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">
-                          Bank Refund (PKR):
-                        </label>
-                        <input
-                          type="number"
-                          name="bankAmountPaid"
-                          placeholder="0"
-                          onKeyDown={blockInvalidChar}
-                          onChange={handleChange}
-                          value={values.bankAmountPaid}
-                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-3 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
-                        />
-                      </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Single Cash / Bank Refund Input */}
-                  {(values.paymentTerm === 'By Cash' || values.paymentTerm === 'By Bank') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-rose-600 dark:text-rose-400 font-black uppercase text-[11px]">
-                          Liquid Refund Collected (PKR):
-                        </label>
-                        {computedGrossTotal > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setFieldValue('amountPaid', computedGrossTotal)}
-                            className="text-[11px] font-black text-rose-600 hover:underline cursor-pointer"
-                          >
-                            ⚡ Full Cash Refund (Rs. {formatMoney(computedGrossTotal)})
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">Rs.</span>
+                    {(values.paymentTerm === 'By Cash' || values.paymentTerm === 'By Bank') && (
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-danger font-bold">
+                            Cash Refund Received (PKR):
+                          </label>
+                          {computedGrossTotal > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setFieldValue('amountPaid', computedGrossTotal)}
+                              className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                            >
+                              ⚡ Pay Full Refund (Rs. {formatMoney(computedGrossTotal)})
+                            </button>
+                          )}
+                        </div>
                         <input
                           type="number"
                           name="amountPaid"
@@ -1350,97 +1217,79 @@ const AddPurchaseReturn = () => {
                           onKeyDown={blockInvalidChar}
                           onChange={handleChange}
                           value={values.amountPaid}
-                          className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 bg-white dark:bg-slate-800 font-mono font-black text-slate-950 dark:text-white text-sm outline-none focus:border-rose-600"
+                          className="w-full rounded border border-stroke dark:border-strokedark p-2 text-xs font-bold font-mono outline-none focus:border-primary text-black dark:text-white bg-transparent"
                         />
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Remarks */}
-                  <div>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                      Return Reason & Quality Inspection Notes:
-                    </label>
-                    <textarea
-                      name="remarks"
-                      rows={2}
-                      onChange={handleChange}
-                      value={values.remarks}
-                      placeholder="Describe fault metrics, batch breakage, or debit credit arrangement..."
-                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs outline-none focus:border-rose-600"
-                    />
+                    <div>
+                      <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
+                        Purchase Return Memo / Remarks:
+                      </label>
+                      <textarea
+                        name="remarks"
+                        rows={2}
+                        onChange={handleChange}
+                        value={values.remarks}
+                        placeholder="Describe fault metrics, batch breakage, or debit credit arrangement..."
+                        className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-transparent text-xs text-black dark:text-white font-semibold outline-none focus:border-primary"
+                      />
+                    </div>
                   </div>
 
-                </div>
-
-                {/* Right Side: Financial Summary Card (5 cols) */}
-                <div className="lg:col-span-5 bg-white dark:bg-boxdark rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                    <h3 className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                      <MdAccountBalance className="text-rose-600" size={18} /> Financial Debit Note Breakdown
-                    </h3>
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
-                      PKR
-                    </span>
-                  </div>
-
-                  <div className="space-y-3 font-mono text-xs">
-                    <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
-                      <span className="font-sans font-bold">Gross Outbound Return Value:</span>
-                      <strong className="text-slate-950 dark:text-white font-black text-base">
-                        Rs. {formatMoney(computedGrossTotal)}
-                      </strong>
-                    </div>
-
-                    <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
-                      <span className="font-sans font-medium">Reimbursement Cash Collected:</span>
-                      <strong className="font-black">
-                        - Rs. {formatMoney(currentLiquidRefund)}
-                      </strong>
-                    </div>
-
-                    <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 flex justify-between items-center text-rose-900 dark:text-rose-300">
-                      <div className="font-sans">
-                        <span className="block text-[10px] font-black uppercase tracking-wider">
-                          Net Debit Note Credit Line:
-                        </span>
-                        <span className="text-[11px] text-rose-700 dark:text-rose-400">
-                          {netCreditLineDebt > 0 ? 'Deducts from Vendor Payable Balance' : 'Fully Settled / No Debt Offset'}
-                        </span>
+                  {/* Right Side: Total Bill Value Card */}
+                  <div className="flex flex-col justify-between space-y-4">
+                    <div className="space-y-3 font-mono">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-sans font-bold text-gray-600 dark:text-gray-400">Total Return Value:</span>
+                        <strong className="text-black dark:text-white font-bold text-base">
+                          Rs. {formatMoney(computedGrossTotal)}
+                        </strong>
                       </div>
-                      <strong className="font-mono font-black text-base text-rose-700 dark:text-rose-300">
-                        Rs. {formatMoney(netCreditLineDebt)}
-                      </strong>
-                    </div>
-                  </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`)}
-                      className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2.5 px-5 font-bold text-slate-700 dark:text-slate-300 transition text-xs cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={loading || !values.vendorName || !values.sourceWarehouse}
-                      className="rounded-xl bg-rose-600 hover:bg-rose-700 py-2.5 px-7 font-black text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
-                    >
-                      {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Return Note' : 'Post Return & Debit Note'}</span>}
-                    </button>
+                      <div className="flex justify-between items-center text-sm text-success">
+                        <span className="font-sans font-medium">Refund Collected:</span>
+                        <strong className="font-bold">
+                          - Rs. {formatMoney(currentLiquidRefund)}
+                        </strong>
+                      </div>
+
+                      <div className="flex justify-between items-center text-sm text-danger pt-2 border-t border-stroke dark:border-strokedark">
+                        <span className="font-sans font-bold">Remaining Debit Note Credit Line:</span>
+                        <strong className="font-bold text-base">
+                          Rs. {formatMoney(netCreditLineDebt)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Submit Actions */}
+                    <div className="flex items-center justify-end gap-3 pt-6">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`)}
+                        className="rounded border border-stroke py-2.5 px-6 font-medium text-black hover:shadow-1 dark:border-strokedark dark:text-white transition text-xs cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={loading || !values.vendorName || !values.sourceWarehouse}
+                        className="rounded bg-primary py-2.5 px-8 font-bold text-white hover:bg-opacity-90 transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
+                      >
+                        {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Return' : 'Save & Post Return'}</span>}
+                      </button>
+                    </div>
+
                   </div>
 
                 </div>
 
-              </div>
+              </Form>
+            );
+          }}
+        </Formik>
 
-            </Form>
-          );
-        }}
-      </Formik>
-
+      </div>
     </div>
   );
 };
