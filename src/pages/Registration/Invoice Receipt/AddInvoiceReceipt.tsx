@@ -131,6 +131,10 @@ function AddInvoiceReceipt() {
             const cleanId = String(invRef).replace(/\D/g, '');
             const matchedInv = invData?.find(i => String(i.id) === cleanId || `INV-${String(i.id).padStart(4, '0')}` === invRef);
             if (matchedInv) setSelectedInvoiceObj(matchedInv);
+          } else {
+            setSelectedInvoiceNo('');
+            setInvoiceSearchQuery('-- General Customer Balance Clearing (All Invoices) --');
+            setSelectedInvoiceObj(null);
           }
 
           calculateCustomerBalances(cName, invRef, invData || [], editData.id);
@@ -321,7 +325,7 @@ function AddInvoiceReceipt() {
     setIsCustomerDropdownOpen(false);
 
     setSelectedInvoiceNo('');
-    setInvoiceSearchQuery('');
+    setInvoiceSearchQuery('-- General Customer Balance Clearing (All Invoices) --');
     setSelectedInvoiceObj(null);
 
     calculateCustomerBalances(cName, '', salesInvoicesList, editData?.id || null);
@@ -330,7 +334,7 @@ function AddInvoiceReceipt() {
   // Invoice selection handler
   const handleSelectInvoice = (invNo: string) => {
     setSelectedInvoiceNo(invNo);
-    setInvoiceSearchQuery(invNo || '-- General Customer Balance Clearing --');
+    setInvoiceSearchQuery(invNo || '-- General Customer Balance Clearing (All Invoices) --');
     setIsInvoiceDropdownOpen(false);
 
     if (invNo) {
@@ -357,6 +361,7 @@ function AddInvoiceReceipt() {
   );
 
   const filteredInvoices = customerInvoicesList.filter(i => {
+    if (!invoiceSearchQuery || invoiceSearchQuery.startsWith('-- General')) return true;
     const invFormatted = `INV-${String(i.id).padStart(4, '0')}`;
     return (
       invFormatted.toLowerCase().includes(invoiceSearchQuery.toLowerCase()) ||

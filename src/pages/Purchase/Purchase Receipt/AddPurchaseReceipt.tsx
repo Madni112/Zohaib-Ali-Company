@@ -130,6 +130,10 @@ function AddPurchaseReceipt() {
             const cleanId = String(poRef).replace(/\D/g, '');
             const matchedPo = purData?.find(p => p.purchase_no === poRef || String(p.id) === cleanId);
             if (matchedPo) setSelectedPurchaseObj(matchedPo);
+          } else {
+            setSelectedPurchaseNo('');
+            setPoSearchQuery('-- General Vendor Balance Clearing (All Orders) --');
+            setSelectedPurchaseObj(null);
           }
 
           calculateVendorBalances(vName, poRef, purData || [], editData.id);
@@ -282,7 +286,7 @@ function AddPurchaseReceipt() {
     setIsVendorDropdownOpen(false);
 
     setSelectedPurchaseNo('');
-    setPoSearchQuery('');
+    setPoSearchQuery('-- General Vendor Balance Clearing (All Orders) --');
     setSelectedPurchaseObj(null);
 
     calculateVendorBalances(vName, '', purchaseOptions, editData?.id || null);
@@ -291,7 +295,7 @@ function AddPurchaseReceipt() {
   // PO selection handler
   const handleSelectPurchase = (poNo: string) => {
     setSelectedPurchaseNo(poNo);
-    setPoSearchQuery(poNo || '-- General Vendor Balance Clearing --');
+    setPoSearchQuery(poNo || '-- General Vendor Balance Clearing (All Orders) --');
     setIsPoDropdownOpen(false);
 
     if (poNo) {
@@ -317,11 +321,14 @@ function AddPurchaseReceipt() {
     selectedVendor && (p.supplier_name || p.vendor_name || '').toLowerCase() === selectedVendor.toLowerCase()
   );
 
-  const filteredPurchases = vendorPurchasesList.filter(p =>
-    (p.purchase_no || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
-    (p.purchase_date || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
-    (p.target_warehouse || '').toLowerCase().includes(poSearchQuery.toLowerCase())
-  );
+  const filteredPurchases = vendorPurchasesList.filter(p => {
+    if (!poSearchQuery || poSearchQuery.startsWith('-- General')) return true;
+    return (
+      (p.purchase_no || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
+      (p.purchase_date || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
+      (p.target_warehouse || '').toLowerCase().includes(poSearchQuery.toLowerCase())
+    );
+  });
 
   const validationSchema = Yup.object().shape({
     voucherType: Yup.string().required('Payment method is required'),
