@@ -46,6 +46,7 @@ import VendorList from '../pages/Purchase/Vendor/VendorList';
 import AddVendor from '../pages/Purchase/Vendor/AddVendor';
 import PurchaseReceiptList from '../pages/Purchase/Purchase Receipt/PurchaseReceiptList';
 import AddPurchaseReceipt from '../pages/Purchase/Purchase Receipt/AddPurchaseReceipt';
+import PrintPurchaseReceipt from '../pages/Purchase/Purchase Receipt/PrintPurchaseReceipt';
 import PurchaseReturnList from '../pages/Purchase/Purchase Return/PurchaseReturnList';
 import AddPurchaseReturn from '../pages/Purchase/Purchase Return/AddPurchaseReturn';
 import PurchaseReturnReceiptList from '../pages/Purchase/Purchase Return Receipt/PurchaseReturnReceiptList';
@@ -452,6 +453,16 @@ export const adminRoutes = [
   {
     path: '/Registration/InvoiceReceipt/Print/:id',
     component: <PrintInvoiceReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Purchase-Receipt/Print/:id',
+    component: <PrintPurchaseReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/purchase/purchase-receipt/print/:id',
+    component: <PrintPurchaseReceipt />,
     hideFromSidebar: true
   }
 ];
