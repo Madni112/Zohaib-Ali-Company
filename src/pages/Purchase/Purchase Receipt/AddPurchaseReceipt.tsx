@@ -43,6 +43,7 @@ function AddPurchaseReceipt() {
   const [poPaidUpfront, setPoPaidUpfront] = useState<number>(0);
   const [poPastReceiptsPaid, setPoPastReceiptsPaid] = useState<number>(0);
   const [effectiveDueForThisReceipt, setEffectiveDueForThisReceipt] = useState<number>(0);
+  const [poAllocationsMap, setPoAllocationsMap] = useState<Record<string, { gross: number; upfront: number; pastReceipts: number; due: number }>>({});
 
   const editData = location.state?.receiptRecord;
   const isEditMode = !!editData;
@@ -126,14 +127,21 @@ function AddPurchaseReceipt() {
       setPoPaidUpfront(0);
       setPoPastReceiptsPaid(0);
       setEffectiveDueForThisReceipt(0);
+      setPoAllocationsMap({});
       return;
     }
 
     try {
-      // 1. Fetch vendor's purchases
+      // 1. Fetch vendor's purchases sorted chronologically (oldest first for FIFO general clearing)
       const vendorPurchases = allPurchases.filter(p => 
         (p.supplier_name || p.vendor_name || '').toLowerCase() === vendorName.toLowerCase()
       );
+
+      const sortedVendorPurchases = [...vendorPurchases].sort((a, b) => {
+        const dateA = new Date(a.purchase_date || a.created_at).getTime();
+        const dateB = new Date(b.purchase_date || b.created_at).getTime();
+        return dateA - dateB;
+      });
 
       // 2. Fetch past payment vouchers for this vendor
       const { data: pastVouchers } = await supabase
@@ -148,49 +156,80 @@ function AddPurchaseReceipt() {
 
       vendorPurchases.forEach(p => {
         const gross = Number(p.total_amount) || 0;
-        const paid = Number(p.cash_amount_paid || p.amount_paid || 0);
+        const paid = Number(p.cash_amount_paid || 0) + Number(p.bank_amount_paid || 0);
         totalPurchasesGross += gross;
         totalPurchasesUpfrontPaid += paid;
       });
 
-      // Sum of all past vouchers for this vendor (excluding current voucher being edited)
+      // Track PO allocations
+      const allocations: Record<string, { gross: number; upfront: number; specificVouchers: number; generalAllocated: number; pastReceipts: number; due: number }> = {};
       let totalVouchersPaid = 0;
-      let selectedPoVouchersPaid = 0;
+      let unallocatedGeneralVouchers = 0;
 
+      // Initialize all POs
+      sortedVendorPurchases.forEach(p => {
+        const key = p.purchase_no;
+        const gross = Number(p.total_amount) || 0;
+        const upfront = Number(p.cash_amount_paid || 0) + Number(p.bank_amount_paid || 0);
+        allocations[key] = {
+          gross,
+          upfront,
+          specificVouchers: 0,
+          generalAllocated: 0,
+          pastReceipts: 0,
+          due: Math.max(0, gross - upfront)
+        };
+      });
+
+      // Assign PO-specific vouchers and accumulate general unallocated vouchers
       (pastVouchers || []).forEach(v => {
         if (currentEditVoucherId && v.id === currentEditVoucherId) return;
         const vAmt = Number(v.total_amount) || 0;
         totalVouchersPaid += vAmt;
 
         const vPoRef = v.original_invoice_no || v.metadata?.linkedPurchaseNo || '';
-        if (poNumber && vPoRef && (vPoRef === poNumber || vPoRef.includes(poNumber) || poNumber.includes(vPoRef))) {
-          selectedPoVouchersPaid += vAmt;
+        if (vPoRef) {
+          const cleanVPoId = String(vPoRef).replace(/\D/g, '');
+          const matchedPo = sortedVendorPurchases.find(p => p.purchase_no === vPoRef || String(p.id) === cleanVPoId);
+          if (matchedPo && allocations[matchedPo.purchase_no]) {
+            allocations[matchedPo.purchase_no].specificVouchers += vAmt;
+          } else {
+            unallocatedGeneralVouchers += vAmt;
+          }
+        } else {
+          unallocatedGeneralVouchers += vAmt;
         }
       });
+
+      // Allocate general unallocated vouchers across open POs (FIFO order)
+      let generalRemaining = unallocatedGeneralVouchers;
+      sortedVendorPurchases.forEach(p => {
+        const key = p.purchase_no;
+        const alloc = allocations[key];
+        if (alloc) {
+          const dueBeforeGeneral = Math.max(0, alloc.gross - alloc.upfront - alloc.specificVouchers);
+          if (dueBeforeGeneral > 0 && generalRemaining > 0) {
+            const toDistribute = Math.min(dueBeforeGeneral, generalRemaining);
+            alloc.generalAllocated += toDistribute;
+            generalRemaining -= toDistribute;
+          }
+          alloc.pastReceipts = alloc.specificVouchers + alloc.generalAllocated;
+          alloc.due = Math.max(0, alloc.gross - alloc.upfront - alloc.pastReceipts);
+        }
+      });
+
+      setPoAllocationsMap(allocations);
 
       const netVendorLiability = Math.max(0, totalPurchasesGross - totalPurchasesUpfrontPaid - totalVouchersPaid);
       setVendorTotalOutstanding(netVendorLiability);
 
       // If a specific PO is selected
-      if (poNumber) {
-        const cleanPoId = String(poNumber).replace(/\D/g, '');
-        const currentPo = vendorPurchases.find(p => p.purchase_no === poNumber || String(p.id) === cleanPoId);
-
-        if (currentPo) {
-          const gross = Number(currentPo.total_amount) || 0;
-          const upfront = Number(currentPo.cash_amount_paid || currentPo.amount_paid || 0);
-          setPoGrossBill(gross);
-          setPoPaidUpfront(upfront);
-          setPoPastReceiptsPaid(selectedPoVouchersPaid);
-
-          const poNetDue = Math.max(0, gross - upfront - selectedPoVouchersPaid);
-          setEffectiveDueForThisReceipt(poNetDue);
-        } else {
-          setPoGrossBill(0);
-          setPoPaidUpfront(0);
-          setPoPastReceiptsPaid(0);
-          setEffectiveDueForThisReceipt(netVendorLiability);
-        }
+      if (poNumber && allocations[poNumber]) {
+        const currentAlloc = allocations[poNumber];
+        setPoGrossBill(currentAlloc.gross);
+        setPoPaidUpfront(currentAlloc.upfront);
+        setPoPastReceiptsPaid(currentAlloc.pastReceipts);
+        setEffectiveDueForThisReceipt(currentAlloc.due);
       } else {
         // No specific PO selected -> clearing from overall vendor balance
         setPoGrossBill(totalPurchasesGross);
@@ -506,9 +545,9 @@ function AddPurchaseReceipt() {
                     >
                       <option value="">-- General Vendor Balance Clearing (All Orders) --</option>
                       {vendorPurchasesList.map(pur => {
-                        const bill = Number(pur.total_amount) || 0;
-                        const paid = Number(pur.amount_paid) || Number(pur.cash_amount_paid || 0);
-                        const due = Math.max(0, bill - paid);
+                        const alloc = poAllocationsMap[pur.purchase_no];
+                        const bill = alloc ? alloc.gross : (Number(pur.total_amount) || 0);
+                        const due = alloc ? alloc.due : Math.max(0, bill - (Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0)));
                         return (
                           <option key={pur.id} value={pur.purchase_no}>
                             {pur.purchase_no} — Bill: Rs. {formatMoney(bill)} | Due: Rs. {formatMoney(due)} ({pur.purchase_date || 'N/A'})

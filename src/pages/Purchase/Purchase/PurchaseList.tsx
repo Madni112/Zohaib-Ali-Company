@@ -11,6 +11,7 @@ const PurchaseList = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
   const [purchases, setPurchases] = useState<any[]>([]);
+  const [purchaseAllocationsMap, setPurchaseAllocationsMap] = useState<Record<string, { totalPaid: number; due: number }>>({});
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +27,79 @@ const PurchaseList = () => {
         .order('created_at', { ascending: false });
 
       if (purError) throw purError;
+
+      const { data: vouchersData } = await supabase
+        .from('financial_vouchers')
+        .select('*')
+        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher');
+
+      // Group purchases by vendor
+      const purchasesByVendor: Record<string, any[]> = {};
+      (purData || []).forEach(p => {
+        const vKey = (p.supplier_name || p.vendor_name || 'General Vendor').toLowerCase();
+        if (!purchasesByVendor[vKey]) purchasesByVendor[vKey] = [];
+        purchasesByVendor[vKey].push(p);
+      });
+
+      const allocMap: Record<string, { totalPaid: number; due: number }> = {};
+
+      // For each vendor, allocate vouchers (specific + general unallocated)
+      Object.keys(purchasesByVendor).forEach(vKey => {
+        const vendorPurs = [...purchasesByVendor[vKey]].sort((a, b) => {
+          const dateA = new Date(a.purchase_date || a.created_at).getTime();
+          const dateB = new Date(b.purchase_date || b.created_at).getTime();
+          return dateA - dateB;
+        });
+
+        const vendorVouchers = (vouchersData || []).filter(v => 
+          (v.customer_name || v.customerName || '').toLowerCase() === vKey
+        );
+
+        const poAlloc: Record<string, { gross: number; upfront: number; specific: number; general: number; totalPaid: number; due: number }> = {};
+        let unallocatedGeneral = 0;
+
+        vendorPurs.forEach(p => {
+          const key = p.purchase_no || String(p.id);
+          const gross = Number(p.total_amount) || 0;
+          const upfront = Number(p.cash_amount_paid || 0) + Number(p.bank_amount_paid || 0);
+          poAlloc[key] = { gross, upfront, specific: 0, general: 0, totalPaid: upfront, due: Math.max(0, gross - upfront) };
+        });
+
+        vendorVouchers.forEach(v => {
+          const vAmt = Number(v.total_amount) || 0;
+          const vPoRef = v.original_invoice_no || v.metadata?.linkedPurchaseNo || '';
+          if (vPoRef) {
+            const cleanId = String(vPoRef).replace(/\D/g, '');
+            const matched = vendorPurs.find(p => p.purchase_no === vPoRef || String(p.id) === cleanId);
+            if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
+              poAlloc[matched.purchase_no || String(matched.id)].specific += vAmt;
+            } else {
+              unallocatedGeneral += vAmt;
+            }
+          } else {
+            unallocatedGeneral += vAmt;
+          }
+        });
+
+        let genRemaining = unallocatedGeneral;
+        vendorPurs.forEach(p => {
+          const key = p.purchase_no || String(p.id);
+          const alloc = poAlloc[key];
+          const dueBeforeGen = Math.max(0, alloc.gross - alloc.upfront - alloc.specific);
+          if (dueBeforeGen > 0 && genRemaining > 0) {
+            const toDist = Math.min(dueBeforeGen, genRemaining);
+            alloc.general += toDist;
+            genRemaining -= toDist;
+          }
+          alloc.totalPaid = alloc.upfront + alloc.specific + alloc.general;
+          alloc.due = Math.max(0, alloc.gross - alloc.totalPaid);
+
+          allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due };
+          allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due };
+        });
+      });
+
+      setPurchaseAllocationsMap(allocMap);
       setPurchases(purData || []);
     } catch (err: any) {
       toast.error('Data Fetching Failure: ' + err.message);
@@ -176,10 +250,11 @@ const PurchaseList = () => {
                 paginatedPurchases.map((pur, idx) => {
                   const serialNumber = startIndex + idx + 1;
                   const totalAmt = Number(pur.total_amount) || 0;
-                  const cashPaid = Number(pur.cash_amount_paid || 0);
-                  const bankPaid = Number(pur.bank_amount_paid || 0);
-                  const paidAmt = (cashPaid > 0 || bankPaid > 0) ? (cashPaid + bankPaid) : (Number(pur.amount_paid) || 0);
-                  const dueAmt = Math.max(0, totalAmt - paidAmt);
+                  const key = pur.purchase_no || String(pur.id);
+                  const alloc = purchaseAllocationsMap[key] || purchaseAllocationsMap[String(pur.id)];
+                  const upfrontPaid = Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0);
+                  const paidAmt = alloc ? alloc.totalPaid : (Number(pur.amount_paid) || upfrontPaid);
+                  const dueAmt = alloc ? alloc.due : Math.max(0, totalAmt - paidAmt);
                   const term = pur.payment_term || 'On Credit';
                   const vendorName = pur.supplier_name || 'General Vendor';
 
