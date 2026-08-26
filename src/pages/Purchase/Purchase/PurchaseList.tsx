@@ -94,6 +94,18 @@ const PurchaseList = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, pageSize]);
+  // ── Smart Money Formatter (Hides .00 for whole numbers, shows decimals if fractional) ──
+  const formatMoney = (val: number | string | undefined | null): string => {
+    const num = Number(val) || 0;
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('en-US');
+    }
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
       
@@ -111,31 +123,31 @@ const PurchaseList = () => {
         </button>
       </div>
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+      <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
         
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <span>Show</span>
-            <select 
-              value={pageSize} 
-              onChange={(e) => setPageSize(Number(e.target.value))} 
-              className="rounded border border-stroke py-1 px-2 bg-transparent dark:border-strokedark outline-none text-black dark:text-white font-bold"
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Show</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded border border-stroke bg-transparent py-1 px-2 outline-none dark:border-strokedark text-xs"
             >
-              {[10, 25, 50, 100].map((size) => (
-                <option key={size} value={size} className="dark:bg-boxdark">{size}</option>
-              ))}
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
             </select>
-            <span>entries</span>
+            <span className="text-xs text-gray-500">entries</span>
           </div>
 
-          <div className="flex items-center gap-2 text-sm w-full sm:w-auto text-gray-500 dark:text-gray-400">
-            <span>Search:</span>
-            <input 
-              type="text" 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
-              placeholder="Search by order # or vendor name..." 
-              className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold" 
+          <div className="w-full sm:w-auto">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by order # or vendor name..."
+              className="w-full sm:w-64 rounded border border-stroke bg-transparent py-1.5 px-3 text-xs outline-none focus:border-primary dark:border-strokedark"
             />
           </div>
         </div>
@@ -150,19 +162,24 @@ const PurchaseList = () => {
                 <th className="py-4 px-4 font-semibold">Stock Receiving Location</th>
                 <th className="py-4 px-4 font-semibold text-center">Entry Date</th>
                 <th className="py-4 px-4 font-semibold text-center">Payment Term</th>
-                <th className="py-4 px-4 font-semibold text-right pr-6">Total Bill Payables</th>
+                <th className="py-4 px-4 font-semibold text-right pr-4">Total Bill</th>
+                <th className="py-4 px-4 font-semibold text-right pr-6">Payment / Due Status</th>
                 <th className="py-4 px-4 font-semibold w-24 text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-sm"><Spinner /></td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-sm"><Spinner /></td></tr>
               ) : paginatedPurchases.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No supply restock logs recorded yet.</td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400 italic">No supply restock logs recorded yet.</td></tr>
               ) : (
                 paginatedPurchases.map((pur, idx) => {
                   const serialNumber = startIndex + idx + 1;
                   const totalAmt = Number(pur.total_amount) || 0;
+                  const cashPaid = Number(pur.cash_amount_paid || 0);
+                  const bankPaid = Number(pur.bank_amount_paid || 0);
+                  const paidAmt = (cashPaid > 0 || bankPaid > 0) ? (cashPaid + bankPaid) : (Number(pur.amount_paid) || 0);
+                  const dueAmt = Math.max(0, totalAmt - paidAmt);
                   const term = pur.payment_term || 'On Credit';
                   const vendorName = pur.supplier_name || 'General Vendor';
 
@@ -178,7 +195,27 @@ const PurchaseList = () => {
                           {term}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-black text-success pr-6">Rs. {totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900 dark:text-white pr-4">
+                        Rs. {formatMoney(totalAmt)}
+                      </td>
+                      <td className="py-3.5 px-4 text-right pr-6 font-mono text-xs">
+                        {dueAmt <= 0 ? (
+                          <span className="inline-block px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase">
+                            Fully Paid
+                          </span>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {paidAmt > 0 && (
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-semibold">
+                                Paid: Rs. {formatMoney(paidAmt)}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-rose-600 dark:text-rose-400 block font-black">
+                              Due: Rs. {formatMoney(dueAmt)}
+                            </span>
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
                           onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${pur.id}`)}

@@ -216,6 +216,18 @@ const PrintPurchase = () => {
     ? new Date(purchase.purchase_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     : new Date(purchase.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
+  // ── Currency / Number Formatter (Hide .00 if whole number, show decimals if fractional) ──
+  const formatMoney = (val: number | string | undefined | null): string => {
+    const num = Number(val) || 0;
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('en-US');
+    }
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   // ── Number to Words Helper ───────────────────────────────────────────────
   const numberToWords = (num: number): string => {
     if (num === 0) return 'Zero';
@@ -443,10 +455,10 @@ const PrintPurchase = () => {
                     )}
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800 whitespace-nowrap">
-                    Rs. {item.rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Rs. {formatMoney(item.rate)}
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950 pr-4 whitespace-nowrap">
-                    Rs. {item.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Rs. {formatMoney(item.netTotal)}
                   </td>
                 </tr>
               ))}
@@ -470,11 +482,13 @@ const PrintPurchase = () => {
                     </div>
                   )}
                 </td>
-                <td className="py-2.5 px-3 text-right text-slate-600 font-sans text-[11px] font-bold">
-                  Net Payable:
-                </td>
-                <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950 pr-4 text-sm whitespace-nowrap bg-slate-200/50">
-                  Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <td colSpan={2} className="py-2.5 px-3 text-right pr-4 bg-slate-200/50">
+                  <div className="inline-flex items-baseline justify-end gap-2">
+                    <span className="text-slate-600 font-sans text-[11px] font-bold uppercase tracking-wider">Net Total:</span>
+                    <strong className="font-mono font-black text-slate-950 text-sm whitespace-nowrap">
+                      Rs. {formatMoney(grandTotal)}
+                    </strong>
+                  </div>
                 </td>
               </tr>
             </tfoot>
@@ -518,7 +532,7 @@ const PrintPurchase = () => {
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-300 space-y-2 font-mono text-xs">
             <div className="flex justify-between items-center text-slate-700">
               <span className="font-sans font-bold">Gross Total Bill:</span>
-              <strong className="font-black text-sm text-slate-950">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong className="font-black text-sm text-slate-950">Rs. {formatMoney(grandTotal)}</strong>
             </div>
 
             {computedTotalSqm > 0 && (
@@ -530,18 +544,18 @@ const PrintPurchase = () => {
 
             <div className="flex justify-between items-center text-emerald-800 pt-1.5 border-t border-slate-200 font-bold">
               <span className="font-sans">Amount Paid Upfront:</span>
-              <strong className="font-black text-sm">Rs. {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong className="font-black text-sm">Rs. {formatMoney(totalPaid)}</strong>
             </div>
 
             {cashPaid > 0 && bankPaid > 0 && (
               <div className="text-[10px] text-slate-500 flex justify-between px-2">
-                <span>(Cash: Rs. {cashPaid.toLocaleString()} + Bank: Rs. {bankPaid.toLocaleString()})</span>
+                <span>(Cash: Rs. {formatMoney(cashPaid)} + Bank: Rs. {formatMoney(bankPaid)})</span>
               </div>
             )}
 
             <div className="flex justify-between items-center text-rose-700 pt-2 border-t-2 border-slate-300">
               <span className="font-sans font-black">Remaining Vendor Payable:</span>
-              <strong className="font-black text-base">Rs. {remainingPayable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              <strong className="font-black text-base">Rs. {formatMoney(remainingPayable)}</strong>
             </div>
           </div>
         </div>
