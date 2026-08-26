@@ -175,9 +175,15 @@ function AddInvoiceReceipt() {
       );
 
       const sortedCustomerInvoices = [...customerInvoices].sort((a, b) => {
-        const dateA = new Date(a.invoice_date || a.created_at || 0).getTime();
-        const dateB = new Date(b.invoice_date || b.created_at || 0).getTime();
-        return dateA - dateB;
+        const timeA = new Date(a.invoice_date || a.created_at || 0).getTime();
+        const timeB = new Date(b.invoice_date || b.created_at || 0).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+
+        const createdA = new Date(a.created_at || 0).getTime();
+        const createdB = new Date(b.created_at || 0).getTime();
+        if (createdA !== createdB) return createdA - createdB;
+
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
       });
 
       // 2. Fetch past receipt vouchers for this customer

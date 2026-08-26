@@ -173,9 +173,15 @@ function AddPurchaseReceipt() {
       );
 
       const sortedVendorPurchases = [...vendorPurchases].sort((a, b) => {
-        const dateA = new Date(a.purchase_date || a.created_at).getTime();
-        const dateB = new Date(b.purchase_date || b.created_at).getTime();
-        return dateA - dateB;
+        const timeA = new Date(a.purchase_date || a.created_at || 0).getTime();
+        const timeB = new Date(b.purchase_date || b.created_at || 0).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+
+        const createdA = new Date(a.created_at || 0).getTime();
+        const createdB = new Date(b.created_at || 0).getTime();
+        if (createdA !== createdB) return createdA - createdB;
+
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
       });
 
       // 2. Fetch past payment vouchers for this vendor
