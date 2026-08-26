@@ -950,7 +950,7 @@ const AddPurchaseReturn = () => {
 
                 <FieldArray name="items">
                   {({ push, remove }) => (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto overflow-y-visible min-h-[280px] pb-20">
                       <table className="w-full table-auto border-collapse text-left text-xs">
                         <thead>
                           <tr className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-black uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
@@ -987,11 +987,11 @@ const AddPurchaseReturn = () => {
                             const totalMatchingCount = filteredBought.length + otherCatalogProds.length;
 
                             return (
-                              <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                              <tr key={idx} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition relative ${activeItemSearchIdx === idx ? 'z-50' : 'z-1'}`}>
                                 <td className="p-3 text-center text-slate-400 font-bold">{idx + 1}</td>
 
                                 {/* Product Search Cell */}
-                                <td className="p-2 relative product-search-cell">
+                                <td className={`p-2 relative product-search-cell ${activeItemSearchIdx === idx ? 'z-50' : 'z-10'}`}>
                                   <div className="relative">
                                     <input
                                       type="text"
@@ -1051,7 +1051,7 @@ const AddPurchaseReturn = () => {
 
                                   {/* Floating Product Dropdown */}
                                   {activeItemSearchIdx === idx && (
-                                    <div className="absolute left-2 right-2 top-full mt-1 z-[9999] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                                    <div className="absolute left-2 right-2 top-full mt-1 z-[999999] min-w-[320px] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
                                       {/* 1. Products Purchased from Selected Vendor */}
                                       {filteredBought.length > 0 && (
                                         <div>
