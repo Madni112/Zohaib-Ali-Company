@@ -860,7 +860,7 @@ const AddPurchases = () => {
                     )}
 
                     {/* Amount Inputs */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className={values.settlementMode === 'Split' ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : 'w-full'}>
                       {(values.settlementMode === 'Cash' || values.settlementMode === 'Split') && (
                         <div>
                           <span className="font-bold text-rose-600 block mb-1">Cash Payment Amount (PKR):</span>
