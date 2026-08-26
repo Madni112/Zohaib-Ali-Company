@@ -273,8 +273,10 @@ const AddPurchases = () => {
               if (isEditMode) {
                 const { error } = await supabase.from('supplier_purchases').update(databasePayload).eq('id', editData.id);
                 if (error) throw error;
+                toast.success('Procurement inventory batch updated successfully!');
+                navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${editData.id}`);
               } else {
-                const { error } = await supabase.from('supplier_purchases').insert([databasePayload]);
+                const { data: insertedData, error } = await supabase.from('supplier_purchases').insert([databasePayload]).select('id').single();
                 if (error) throw error;
 
                 // Restock receiving warehouse inventory bins
@@ -288,10 +290,14 @@ const AddPurchases = () => {
                     await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: effectiveWarehouse, quantity: Number(item.qty) }]);
                   }
                 }
-              }
 
-              toast.success('Procurement inventory batch recorded successfully!');
-              navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/List`);
+                toast.success('Procurement inventory batch recorded successfully!');
+                if (insertedData?.id) {
+                  navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${insertedData.id}`);
+                } else {
+                  navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/List`);
+                }
+              }
 
             } catch (err: any) {
               toast.error('Submission Interrupted: ' + err.message);

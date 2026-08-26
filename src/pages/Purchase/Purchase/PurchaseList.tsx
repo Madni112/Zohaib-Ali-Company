@@ -4,10 +4,12 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
+import { useAuth } from '../../../Context/Auth';
 import { MdStore, MdPerson, MdEvent } from 'react-icons/md';
 
 const PurchaseList = () => {
   const navigate = useNavigate();
+  const { tenantId } = useAuth();
   const [purchases, setPurchases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -179,8 +181,10 @@ const PurchaseList = () => {
                       <td className="py-3.5 px-4 text-right font-mono font-black text-success pr-6">Rs. {totalAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
-                          onEdit={() => navigate('/Purchase/Purchases/Add', { state: { purchaseRecord: pur } })}
+                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${pur.id}`)}
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Add`, { state: { purchaseRecord: pur } })}
                           onDelete={() => handleDeletePurchaseRecord(pur.id)}
+                          printTitle="Print Goods Receiving Note"
                           editTitle="Edit Purchase"
                           deleteTitle="Delete Purchase"
                         />

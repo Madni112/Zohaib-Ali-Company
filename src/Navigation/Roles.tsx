@@ -41,6 +41,7 @@ import PrintInvoiceReceipt from '../pages/Registration/Invoice Receipt/PrintInvo
 import AddMultiInvoiceReceipt from '../pages/Registration/Multi Invoice Receipt/AddMultiInvoiceReceipt';
 import AddPurchases from '../pages/Purchase/Purchase/AddPurchases';
 import PurchaseList from '../pages/Purchase/Purchase/PurchaseList';
+import PrintPurchase from '../pages/Purchase/Purchase/PrintPurchase';
 import VendorList from '../pages/Purchase/Vendor/VendorList';
 import AddVendor from '../pages/Purchase/Vendor/AddVendor';
 import PurchaseReceiptList from '../pages/Purchase/Purchase Receipt/PurchaseReceiptList';
@@ -389,6 +390,18 @@ export const adminRoutes = [
   {
     path: '/Purchase/Purchases/Add',
     component: <AddPurchases />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Purchases/Print/:id',
+    component: <PrintPurchase />,
+    label: 'Print Purchase',
+    hideFromSidebar: true
+  },
+  {
+    path: '/purchase/purchases/print/:id',
+    component: <PrintPurchase />,
+    label: 'Print Purchase',
     hideFromSidebar: true
   },
   {
