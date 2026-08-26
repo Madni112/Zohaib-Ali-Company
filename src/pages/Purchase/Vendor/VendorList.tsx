@@ -120,11 +120,11 @@ const VendorList = () => {
                         <thead>
                             <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                                 <th className="py-4 px-4 font-semibold w-16">S#</th>
-                                <th className="py-4 px-4 font-semibold">Vendor / Factory Name</th>
-                                <th className="py-4 px-4 font-semibold">Supply Category</th>
+                                <th className="py-4 px-4 font-semibold">Vendor / Business Name</th>
                                 <th className="py-4 px-4 font-semibold">Contact Person</th>
-                                <th className="py-4 px-4 font-semibold">City & Phone</th>
-                                <th className="py-4 px-4 font-semibold text-right">Opening Balance</th>
+                                <th className="py-4 px-4 font-semibold">Mobile / Phone</th>
+                                <th className="py-4 px-4 font-semibold">Email</th>
+                                <th className="py-4 px-4 font-semibold">Address</th>
                                 <th className="py-4 px-4 font-semibold w-24 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -136,8 +136,6 @@ const VendorList = () => {
                             ) : (
                                 paginatedVendors.map((vendor, idx) => {
                                     const serialNumber = startIndex + idx + 1;
-                                    const openBal = Number(vendor.opening_balance ?? vendor.balance ?? 0);
-                                    const balType = vendor.balance_type || 'Payable';
 
                                     return (
                                         <tr key={vendor.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
@@ -149,37 +147,24 @@ const VendorList = () => {
                                                 </div>
                                             </td>
                                             <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300">
-                                                <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                                    {vendor.category || 'Tiles & Ceramics'}
-                                                </span>
-                                            </td>
-                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300">
                                                 <span className="inline-flex items-center gap-1">
                                                     <MdPerson size={14} className="text-gray-400" />
                                                     {vendor.contact_name || '-'}
                                                 </span>
                                             </td>
                                             <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400">
-                                                <div className="flex flex-col gap-0.5">
-                                                    {vendor.city && <span className="font-bold text-slate-800 dark:text-slate-200">{vendor.city}</span>}
-                                                    <span className="inline-flex items-center gap-1 font-mono text-[11px]">
-                                                        {vendor.cell_no || vendor.phone_no || vendor.phone || '-'}
-                                                    </span>
-                                                </div>
+                                                <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                                                    <MdPhone size={14} className="text-gray-400" />
+                                                    {vendor.cell_no || vendor.phone_no || vendor.phone || '-'}
+                                                </span>
                                             </td>
-                                            <td className="py-3.5 px-4 text-right font-mono font-bold">
-                                                {openBal > 0 ? (
-                                                    <div className="flex flex-col items-end">
-                                                        <span className={balType === 'Payable' ? 'text-rose-600' : 'text-emerald-600'}>
-                                                            Rs. {openBal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                        </span>
-                                                        <span className="text-[10px] text-gray-400 font-sans">
-                                                            {balType === 'Payable' ? 'Payable' : 'Advance'}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400">Rs. 0.00</span>
-                                                )}
+                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400">
+                                                <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                                                    {vendor.email ? <><MdEmail size={14} className="text-gray-400" />{vendor.email}</> : '-'}
+                                                </span>
+                                            </td>
+                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-400 max-w-xs truncate">
+                                                {vendor.address || '-'}
                                             </td>
                                             <td className="py-3.5 px-4 text-center">
                                                 <TableActions
