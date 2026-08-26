@@ -103,6 +103,10 @@ const PrintPurchase = () => {
   let computedTotalDiscount = 0;
   let computedTotalGst = 0;
   let computedTotalNet = 0;
+  let computedTotalSqm = 0;
+  let computedTotalBoxes = 0;
+  let computedTotalLoosePcs = 0;
+  let hasTileItems = false;
 
   const processedItems = rawItems.map((item) => {
     const pName = item.itemName ?? item.product_name ?? 'N/A';
@@ -119,6 +123,7 @@ const PrintPurchase = () => {
         String(prodMeta.uom || '').toLowerCase().includes('box')
       )
     );
+    if (isTile) hasTileItems = true;
     const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
     const pcsPerBox = rawPcs > 1 ? rawPcs : 4;
 
@@ -143,6 +148,8 @@ const PrintPurchase = () => {
     if (isTile) {
       const boxes = Math.floor(qty);
       const loose = Math.round((qty - boxes) * pcsPerBox);
+      computedTotalBoxes += boxes;
+      computedTotalLoosePcs += loose;
 
       let tileWidthCm = 60;
       let tileHeightCm = 60;
@@ -157,6 +164,7 @@ const PrintPurchase = () => {
       perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
       perBoxSqm = perPieceSqm * pcsPerBox;
       totalLineSqm = (boxes * perBoxSqm) + (loose * perPieceSqm);
+      computedTotalSqm += totalLineSqm;
 
       if (boxes > 0 && loose > 0) {
         qtyDisplay = `${boxes} Box + ${loose} Pcs`;
@@ -196,6 +204,7 @@ const PrintPurchase = () => {
     };
   });
 
+  const computedTotalSqFt = computedTotalSqm * 10.7639;
   const grandTotal = computedTotalNet > 0 ? computedTotalNet : Number(purchase.total_amount || 0);
   const cashPaid = Number(purchase.cash_amount_paid || 0);
   const bankPaid = Number(purchase.bank_amount_paid || 0);
@@ -226,17 +235,30 @@ const PrintPurchase = () => {
   const amountInWords = numberToWords(Math.round(grandTotal));
 
   return (
-    <div className="mx-auto max-w-4xl p-2 sm:p-4 md:p-6 bg-white text-slate-900 font-sans min-h-screen relative print:p-0 print:m-0 print:max-w-full print:w-full">
+    <div className="mx-auto max-w-5xl p-2 sm:p-4 md:p-6 bg-white text-slate-900 font-sans min-h-screen relative print:p-0 print:m-0 print:max-w-none print:w-full">
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 10mm 12mm;
+            margin: 8mm 10mm;
           }
-          aside, nav, header, .no-print, button {
+          html, body, #root, main, div[class*="max-w-screen-2xl"], div[class*="p-4 md:p-6 2xl:p-8"] {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-height: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          aside, nav, header, footer, .no-print, button {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           body {
             background: white !important;
@@ -251,10 +273,12 @@ const PrintPurchase = () => {
             padding: 0 !important;
             margin: 0 !important;
             width: 100% !important;
+            max-width: 100% !important;
           }
           table {
             width: 100% !important;
             table-layout: fixed !important;
+            border-collapse: collapse !important;
           }
           .print-table-header {
             background-color: #0f172a !important;
@@ -263,6 +287,11 @@ const PrintPurchase = () => {
           .print-table-header th {
             color: #ffffff !important;
             background-color: #0f172a !important;
+          }
+          .print-total-row td {
+            background-color: #f1f5f9 !important;
+            border-top: 2px solid #0f172a !important;
+            border-bottom: 2px solid #0f172a !important;
           }
         }
       `}</style>
@@ -422,6 +451,33 @@ const PrintPurchase = () => {
                 </tr>
               ))}
             </tbody>
+            <tfoot className="border-t-2 border-slate-900 bg-slate-100 font-bold text-xs print-total-row">
+              <tr>
+                <td colSpan={3} className="py-2.5 px-3 text-right font-black uppercase text-slate-900 tracking-wider">
+                  Consignment Total ({processedItems.length} {processedItems.length === 1 ? 'Item' : 'Items'}):
+                </td>
+                <td className="py-2.5 px-3 text-center bg-slate-200/70">
+                  <div className="font-mono font-black text-slate-950 text-xs">
+                    {hasTileItems && computedTotalBoxes > 0
+                      ? `${computedTotalBoxes} Box${computedTotalBoxes > 1 ? 'es' : ''}${computedTotalLoosePcs > 0 ? ` + ${computedTotalLoosePcs} Pcs` : ''}`
+                      : `${processedItems.reduce((acc, it) => acc + it.qty, 0)} Units`}
+                  </div>
+                  {computedTotalSqm > 0 && (
+                    <div className="mt-1">
+                      <span className="text-[10px] font-black text-emerald-950 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-400 inline-block font-mono shadow-xs">
+                        Total: {computedTotalSqm.toFixed(2)} sq.m
+                      </span>
+                    </div>
+                  )}
+                </td>
+                <td className="py-2.5 px-3 text-right text-slate-600 font-sans text-[11px] font-bold">
+                  Net Payable:
+                </td>
+                <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950 pr-4 text-sm whitespace-nowrap bg-slate-200/50">
+                  Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -433,6 +489,22 @@ const PrintPurchase = () => {
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-0.5">Total Amount in Words:</span>
               <p className="font-bold text-slate-900 italic text-xs">{amountInWords}</p>
             </div>
+
+            {/* Consignment Area Metric Badge */}
+            {computedTotalSqm > 0 && (
+              <div className="p-3 rounded-xl bg-teal-50/80 border border-teal-300 text-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-teal-800 uppercase tracking-wider block">Total Tile Coverage Area:</span>
+                  <p className="font-black text-teal-950 text-sm font-mono mt-0.5">
+                    {computedTotalSqm.toFixed(2)} Sq.M <span className="text-xs font-medium text-teal-700">({computedTotalSqFt.toLocaleString(undefined, { maximumFractionDigits: 1 })} Sq.Ft)</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-black text-teal-800 uppercase tracking-wider block">Boxes:</span>
+                  <p className="font-black text-teal-950 text-sm font-mono mt-0.5">{computedTotalBoxes} Boxes</p>
+                </div>
+              </div>
+            )}
 
             {(purchase.remarks || purchase.notes) && (
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-300 text-xs">
@@ -448,6 +520,13 @@ const PrintPurchase = () => {
               <span className="font-sans font-bold">Gross Total Bill:</span>
               <strong className="font-black text-sm text-slate-950">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
             </div>
+
+            {computedTotalSqm > 0 && (
+              <div className="flex justify-between items-center text-teal-900 pt-1.5 border-t border-slate-200 font-bold">
+                <span className="font-sans text-[11px]">Consignment Tile Area:</span>
+                <strong className="font-black text-xs text-teal-950 font-mono">{computedTotalSqm.toFixed(2)} Sq.M</strong>
+              </div>
+            )}
 
             <div className="flex justify-between items-center text-emerald-800 pt-1.5 border-t border-slate-200 font-bold">
               <span className="font-sans">Amount Paid Upfront:</span>
