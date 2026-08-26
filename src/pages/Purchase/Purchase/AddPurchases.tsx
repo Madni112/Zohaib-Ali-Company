@@ -399,14 +399,14 @@ const AddPurchases = () => {
                 </div>
 
                 {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}
-                <div className="border border-stroke dark:border-strokedark rounded-sm overflow-hidden">
-                  <div className="w-full overflow-x-auto pb-44">
-                    <table className="w-full border-collapse text-left min-w-[1100px]">
+                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-visible">
+                  <div className="w-full overflow-visible">
+                    <table className="w-full table-auto border-collapse text-left">
                       <thead>
                         <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                           <th className="p-3 w-10 text-center">S#</th>
                           <th className="p-3 w-48">SKU Code (Search)</th>
-                          <th className="p-3">Product Description</th>
+                          <th className="p-3 min-w-[260px]">Product Description</th>
                           <th className="p-3 w-28 text-center">Arrived Qty</th>
                           <th className="p-3 w-32 text-right">Cost Price (PKR)</th>
                           {values.showDiscount && (
@@ -433,13 +433,23 @@ const AddPurchases = () => {
                               const uomString = matchedProduct ? matchedProduct.uom : 'NOS';
                               const lineTotals = calculatePurchaseLineTotals(item, values.applyTax);
                               const isCurrentActive = activeSkuIndex === idx;
+                              const isCurrentProdNameActive = activeProdNameIndex === idx;
+
+                              const handleProductSelection = (p: any) => {
+                                const displaySku = p.item_sr_no || `SKU-${p.id}`;
+                                setFieldValue(`items.${idx}.skuCode`, displaySku);
+                                setFieldValue(`items.${idx}.itemName`, p.product_name);
+                                setFieldValue(`items.${idx}.rate`, Number(p.purchase_price || 0));
+                                setActiveProdNameIndex(null);
+                                setActiveSkuIndex(null);
+                              };
 
                               return (
-                                <tr key={idx} className="bg-white dark:bg-boxdark text-xs hover:bg-slate-50 dark:hover:bg-meta-4/10 transition">
+                                <tr key={idx} className={`border-b border-stroke dark:border-strokedark text-xs transition ${isCurrentActive || isCurrentProdNameActive ? 'relative z-50 bg-slate-50/90 dark:bg-meta-4/20' : 'relative z-10 bg-white dark:bg-boxdark hover:bg-slate-50 dark:hover:bg-meta-4/10'}`}>
                                   <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
 
                                   {/* Searchable SKU Code */}
-                                  <td className={`p-3 relative sku-container ${isCurrentActive ? 'z-50' : 'z-10'}`}>
+                                  <td className="p-3 relative sku-container">
                                     {(() => {
                                       const filteredProds = productList.filter(p => {
                                         if (!item.skuCode) return true;
@@ -457,6 +467,7 @@ const AddPurchases = () => {
                                             value={item.skuCode || ''}
                                             onFocus={() => {
                                               setActiveSkuIndex(idx);
+                                              setActiveProdNameIndex(null);
                                               setHighlightedSkuIndex(0);
                                             }}
                                             onKeyDown={(e) => {
@@ -469,12 +480,10 @@ const AddPurchases = () => {
                                               } else if (e.key === 'Enter') {
                                                 e.preventDefault();
                                                 if (filteredProds[highlightedSkuIndex]) {
-                                                  const p = filteredProds[highlightedSkuIndex];
-                                                  setFieldValue(`items.${idx}.skuCode`, p.item_sr_no || `SKU-${p.id}`);
-                                                  setFieldValue(`items.${idx}.itemName`, p.product_name);
-                                                  setFieldValue(`items.${idx}.rate`, Number(p.purchase_price || 0));
-                                                  setActiveSkuIndex(null);
+                                                  handleProductSelection(filteredProds[highlightedSkuIndex]);
                                                 }
+                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                                setActiveSkuIndex(null);
                                               }
                                             }}
                                             onChange={(e) => {
@@ -486,15 +495,20 @@ const AddPurchases = () => {
                                           />
 
                                           {isCurrentActive && filteredProds.length > 0 && (
-                                            <div className="absolute left-0 top-full mt-1 w-72 max-h-52 overflow-y-auto bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-lg shadow-xl z-50 divide-y divide-stroke dark:divide-strokedark">
+                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] w-72 max-h-52 overflow-y-auto bg-white dark:bg-[#1A222C] border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
                                               {filteredProds.map((prod, pIdx) => (
                                                 <div
                                                   key={prod.id}
-                                                  onMouseDown={() => {
-                                                    setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no || `SKU-${prod.id}`);
-                                                    setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                    setFieldValue(`items.${idx}.rate`, Number(prod.purchase_price || 0));
-                                                    setActiveSkuIndex(null);
+                                                  onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
+                                                  onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleProductSelection(prod);
+                                                  }}
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    handleProductSelection(prod);
                                                   }}
                                                   className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${highlightedSkuIndex === pIdx ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}
                                                 >
@@ -513,7 +527,7 @@ const AddPurchases = () => {
                                   </td>
 
                                   {/* Product Name & Description (Searchable Two-Way Input with Rich Dropdown matching Sales page) */}
-                                  <td className="p-3 relative prod-name-container min-w-[240px]">
+                                  <td className="p-3 relative prod-name-container min-w-[260px]">
                                     {(() => {
                                       const query = (item.itemName || '').toLowerCase().trim();
                                       const filteredByName = productList.filter(p => {
@@ -522,7 +536,6 @@ const AddPurchases = () => {
                                         const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
                                         return name.includes(query) || sku.includes(query);
                                       });
-                                      const isCurrentProdNameActive = activeProdNameIndex === idx;
 
                                       return (
                                         <div className="relative">
@@ -545,13 +558,9 @@ const AddPurchases = () => {
                                               } else if (e.key === 'Enter') {
                                                 e.preventDefault();
                                                 if (filteredByName[highlightedProdNameIndex]) {
-                                                  const p = filteredByName[highlightedProdNameIndex];
-                                                  setFieldValue(`items.${idx}.skuCode`, p.item_sr_no || `SKU-${p.id}`);
-                                                  setFieldValue(`items.${idx}.itemName`, p.product_name);
-                                                  setFieldValue(`items.${idx}.rate`, Number(p.purchase_price || 0));
-                                                  setActiveProdNameIndex(null);
+                                                  handleProductSelection(filteredByName[highlightedProdNameIndex]);
                                                 }
-                                              } else if (e.key === 'Escape') {
+                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
                                                 setActiveProdNameIndex(null);
                                               }
                                             }}
@@ -565,8 +574,7 @@ const AddPurchases = () => {
                                                 p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
                                               );
                                               if (matched) {
-                                                setFieldValue(`items.${idx}.skuCode`, matched.item_sr_no || `SKU-${matched.id}`);
-                                                setFieldValue(`items.${idx}.rate`, Number(matched.purchase_price || 0));
+                                                handleProductSelection(matched);
                                               }
                                             }}
                                             placeholder="Search Product Name..."
@@ -585,10 +593,13 @@ const AddPurchases = () => {
                                                     onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
                                                     onMouseDown={(e) => {
                                                       e.preventDefault();
-                                                      setFieldValue(`items.${idx}.skuCode`, displaySku);
-                                                      setFieldValue(`items.${idx}.itemName`, p.product_name);
-                                                      setFieldValue(`items.${idx}.rate`, Number(p.purchase_price || 0));
-                                                      setActiveProdNameIndex(null);
+                                                      e.stopPropagation();
+                                                      handleProductSelection(p);
+                                                    }}
+                                                    onClick={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      handleProductSelection(p);
                                                     }}
                                                     className={`p-3 cursor-pointer transition flex items-center justify-between group ${
                                                       isHighlighted

@@ -772,6 +772,13 @@ const NewInvoice = () => {
                                                       onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
                                                       onMouseDown={(e) => {
                                                         e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                        setActiveSkuIndex(null);
+                                                      }}
+                                                      onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
                                                         handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
                                                         setActiveSkuIndex(null);
                                                       }}
@@ -889,6 +896,13 @@ const NewInvoice = () => {
                                                        onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
                                                        onMouseDown={(e) => {
                                                          e.preventDefault();
+                                                         e.stopPropagation();
+                                                         handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                         setActiveProdNameIndex(null);
+                                                       }}
+                                                       onClick={(e) => {
+                                                         e.preventDefault();
+                                                         e.stopPropagation();
                                                          handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
                                                          setActiveProdNameIndex(null);
                                                        }}
