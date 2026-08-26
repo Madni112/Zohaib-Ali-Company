@@ -155,6 +155,7 @@ const AddPurchases = () => {
         items: rawItems.map((it: any) => ({
           ...it,
           skuCode: it.skuCode || it.item_sr_no || it.item_code || '',
+          warehouse: it.warehouse || it.target_warehouse || '',
           rate: Number(it.rate ?? it.cost_price ?? 0),
           qty: Number(it.qty ?? it.quantity ?? 1),
           gstRate: Number(it.gstRate ?? it.gst_rate ?? 18),
@@ -180,6 +181,7 @@ const AddPurchases = () => {
         {
           itemName: '',
           skuCode: '',
+          warehouse: '',
           qty: 1,
           rate: 0,
           discountPer: 0,
@@ -269,11 +271,13 @@ const AddPurchases = () => {
 
                 // Restock receiving warehouse inventory bins
                 for (const item of values.items) {
-                  const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', values.targetWarehouse).maybeSingle();
+                  const effectiveWarehouse = item.warehouse || values.targetWarehouse;
+                  if (!effectiveWarehouse || !item.itemName) continue;
+                  const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', effectiveWarehouse).maybeSingle();
                   if (p) {
                     await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) + Number(item.qty) }).eq('id', p.id);
                   } else {
-                    await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: values.targetWarehouse, quantity: Number(item.qty) }]);
+                    await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: effectiveWarehouse, quantity: Number(item.qty) }]);
                   }
                 }
               }
@@ -408,7 +412,8 @@ const AddPurchases = () => {
                         <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                           <th className="p-3 w-10 text-center">S#</th>
                           <th className="p-3 w-48">SKU Code (Search)</th>
-                          <th className="p-3 min-w-[260px]">Product Description</th>
+                          <th className="p-3 min-w-[240px]">Product Description</th>
+                          <th className="p-3 w-44">Destination Warehouse</th>
                           <th className="p-3 w-28 text-center">Arrived Qty</th>
                           <th className="p-3 w-32 text-right">Cost Price (PKR)</th>
                           {values.showDiscount && (
@@ -643,6 +648,24 @@ const AddPurchases = () => {
                                     })()}
                                   </td>
 
+                                  {/* ROW-LEVEL DESTINATION WAREHOUSE */}
+                                  <td className="p-3 w-44">
+                                    <select
+                                      value={item.warehouse || values.targetWarehouse || ''}
+                                      onChange={(e) => {
+                                        setFieldValue(`items.${idx}.warehouse`, e.target.value);
+                                      }}
+                                      className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-xs"
+                                    >
+                                      <option value="">Default ({values.targetWarehouse || 'None'})</option>
+                                      {locations.map((loc) => (
+                                        <option key={loc.id} value={loc.name}>
+                                          {loc.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+
                                   {/* Arrived Qty */}
                                   <td className="p-3">
                                     <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
@@ -796,7 +819,7 @@ const AddPurchases = () => {
                       {({ push }) => (
                         <button
                           type="button"
-                          onClick={() => push({ itemName: '', skuCode: '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 })}
+                          onClick={() => push({ itemName: '', skuCode: '', warehouse: values.targetWarehouse || '', qty: 1, rate: 0, discountPer: 0, discountAmt: 0, gstRate: 18, gstAmt: 0 })}
                           className="inline-flex items-center gap-1 bg-primary text-white font-bold py-1.5 px-3.5 rounded text-xs hover:bg-opacity-90 transition cursor-pointer shadow-xs"
                         >
                           <FiPlus size={12} /> Add Row Line
