@@ -247,6 +247,7 @@ const AddPurchases = () => {
               const databasePayload = {
                 purchase_no: values.purchaseNo,
                 supplier_name: values.supplierName,
+                vendor_name: values.supplierName,
                 target_warehouse: values.items[0]?.warehouse || locations[0]?.name || 'Main Warehouse',
                 purchase_date: values.purchaseDate,
                 purchase_type: values.applyTax ? 'GST Standard Item' : 'No Tax',
@@ -258,6 +259,7 @@ const AddPurchases = () => {
                 total_amount: totalBillAmount,
                 remaining_balance: remainingBalance,
                 remarks: values.remarks.trim() || null,
+                notes: values.remarks.trim() || null,
                 items: values.items,
                 metadata: {
                   settlementMode: values.settlementMode,
