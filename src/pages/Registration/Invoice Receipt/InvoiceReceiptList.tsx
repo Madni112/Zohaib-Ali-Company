@@ -18,6 +18,17 @@ function InvoiceReceiptList() {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const formatMoney = (val: number | string | undefined | null): string => {
+    const num = Number(val) || 0;
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('en-US');
+    }
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   useEffect(() => {
     fetchInvoiceReceiptHistories();
   }, []);
@@ -28,7 +39,7 @@ function InvoiceReceiptList() {
       const { data, error } = await supabase
         .from('financial_vouchers')
         .select('*')
-        .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher')
+        .or('voucher_type.eq.Cash Receipt Voucher,voucher_type.eq.Bank Receipt Voucher,voucher_type.eq.Cash & Bank Receipt Voucher')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -158,14 +169,28 @@ function InvoiceReceiptList() {
                     <tr key={r.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150">
                       <td className="py-3.5 px-4 font-medium text-black dark:text-white">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-mono font-bold text-primary tracking-wide">{r.voucher_no}</td>
-                      <td className="py-3.5 px-4 font-bold text-gray-600 dark:text-gray-400">{r.original_invoice_no ? `INV-${String(r.original_invoice_no).padStart(4, '0')}` : '-'}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold">
+                        {r.original_invoice_no ? (
+                          <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px]">
+                            {String(r.original_invoice_no).startsWith('INV-') ? r.original_invoice_no : `INV-${String(r.original_invoice_no).padStart(4, '0')}`}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-sans">General Ledger</span>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex px-2 py-0.5 rounded font-bold uppercase text-[10px] ${r.voucher_type === 'Cash Receipt Voucher' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60' : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60'}`}>
-                          {r.voucher_type === 'Cash Receipt Voucher' ? 'Cash Box' : 'Bank Wire'}
+                        <span className={`inline-flex px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                          r.voucher_type === 'Cash Receipt Voucher' 
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60' 
+                            : r.voucher_type === 'Bank Receipt Voucher'
+                            ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60'
+                            : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60'
+                        }`}>
+                          {r.voucher_type === 'Cash Receipt Voucher' ? 'Cash Counter' : (r.voucher_type === 'Bank Receipt Voucher' ? 'Bank Wire' : 'Split Payment')}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-black dark:text-white whitespace-nowrap">{r.customer_name}</td>
-                      <td className="py-3.5 px-4 text-right font-bold text-success font-mono">Rs. {Number(r.total_amount || 0).toFixed(2)}</td>
+                      <td className="py-3.5 px-4 text-right font-bold text-success font-mono">Rs. {formatMoney(r.total_amount)}</td>
                       <td className="py-3.5 px-4 text-center text-gray-500 font-medium whitespace-nowrap">{r.voucher_date}</td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions

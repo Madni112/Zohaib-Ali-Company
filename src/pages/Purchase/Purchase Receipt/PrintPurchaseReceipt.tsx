@@ -93,11 +93,14 @@ const PrintPurchaseReceipt: React.FC = () => {
     });
   };
 
+  const isSplit = receipt.voucher_type === 'Cash & Bank Payment Voucher' || (meta.cashAmount && meta.bankAmount);
   const isBank = receipt.voucher_type === 'Bank Payment Voucher';
   const bankTitle = meta.selectedBankTitle || receipt.selected_bank_title || meta.selectedBankId || '';
-  const paymentMethod = isBank 
-    ? `Bank Account Outflow (${bankTitle || 'Online Wire'})` 
-    : 'Cash Drawer Disbursement';
+  const paymentMethod = isSplit
+    ? `Split Payment (Cash: Rs. ${formatMoney(meta.cashAmount || 0)} + Bank: Rs. ${formatMoney(meta.bankAmount || 0)} - ${bankTitle || 'Bank'})`
+    : (isBank 
+      ? `Bank Account Outflow (${bankTitle || 'Online Wire'})` 
+      : 'Cash Drawer Disbursement');
 
   const poDisplay = receipt.original_invoice_no || meta.linkedPurchaseNo || 'General Vendor Clearing';
 
@@ -213,7 +216,7 @@ const PrintPurchaseReceipt: React.FC = () => {
             </div>
             <div className="mt-1.5">
               <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">
-                {isBank ? 'Bank Payment Voucher' : 'Cash Payment Voucher'}
+                {isSplit ? 'Split Payment Voucher' : (isBank ? 'Bank Payment Voucher' : 'Cash Payment Voucher')}
               </span>
             </div>
           </div>

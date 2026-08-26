@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
@@ -16,7 +16,10 @@ import {
   MdCheckCircle, 
   MdArrowBack, 
   MdInfoOutline,
-  MdOutlinePayment
+  MdOutlinePayment,
+  MdSearch,
+  MdClear,
+  MdKeyboardArrowDown
 } from 'react-icons/md';
 
 function AddPurchaseReceipt() {
@@ -32,8 +35,17 @@ function AddPurchaseReceipt() {
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [coaAccounts, setCoaAccounts] = useState<any[]>([]);
 
+  // Vendor Autocomplete State
+  const [vendorSearchQuery, setVendorSearchQuery] = useState('');
+  const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
+  const [highlightedVendorIndex, setHighlightedVendorIndex] = useState(0);
   const [selectedVendor, setSelectedVendor] = useState<string>('');
   const [selectedVendorObj, setSelectedVendorObj] = useState<any>(null);
+
+  // PO Autocomplete State
+  const [poSearchQuery, setPoSearchQuery] = useState('');
+  const [isPoDropdownOpen, setIsPoDropdownOpen] = useState(false);
+  const [highlightedPoIndex, setHighlightedPoIndex] = useState(0);
   const [selectedPurchaseNo, setSelectedPurchaseNo] = useState<string>('');
   const [selectedPurchaseObj, setSelectedPurchaseObj] = useState<any>(null);
 
@@ -44,6 +56,9 @@ function AddPurchaseReceipt() {
   const [poPastReceiptsPaid, setPoPastReceiptsPaid] = useState<number>(0);
   const [effectiveDueForThisReceipt, setEffectiveDueForThisReceipt] = useState<number>(0);
   const [poAllocationsMap, setPoAllocationsMap] = useState<Record<string, { gross: number; upfront: number; pastReceipts: number; due: number }>>({});
+
+  const vendorContainerRef = useRef<HTMLDivElement>(null);
+  const poContainerRef = useRef<HTMLDivElement>(null);
 
   const editData = location.state?.receiptRecord;
   const isEditMode = !!editData;
@@ -58,6 +73,20 @@ function AddPurchaseReceipt() {
       maximumFractionDigits: 2
     });
   };
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (vendorContainerRef.current && !vendorContainerRef.current.contains(e.target as Node)) {
+        setIsVendorDropdownOpen(false);
+      }
+      if (poContainerRef.current && !poContainerRef.current.contains(e.target as Node)) {
+        setIsPoDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -90,12 +119,14 @@ function AddPurchaseReceipt() {
         if (isEditMode && editData) {
           const vName = editData.customer_name || editData.customerName || '';
           setSelectedVendor(vName);
+          setVendorSearchQuery(vName);
           const matchedVendor = normalizedVendors.find(v => v.vendor_name.toLowerCase() === vName.toLowerCase());
           if (matchedVendor) setSelectedVendorObj(matchedVendor);
 
           const poRef = editData.original_invoice_no || editData.metadata?.linkedPurchaseNo || '';
           if (poRef) {
             setSelectedPurchaseNo(poRef);
+            setPoSearchQuery(poRef);
             const cleanId = String(poRef).replace(/\D/g, '');
             const matchedPo = purData?.find(p => p.purchase_no === poRef || String(p.id) === cleanId);
             if (matchedPo) setSelectedPurchaseObj(matchedPo);
@@ -148,7 +179,7 @@ function AddPurchaseReceipt() {
         .from('financial_vouchers')
         .select('id, total_amount, original_invoice_no, metadata')
         .eq('customer_name', vendorName)
-        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher');
+        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
 
       // Gross purchases total and initial paid
       let totalPurchasesGross = 0;
@@ -243,43 +274,77 @@ function AddPurchaseReceipt() {
   };
 
   // Vendor selection handler
-  const handleVendorChange = (vName: string) => {
+  const handleSelectVendor = (vendor: any) => {
+    const vName = vendor.vendor_name;
     setSelectedVendor(vName);
-    setSelectedPurchaseNo('');
-    setSelectedPurchaseObj(null);
+    setVendorSearchQuery(vName);
+    setSelectedVendorObj(vendor);
+    setIsVendorDropdownOpen(false);
 
-    const vObj = vendorOptions.find(v => v.vendor_name === vName);
-    setSelectedVendorObj(vObj || null);
+    setSelectedPurchaseNo('');
+    setPoSearchQuery('');
+    setSelectedPurchaseObj(null);
 
     calculateVendorBalances(vName, '', purchaseOptions, editData?.id || null);
   };
 
   // PO selection handler
-  const handlePurchaseSelect = (poNo: string) => {
+  const handleSelectPurchase = (poNo: string) => {
     setSelectedPurchaseNo(poNo);
-    const cleanId = String(poNo).replace(/\D/g, '');
-    const poObj = purchaseOptions.find(p => p.purchase_no === poNo || String(p.id) === cleanId);
-    setSelectedPurchaseObj(poObj || null);
+    setPoSearchQuery(poNo || '-- General Vendor Balance Clearing --');
+    setIsPoDropdownOpen(false);
+
+    if (poNo) {
+      const cleanId = String(poNo).replace(/\D/g, '');
+      const poObj = purchaseOptions.find(p => p.purchase_no === poNo || String(p.id) === cleanId);
+      setSelectedPurchaseObj(poObj || null);
+    } else {
+      setSelectedPurchaseObj(null);
+    }
 
     calculateVendorBalances(selectedVendor, poNo, purchaseOptions, editData?.id || null);
   };
 
-  // Filtered purchases available for the selected vendor
+  // Filtered lists for autocomplete
+  const filteredVendors = vendorOptions.filter(v =>
+    (v.vendor_name || '').toLowerCase().includes(vendorSearchQuery.toLowerCase()) ||
+    (v.contact_name || v.contact_person || '').toLowerCase().includes(vendorSearchQuery.toLowerCase()) ||
+    (v.cell_no || v.phone_no || v.phone || '').toLowerCase().includes(vendorSearchQuery.toLowerCase()) ||
+    (v.city || '').toLowerCase().includes(vendorSearchQuery.toLowerCase())
+  );
+
   const vendorPurchasesList = purchaseOptions.filter(p => 
     selectedVendor && (p.supplier_name || p.vendor_name || '').toLowerCase() === selectedVendor.toLowerCase()
+  );
+
+  const filteredPurchases = vendorPurchasesList.filter(p =>
+    (p.purchase_no || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
+    (p.purchase_date || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
+    (p.target_warehouse || '').toLowerCase().includes(poSearchQuery.toLowerCase())
   );
 
   const validationSchema = Yup.object().shape({
     voucherType: Yup.string().required('Payment method is required'),
     paymentDate: Yup.string().required('Payment date is required'),
-    amount: Yup.number()
-      .typeError('Amount must be a valid number')
-      .min(1, 'Amount must be greater than 0')
-      .required('Payment amount is required'),
+    amount: Yup.number().when('voucherType', {
+      is: (val: string) => val === 'By Cash' || val === 'By Bank',
+      then: () => Yup.number().typeError('Amount must be a number').min(1, 'Amount must be greater than 0').required('Amount is required'),
+      otherwise: () => Yup.number().nullable()
+    }),
+    cashAmount: Yup.number().when('voucherType', {
+      is: 'Split',
+      then: () => Yup.number().typeError('Cash must be numeric').min(0, 'Cannot be negative'),
+      otherwise: () => Yup.number().nullable()
+    }),
+    bankAmount: Yup.number().when('voucherType', {
+      is: 'Split',
+      then: () => Yup.number().typeError('Bank must be numeric').min(0, 'Cannot be negative'),
+      otherwise: () => Yup.number().nullable()
+    }),
     selectedBankId: Yup.string().when('voucherType', {
-      is: 'By Bank',
-      then: (schema) => schema.required('Please select the source bank account'),
-      otherwise: (schema) => schema.nullable()
+      is: (val: string) => val === 'By Bank' || val === 'Split',
+      then: () => Yup.string().required('Please select the source bank account'),
+      otherwise: () => Yup.string().nullable()
     })
   });
 
@@ -305,7 +370,7 @@ function AddPurchaseReceipt() {
             {isEditMode ? 'Edit Vendor Purchase Receipt Voucher' : 'Log Vendor Outflow Purchase Receipt'}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Disburse cash or bank wire payments to settle supplier bills and keep vendor ledgers balanced
+            Disburse cash, bank wire, or split payments to settle supplier bills with automated FIFO ledger balancing
           </p>
         </div>
         <button
@@ -320,10 +385,12 @@ function AddPurchaseReceipt() {
       <Formik
         initialValues={isEditMode && editData ? {
           voucherNo: editData.voucher_no || '',
-          voucherType: editData.voucher_type === 'Bank Payment Voucher' ? 'By Bank' : 'By Cash',
+          voucherType: editData.voucher_type === 'Bank Payment Voucher' ? 'By Bank' : (editData.voucher_type === 'Cash & Bank Payment Voucher' || (editData.metadata?.cashAmount && editData.metadata?.bankAmount) ? 'Split' : 'By Cash'),
           selectedBankId: editData.metadata?.selectedBankId || '',
           paymentDate: editData.voucher_date || new Date().toISOString().split('T')[0],
           amount: editData.total_amount || '',
+          cashAmount: editData.metadata?.cashAmount || '',
+          bankAmount: editData.metadata?.bankAmount || '',
           notes: editData.narration || ''
         } : {
           voucherNo: `PRC-${Date.now().toString().slice(-6)}`,
@@ -331,6 +398,8 @@ function AddPurchaseReceipt() {
           selectedBankId: '',
           paymentDate: new Date().toISOString().split('T')[0],
           amount: '',
+          cashAmount: '',
+          bankAmount: '',
           notes: ''
         }}
         enableReinitialize={true}
@@ -341,13 +410,36 @@ function AddPurchaseReceipt() {
             return;
           }
 
-          const enteredAmount = Number(values.amount) || 0;
-          if (enteredAmount <= 0) {
-            toast.error('Please enter a valid disbursement amount.');
+          let finalAmount = 0;
+          let cashPortion = 0;
+          let bankPortion = 0;
+
+          if (values.voucherType === 'By Cash') {
+            cashPortion = Number(values.amount) || 0;
+            finalAmount = cashPortion;
+          } else if (values.voucherType === 'By Bank') {
+            bankPortion = Number(values.amount) || 0;
+            finalAmount = bankPortion;
+            if (!values.selectedBankId) {
+              toast.error('Please select the source bank account.');
+              return;
+            }
+          } else if (values.voucherType === 'Split') {
+            cashPortion = Number(values.cashAmount) || 0;
+            bankPortion = Number(values.bankAmount) || 0;
+            finalAmount = cashPortion + bankPortion;
+            if (!values.selectedBankId && bankPortion > 0) {
+              toast.error('Please select the source bank account for the bank transfer portion.');
+              return;
+            }
+          }
+
+          if (finalAmount <= 0) {
+            toast.error('Please enter a valid disbursement amount greater than 0.');
             return;
           }
 
-          if (effectiveDueForThisReceipt > 0 && enteredAmount > effectiveDueForThisReceipt + 1) {
+          if (effectiveDueForThisReceipt > 0 && finalAmount > effectiveDueForThisReceipt + 1) {
             toast.error(`Overpayment Warning: Total payable due is Rs. ${formatMoney(effectiveDueForThisReceipt)}.`);
             return;
           }
@@ -378,36 +470,59 @@ function AddPurchaseReceipt() {
               String(c.account_title || '').toLowerCase().includes('creditor')
             );
 
-            const assetAccountCode = values.voucherType === 'By Cash'
-              ? (cashCoa ? String(cashCoa.account_code) : '1010')
-              : (bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1015'));
-
             const vendorAccountCode = payCoa ? String(payCoa.account_code) : (cashCoa ? String(cashCoa.account_code) : '2010');
+            const cashAccountCode = cashCoa ? String(cashCoa.account_code) : '1010';
+            const bankAccountCode = bankCoa ? String(bankCoa.account_code) : (selectedBankObj?.accountNumber || '1015');
 
-            const balancedJournalItems = [
-              { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: enteredAmount, credit: 0 },
-              { accountCode: assetAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: enteredAmount }
-            ];
+            let balancedJournalItems: any[] = [];
+            let voucherTypeRecord = 'Cash Payment Voucher';
 
-            const bankInfoStr = values.voucherType === 'By Bank' ? ` | Source Bank: ${selectedBankObj?.bankName || values.selectedBankId}` : '';
+            if (values.voucherType === 'By Cash') {
+              voucherTypeRecord = 'Cash Payment Voucher';
+              balancedJournalItems = [
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
+                { accountCode: cashAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: finalAmount }
+              ];
+            } else if (values.voucherType === 'By Bank') {
+              voucherTypeRecord = 'Bank Payment Voucher';
+              balancedJournalItems = [
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
+                { accountCode: bankAccountCode, description: `Fund disbursed via ${values.voucherNo}`, debit: 0, credit: finalAmount }
+              ];
+            } else {
+              voucherTypeRecord = 'Cash & Bank Payment Voucher';
+              balancedJournalItems = [
+                { accountCode: vendorAccountCode, description: `Settled balance due to ${selectedVendor}`, debit: finalAmount, credit: 0 },
+                ...(cashPortion > 0 ? [{ accountCode: cashAccountCode, description: `Cash disbursement via ${values.voucherNo}`, debit: 0, credit: cashPortion }] : []),
+                ...(bankPortion > 0 ? [{ accountCode: bankAccountCode, description: `Bank disbursement via ${values.voucherNo}`, debit: 0, credit: bankPortion }] : [])
+              ];
+            }
+
+            const methodStr = values.voucherType === 'Split'
+              ? ` | Split (Cash: Rs. ${formatMoney(cashPortion)} + Bank: Rs. ${formatMoney(bankPortion)} via ${selectedBankObj?.bankName || values.selectedBankId})`
+              : (values.voucherType === 'By Bank' ? ` | Source Bank: ${selectedBankObj?.bankName || values.selectedBankId}` : ' | Mode: Cash Drawer');
+
             const poInfoStr = selectedPurchaseNo ? ` | Linked PO: ${selectedPurchaseNo}` : ' | General Vendor Settlement';
-            const compositeNarration = `Paid to Vendor: ${selectedVendor}${poInfoStr}${bankInfoStr} | Remarks: ${values.notes.trim()}`.trim();
+            const compositeNarration = `Paid to Vendor: ${selectedVendor}${poInfoStr}${methodStr} | Remarks: ${values.notes.trim()}`.trim();
 
             const payload = {
               voucher_no: values.voucherNo,
-              voucher_type: values.voucherType === 'By Cash' ? 'Cash Payment Voucher' : 'Bank Payment Voucher',
+              voucher_type: voucherTypeRecord,
               voucher_date: values.paymentDate,
               customerName: selectedVendor,
               customer_name: selectedVendor,
               original_invoice_no: selectedPurchaseNo || null,
               narration: compositeNarration,
               notes: compositeNarration,
-              total_amount: enteredAmount,
+              total_amount: finalAmount,
               items: balancedJournalItems,
               metadata: { 
-                selectedBankId: values.voucherType === 'By Bank' ? values.selectedBankId : null,
+                selectedBankId: (values.voucherType === 'By Bank' || values.voucherType === 'Split') ? values.selectedBankId : null,
                 selectedBankTitle: selectedBankObj ? `${selectedBankObj.bankName} - ${selectedBankObj.accountTitle}` : null,
                 linkedPurchaseNo: selectedPurchaseNo || null,
+                cashAmount: values.voucherType === 'Split' ? cashPortion : (values.voucherType === 'By Cash' ? finalAmount : 0),
+                bankAmount: values.voucherType === 'Split' ? bankPortion : (values.voucherType === 'By Bank' ? finalAmount : 0),
+                paymentTerm: values.voucherType,
                 moduleSource: 'purchase_receipt'
               }
             };
@@ -432,7 +547,6 @@ function AddPurchaseReceipt() {
               const targetPo = purchaseOptions.find(p => p.purchase_no === selectedPurchaseNo || String(p.id) === cleanId);
               
               if (targetPo) {
-                // Fetch all vouchers for this PO to calculate exact cumulative paid
                 const { data: allVouchersForPo } = await supabase
                   .from('financial_vouchers')
                   .select('id, total_amount')
@@ -464,8 +578,11 @@ function AddPurchaseReceipt() {
         }}
       >
         {({ handleChange, setFieldValue, values, errors, touched }) => {
-          const enteredAmt = Number(values.amount) || 0;
-          const projectedRemaining = Math.max(0, effectiveDueForThisReceipt - enteredAmt);
+          const currentTotalAmt = values.voucherType === 'Split'
+            ? (Number(values.cashAmount || 0) + Number(values.bankAmount || 0))
+            : (Number(values.amount) || 0);
+
+          const projectedRemaining = Math.max(0, effectiveDueForThisReceipt - currentTotalAmt);
 
           return (
             <Form className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -500,29 +617,114 @@ function AddPurchaseReceipt() {
                   </div>
                 </div>
 
-                {/* Row 2: Target Vendor Selector */}
-                <div>
+                {/* Row 2: Target Wholesale Vendor (Searchable Autocomplete Input) */}
+                <div className="relative" ref={vendorContainerRef}>
                   <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1 flex items-center gap-1.5">
                     <MdPerson size={15} className="text-emerald-600" /> Target Wholesale Vendor: *
                   </label>
-                  <select
-                    value={selectedVendor}
-                    disabled={isEditMode}
-                    onChange={(e) => handleVendorChange(e.target.value)}
-                    className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
-                  >
-                    <option value="">-- Choose Wholesale Vendor Account --</option>
-                    {vendorOptions.map(v => (
-                      <option key={v.id} value={v.vendor_name}>
-                        {v.vendor_name} {v.city ? `(${v.city})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  
+                  <div className="relative">
+                    <input
+                      type="text"
+                      disabled={isEditMode}
+                      value={vendorSearchQuery}
+                      onFocus={() => setIsVendorDropdownOpen(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setHighlightedVendorIndex(prev => Math.min(prev + 1, filteredVendors.length - 1));
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setHighlightedVendorIndex(prev => Math.max(prev - 1, 0));
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (filteredVendors[highlightedVendorIndex]) {
+                            handleSelectVendor(filteredVendors[highlightedVendorIndex]);
+                          }
+                        } else if (e.key === 'Escape') {
+                          setIsVendorDropdownOpen(false);
+                        }
+                      }}
+                      onChange={(e) => {
+                        setVendorSearchQuery(e.target.value);
+                        setIsVendorDropdownOpen(true);
+                        setHighlightedVendorIndex(0);
+                        if (!e.target.value) {
+                          setSelectedVendor('');
+                          setSelectedVendorObj(null);
+                          calculateVendorBalances('', '', purchaseOptions, editData?.id || null);
+                        }
+                      }}
+                      placeholder="Type to search wholesale vendor name, contact or phone..."
+                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-3 pr-10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                    />
+
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {selectedVendor && !isEditMode && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedVendor('');
+                            setVendorSearchQuery('');
+                            setSelectedVendorObj(null);
+                            setSelectedPurchaseNo('');
+                            setPoSearchQuery('');
+                            calculateVendorBalances('', '', purchaseOptions, editData?.id || null);
+                          }}
+                          className="text-slate-400 hover:text-rose-500"
+                        >
+                          <MdClear size={16} />
+                        </button>
+                      )}
+                      <MdSearch className="text-slate-400" size={18} />
+                    </div>
+                  </div>
+
+                  {/* Vendor Autocomplete Dropdown */}
+                  {isVendorDropdownOpen && !isEditMode && (
+                    <div className="absolute left-0 top-full mt-1.5 z-[9999] w-full max-h-64 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                      {filteredVendors.length > 0 ? (
+                        filteredVendors.map((vendor, vIdx) => (
+                          <div
+                            key={vendor.id}
+                            onMouseEnter={() => setHighlightedVendorIndex(vIdx)}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectVendor(vendor);
+                            }}
+                            className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${
+                              highlightedVendorIndex === vIdx || selectedVendor === vendor.vendor_name
+                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs font-bold">{vendor.vendor_name}</span>
+                              {(vendor.contact_name || vendor.contact_person || vendor.cell_no || vendor.phone) && (
+                                <span className="text-[10px] text-slate-400">
+                                  {vendor.contact_name || vendor.contact_person} {vendor.cell_no || vendor.phone ? `• ${vendor.cell_no || vendor.phone}` : ''}
+                                </span>
+                              )}
+                            </div>
+                            {vendor.city && (
+                              <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-medium">
+                                {vendor.city}
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-xs text-slate-400 italic">
+                          No matching wholesale vendors found
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Row 3: Linked Purchase Order (PO Selection) */}
+                {/* Row 3: Settle Specific Purchase Order (Searchable Autocomplete Input) */}
                 {selectedVendor && (
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 relative" ref={poContainerRef}>
                     <label className="block text-slate-700 dark:text-slate-300 font-bold uppercase text-[11px] flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <MdReceipt size={15} className="text-emerald-600" /> Settle Specific Purchase Order (Optional):
@@ -530,7 +732,7 @@ function AddPurchaseReceipt() {
                       {selectedPurchaseNo && (
                         <button
                           type="button"
-                          onClick={() => handlePurchaseSelect('')}
+                          onClick={() => handleSelectPurchase('')}
                           className="text-[10px] text-emerald-600 hover:underline font-bold"
                         >
                           Clear Selection (Pay General Ledger)
@@ -538,23 +740,114 @@ function AddPurchaseReceipt() {
                       )}
                     </label>
 
-                    <select
-                      value={selectedPurchaseNo}
-                      onChange={(e) => handlePurchaseSelect(e.target.value)}
-                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600"
-                    >
-                      <option value="">-- General Vendor Balance Clearing (All Orders) --</option>
-                      {vendorPurchasesList.map(pur => {
-                        const alloc = poAllocationsMap[pur.purchase_no];
-                        const bill = alloc ? alloc.gross : (Number(pur.total_amount) || 0);
-                        const due = alloc ? alloc.due : Math.max(0, bill - (Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0)));
-                        return (
-                          <option key={pur.id} value={pur.purchase_no}>
-                            {pur.purchase_no} — Bill: Rs. {formatMoney(bill)} | Due: Rs. {formatMoney(due)} ({pur.purchase_date || 'N/A'})
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={poSearchQuery}
+                        onFocus={() => setIsPoDropdownOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setHighlightedPoIndex(prev => Math.min(prev + 1, filteredPurchases.length));
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setHighlightedPoIndex(prev => Math.max(prev - 1, 0));
+                          } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (highlightedPoIndex === 0) {
+                              handleSelectPurchase('');
+                            } else if (filteredPurchases[highlightedPoIndex - 1]) {
+                              handleSelectPurchase(filteredPurchases[highlightedPoIndex - 1].purchase_no);
+                            }
+                          } else if (e.key === 'Escape') {
+                            setIsPoDropdownOpen(false);
+                          }
+                        }}
+                        onChange={(e) => {
+                          setPoSearchQuery(e.target.value);
+                          setIsPoDropdownOpen(true);
+                          setHighlightedPoIndex(0);
+                        }}
+                        placeholder="Search PO # (e.g. PUR-275918), date, or warehouse..."
+                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 pr-10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600"
+                      />
+
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {selectedPurchaseNo && (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectPurchase('')}
+                            className="text-slate-400 hover:text-rose-500"
+                          >
+                            <MdClear size={16} />
+                          </button>
+                        )}
+                        <MdKeyboardArrowDown className="text-slate-400" size={18} />
+                      </div>
+                    </div>
+
+                    {/* PO Autocomplete Dropdown */}
+                    {isPoDropdownOpen && (
+                      <div className="absolute left-0 top-full mt-1.5 z-[9999] w-full max-h-64 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                        {/* Option 1: General Vendor Balance Clearing */}
+                        <div
+                          onMouseEnter={() => setHighlightedPoIndex(0)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            handleSelectPurchase('');
+                          }}
+                          className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${
+                            highlightedPoIndex === 0 || !selectedPurchaseNo
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-bold text-xs">-- General Vendor Balance Clearing (All Orders) --</span>
+                            <span className="text-[10px] text-slate-400">Automated FIFO allocation against oldest open bills</span>
+                          </div>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            General
+                          </span>
+                        </div>
+
+                        {/* PO List */}
+                        {filteredPurchases.map((pur, pIdx) => {
+                          const alloc = poAllocationsMap[pur.purchase_no];
+                          const bill = alloc ? alloc.gross : (Number(pur.total_amount) || 0);
+                          const due = alloc ? alloc.due : Math.max(0, bill - (Number(pur.cash_amount_paid || 0) + Number(pur.bank_amount_paid || 0)));
+
+                          return (
+                            <div
+                              key={pur.id}
+                              onMouseEnter={() => setHighlightedPoIndex(pIdx + 1)}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectPurchase(pur.purchase_no);
+                              }}
+                              className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${
+                                highlightedPoIndex === (pIdx + 1) || selectedPurchaseNo === pur.purchase_no
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
+                                  : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                              }`}
+                            >
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-mono font-black text-xs text-emerald-700 dark:text-emerald-400">{pur.purchase_no}</span>
+                                <span className="text-[10px] text-slate-400">
+                                  {pur.purchase_date || 'N/A'} • {pur.target_warehouse || 'Main Warehouse'}
+                                </span>
+                              </div>
+                              <div className="text-right font-mono">
+                                <span className="text-slate-500 text-[10px] block">Bill: Rs. {formatMoney(bill)}</span>
+                                <span className="text-rose-600 dark:text-rose-400 font-black text-xs">
+                                  Due: Rs. {formatMoney(due)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       Select a specific consignment order to clear its invoice balance, or leave on General Balance to disburse funds against the vendor's total liability.
@@ -562,79 +855,157 @@ function AddPurchaseReceipt() {
                   </div>
                 )}
 
-                {/* Row 4: Settlement Method (Cash / Bank) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                      Disbursement Source: *
-                    </label>
-                    <select
-                      name="voucherType"
-                      onChange={handleChange}
-                      value={values.voucherType}
-                      className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600"
-                    >
-                      <option value="By Cash">💵 Cash Drawer / Vault</option>
-                      <option value="By Bank">🏦 Bank Wire / Online Transfer</option>
-                    </select>
-                  </div>
-
-                  {values.voucherType === 'By Bank' && (
+                {/* Row 4: Disbursement Source with Split Payment */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                        Source Bank Account: *
+                        Disbursement Source: *
                       </label>
                       <select
-                        name="selectedBankId"
-                        onChange={handleChange}
-                        value={values.selectedBankId}
-                        className={`w-full border rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs ${
-                          touched.selectedBankId && errors.selectedBankId ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600'
-                        }`}
+                        name="voucherType"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFieldValue('voucherType', val);
+                          if (val === 'Split') {
+                            setFieldValue('cashAmount', '');
+                            setFieldValue('bankAmount', '');
+                          }
+                        }}
+                        value={values.voucherType}
+                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600"
                       >
-                        <option value="">-- Choose Disbursing Bank --</option>
-                        {bankAccounts.map(b => (
-                          <option key={b.id} value={b.bankName}>
-                            {b.bankName} - {b.accountTitle} ({b.accountNumber || '-'})
-                          </option>
-                        ))}
+                        <option value="By Cash">💵 Cash Drawer / Vault</option>
+                        <option value="By Bank">🏦 Bank Wire / Online Transfer</option>
+                        <option value="Split">💳 Split Payment (Cash + Bank)</option>
                       </select>
                     </div>
-                  )}
-                </div>
 
-                {/* Row 5: Amount with Quick Fill Button */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-emerald-700 dark:text-emerald-400 font-black uppercase text-[11px]">
-                      Disbursed Amount (PKR): *
-                    </label>
-                    {effectiveDueForThisReceipt > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setFieldValue('amount', effectiveDueForThisReceipt)}
-                        className="text-[11px] font-black text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        ⚡ Pay Full Due (Rs. {formatMoney(effectiveDueForThisReceipt)})
-                      </button>
+                    {(values.voucherType === 'By Bank' || values.voucherType === 'Split') && (
+                      <div>
+                        <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
+                          Source Bank Account: *
+                        </label>
+                        <select
+                          name="selectedBankId"
+                          onChange={handleChange}
+                          value={values.selectedBankId}
+                          className={`w-full border rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs ${
+                            touched.selectedBankId && errors.selectedBankId ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600'
+                          }`}
+                        >
+                          <option value="">-- Choose Disbursing Bank --</option>
+                          {bankAccounts.map(b => (
+                            <option key={b.id} value={b.bankName}>
+                              {b.bankName} - {b.accountTitle} ({b.accountNumber || '-'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                   </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">
-                      Rs.
-                    </span>
-                    <input
-                      type="number"
-                      name="amount"
-                      placeholder="0"
-                      onKeyDown={blockInvalidChar}
-                      onChange={handleChange}
-                      value={values.amount}
-                      className={`w-full border rounded-xl py-3 pl-10 pr-4 bg-white dark:bg-slate-800 font-mono font-black text-slate-950 dark:text-white text-base outline-none ${
-                        touched.amount && errors.amount ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20'
-                      }`}
-                    />
-                  </div>
+
+                  {/* Row 5: Amount Inputs (Single or Split) */}
+                  {values.voucherType === 'Split' ? (
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-emerald-700 dark:text-emerald-400 font-black uppercase text-[11px]">
+                          Split Payment Breakdown (Cash + Bank): *
+                        </label>
+                        {effectiveDueForThisReceipt > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const half = Math.floor(effectiveDueForThisReceipt / 2);
+                              setFieldValue('cashAmount', half);
+                              setFieldValue('bankAmount', effectiveDueForThisReceipt - half);
+                            }}
+                            className="text-[11px] font-black text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                          >
+                            ⚡ Split Full Due (50/50)
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">
+                            Cash Portion (PKR):
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">Rs.</span>
+                            <input
+                              type="number"
+                              name="cashAmount"
+                              placeholder="0"
+                              onKeyDown={blockInvalidChar}
+                              onChange={handleChange}
+                              value={values.cashAmount}
+                              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-9 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">
+                            Bank Portion (PKR):
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">Rs.</span>
+                            <input
+                              type="number"
+                              name="bankAmount"
+                              placeholder="0"
+                              onKeyDown={blockInvalidChar}
+                              onChange={handleChange}
+                              value={values.bankAmount}
+                              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-9 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700 text-xs">
+                        <span className="font-bold text-slate-600 dark:text-slate-400">Total Disbursed in this Voucher:</span>
+                        <strong className="font-mono font-black text-sm text-emerald-600 dark:text-emerald-400">
+                          Rs. {formatMoney(Number(values.cashAmount || 0) + Number(values.bankAmount || 0))}
+                        </strong>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-emerald-700 dark:text-emerald-400 font-black uppercase text-[11px]">
+                          Disbursed Amount (PKR): *
+                        </label>
+                        {effectiveDueForThisReceipt > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFieldValue('amount', effectiveDueForThisReceipt)}
+                            className="text-[11px] font-black text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            ⚡ Pay Full Due (Rs. {formatMoney(effectiveDueForThisReceipt)})
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm">
+                          Rs.
+                        </span>
+                        <input
+                          type="number"
+                          name="amount"
+                          placeholder="0"
+                          onKeyDown={blockInvalidChar}
+                          onChange={handleChange}
+                          value={values.amount}
+                          className={`w-full border rounded-xl py-3 pl-10 pr-4 bg-white dark:bg-slate-800 font-mono font-black text-slate-950 dark:text-white text-base outline-none ${
+                            touched.amount && errors.amount ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Row 6: Remarks */}
@@ -709,7 +1080,7 @@ function AddPurchaseReceipt() {
                   ) : (
                     <div className="text-center py-6 text-slate-400">
                       <MdInfoOutline className="mx-auto mb-1 text-slate-300" size={24} />
-                      <p className="text-xs">Select a vendor on the left to inspect billing history</p>
+                      <p className="text-xs">Type or search a vendor on the left to inspect billing history</p>
                     </div>
                   )}
                 </div>
@@ -762,7 +1133,7 @@ function AddPurchaseReceipt() {
                         <div className="flex justify-between items-center text-slate-500 font-sans text-[11px]">
                           <span>Paying in this Voucher:</span>
                           <strong className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                            - Rs. {formatMoney(enteredAmt)}
+                            - Rs. {formatMoney(currentTotalAmt)}
                           </strong>
                         </div>
 
