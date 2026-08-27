@@ -158,8 +158,6 @@ const AddPurchaseReturn = () => {
           } else {
             setPoSearchQuery('-- General Return (Manual Items) --');
           }
-        } else if (normalizedLocs.length > 0) {
-          setWarehouseSearchQuery(normalizedLocs[0].name);
         }
       } catch (err: any) {
         toast.error('Failed to load return lookup metadata: ' + err.message);
@@ -348,7 +346,7 @@ const AddPurchaseReturn = () => {
           } : {
             returnNo: defaultReturnNo,
             vendorName: '',
-            sourceWarehouse: locations[0]?.name || 'Central Warehouse A',
+            sourceWarehouse: '',
             purchaseNo: '',
             returnDate: new Date().toISOString().split('T')[0],
             paymentTerm: 'On Credit',
@@ -360,7 +358,7 @@ const AddPurchaseReturn = () => {
             items: [{
               skuCode: '',
               itemName: '',
-              warehouse: locations[0]?.name || 'Central Warehouse A',
+              warehouse: '',
               qty: 1,
               rate: 0,
               uom: 'Nos'
@@ -1049,10 +1047,13 @@ const AddPurchaseReturn = () => {
                                   {/* 3. Destination Warehouse */}
                                   <td className="p-3">
                                     <select
-                                      value={item.warehouse || values.sourceWarehouse}
+                                      value={item.warehouse || values.sourceWarehouse || ''}
                                       onChange={(e) => setFieldValue(`items.${idx}.warehouse`, e.target.value)}
                                       className="w-full text-xs font-semibold bg-transparent border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-black dark:text-white focus:border-primary"
                                     >
+                                      <option value="" disabled className="dark:bg-boxdark">
+                                        -- Select Warehouse --
+                                      </option>
                                       {locations.map((loc) => (
                                         <option key={loc.id} value={loc.name} className="dark:bg-boxdark">
                                           {loc.name}
