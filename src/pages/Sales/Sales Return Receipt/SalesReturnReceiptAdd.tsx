@@ -94,11 +94,23 @@ const SalesReturnReceiptAdd: React.FC = () => {
       try {
         setMetadataLoading(true);
 
-        // 1. Fetch Customers & Invoices
-        const { data: cData } = await supabase.from('customers').select('*');
-        const { data: invData } = await supabase.from('sales_invoices').select('id, customer_name, customerName');
+        // 1. Fetch Customers, Invoices, and Returns in parallel
+        const [cRes, invRes, rRes, bankRes, coaRes] = await Promise.all([
+          supabase.from('customers').select('*'),
+          supabase.from('sales_invoices').select('id, customer_name'),
+          supabase.from('sales_returns').select('*').order('id', { ascending: false }),
+          supabase.from('banks').select('id, bankName, accountTitle, accountNumber'),
+          supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code')
+        ]);
+
+        const cData = cRes.data || [];
+        const invData = invRes.data || [];
+        const rData = rRes.data || [];
+        const bankData = bankRes.data || [];
+        const coaData = coaRes.data || [];
 
         const customerMap = new Map<string, any>();
+
         (cData || []).forEach((c: any) => {
           const name = (c.customername || c.customerName || c.customer_name || c.name || '').trim();
           if (name) {
@@ -114,7 +126,7 @@ const SalesReturnReceiptAdd: React.FC = () => {
         });
 
         (invData || []).forEach((inv: any) => {
-          const name = (inv.customer_name || inv.customerName || '').trim();
+          const name = (inv.customer_name || '').trim();
           if (name && !customerMap.has(name.toLowerCase())) {
             customerMap.set(name.toLowerCase(), {
               id: `inv-${inv.id}`,
@@ -127,22 +139,25 @@ const SalesReturnReceiptAdd: React.FC = () => {
           }
         });
 
+        (rData || []).forEach((r: any) => {
+          const name = (r.customer_name || '').trim();
+          if (name && !customerMap.has(name.toLowerCase())) {
+            customerMap.set(name.toLowerCase(), {
+              id: `rtn-${r.id}`,
+              customer_name: name,
+              contact_name: '',
+              phone: '',
+              city: '',
+              address: ''
+            });
+          }
+        });
+
         const normalizedCustomers = Array.from(customerMap.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
         setCustomerOptions(normalizedCustomers);
 
-        // 2. Fetch Banks & COA
-        const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
-        const { data: coaData } = await supabase.from('chart_of_accounts').select('account_code, account_title, control_code, category_code');
-
         if (bankData) setBankAccounts(bankData);
         if (coaData) setCoaAccounts(coaData);
-
-        // 3. Fetch all Sales Returns
-        const { data: rData } = await supabase
-          .from('sales_returns')
-          .select('*')
-          .order('id', { ascending: false });
-
         if (rData) setReturnOptions(rData);
 
         // If in Edit Mode, restore state
@@ -200,7 +215,7 @@ const SalesReturnReceiptAdd: React.FC = () => {
       // 1. Fetch customer's sales invoices to determine available open receivable capacity (what customer owes us)
       const { data: customerInvoices } = await supabase
         .from('sales_invoices')
-        .select('total_amount, cash_amount_paid, bank_amount, remaining_balance')
+        .select('total_amount, cash_amount_paid, bank_amount')
         .ilike('customer_name', customerName);
 
       const { data: customerReceiptVouchers } = await supabase
