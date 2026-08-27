@@ -72,17 +72,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
 
   useEffect(() => {
+    let isMounted = true;
+
+    // Safety timeout: Never keep the app in loading state for more than 1.2s
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 1200);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      handleAuthState(session);
-      setLoading(false);
+      if (isMounted) {
+        handleAuthState(session);
+        setLoading(false);
+      }
+    }).catch((err) => {
+      console.error('Auth getSession error:', err);
+      if (isMounted) setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleAuthState(session);
-      setLoading(false);
+      if (isMounted) {
+        handleAuthState(session);
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleAuthState = async (session: any) => {
