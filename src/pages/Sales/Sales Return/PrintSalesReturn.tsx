@@ -63,23 +63,20 @@ const PrintSalesReturn: React.FC = () => {
     const fetchReturnRecord = async () => {
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('sales_returns')
-          .select('*')
-          .eq('id', id)
-          .single();
+        const [returnRes, prodsRes] = await Promise.all([
+          supabase.from('sales_returns').select('*').eq('id', id).single(),
+          supabase.from('products').select('id, product_name, item_sr_no, category, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, scenario_name, retail_price, sales_price')
+        ]);
 
-        if (error) throw error;
-        setReturnData(data);
+        if (returnRes.error) throw returnRes.error;
+        const retData = returnRes.data;
+        const prods = prodsRes.data || [];
 
-        // Fetch products catalog for tile box/sqm conversions
-        const { data: prods } = await supabase
-          .from('products')
-          .select('id, product_name, item_sr_no, category, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, scenario_name, retail_price, sales_price');
-        if (prods) setProductsCatalog(prods);
+        setReturnData(retData);
+        setProductsCatalog(prods);
 
         // Fetch customer info
-        const cName = data.customer_name;
+        const cName = retData?.customer_name;
         if (cName && cName.toLowerCase() !== 'walk-in') {
           const { data: cData } = await supabase
             .from('customers')
@@ -117,13 +114,23 @@ const PrintSalesReturn: React.FC = () => {
   let hasTileItems = false;
 
   const processedItems = rawItems.map((item, idx) => {
-    const pName = item.itemName ?? item.product_name ?? 'Item';
+    const itemSku = (item.skuCode || item.sku || item.item_sr_no || '').trim();
+    const pName = (item.itemName ?? item.product_name ?? 'Item').trim();
+
     const prodMeta = productsCatalog.find(p => 
-      p.product_name?.toLowerCase() === pName.toLowerCase() || 
-      (item.skuCode && ((p.item_sr_no || '').toLowerCase() === item.skuCode.toLowerCase() || `SKU-${p.id}`.toLowerCase() === item.skuCode.toLowerCase()))
+      (p.product_name || '').trim().toLowerCase() === pName.toLowerCase() || 
+      (itemSku && ((p.item_sr_no || '').toLowerCase() === itemSku.toLowerCase() || `sku-${p.id}`.toLowerCase() === itemSku.toLowerCase()))
     );
 
-    const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
+    const rawPcs = Number(
+      item.pcsPerBox || 
+      item.pcs_per_box || 
+      prodMeta?.pieces_per_box || 
+      prodMeta?.pcs_per_box || 
+      prodMeta?.pieces_per_packing || 
+      0
+    );
+
     const isTile = Boolean(
       prodMeta && (
         String(prodMeta.category || '').toLowerCase().includes('tile') ||
@@ -131,15 +138,15 @@ const PrintSalesReturn: React.FC = () => {
         rawPcs > 1 ||
         String(prodMeta.uom || '').toLowerCase().includes('box')
       )
-    ) || (Number(item.qty || item.quantity || 0) % 1 !== 0);
+    ) || rawPcs > 1 || (Number(item.qty || item.quantity || 0) % 1 !== 0);
 
     if (isTile) hasTileItems = true;
 
-    const pcsPerBox = rawPcs > 1 ? rawPcs : (item.qty && Number(item.qty) % 1 !== 0 ? Math.round(1 / (Number(item.qty) - Math.floor(Number(item.qty)))) : 6) || 6;
+    const pcsPerBox = rawPcs > 1 ? rawPcs : 10;
 
     const qty = Number(item.qty ?? item.returnedQty ?? item.quantity ?? item.returned_qty ?? 0);
     const rate = Number(item.rate ?? item.rp ?? item.sale_price ?? item.price ?? prodMeta?.retail_price ?? prodMeta?.sales_price ?? 0);
-    const lineTotal = Number(item.lineTotal ?? (rate * qty));
+    const lineTotal = Number(item.lineTotal ?? item.total ?? (rate * qty));
     computedTotalGross += lineTotal;
 
     // Quantity display string and Sq.Mtr calculations
@@ -157,7 +164,7 @@ const PrintSalesReturn: React.FC = () => {
       let tileWidthCm = 60;
       let tileHeightCm = 60;
       const desc = prodMeta?.product_description || prodMeta?.product_name || pName || '';
-      const sku = prodMeta?.item_sr_no || item.skuCode || '';
+      const sku = prodMeta?.item_sr_no || itemSku || '';
       const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
                         desc.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i) ||
                         sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
@@ -185,7 +192,7 @@ const PrintSalesReturn: React.FC = () => {
 
     return {
       pName,
-      sku: item.skuCode || prodMeta?.item_sr_no || `SKU-${idx + 1}`,
+      sku: itemSku || prodMeta?.item_sr_no || `SKU-${idx + 1}`,
       warehouse: item.warehouse || returnData.source_warehouse || returnData.warehouse_name || 'Main Warehouse',
       uom: item.uom || prodMeta?.uom || (isTile ? 'BOX' : 'Nos'),
       qty,
