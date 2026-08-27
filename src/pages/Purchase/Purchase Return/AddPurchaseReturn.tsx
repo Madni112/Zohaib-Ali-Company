@@ -265,7 +265,6 @@ const AddPurchaseReturn = () => {
 
   const validationSchema = Yup.object().shape({
     vendorName: Yup.string().required('Wholesale Vendor selection is required'),
-    sourceWarehouse: Yup.string().required('Source warehouse selection is required'),
     returnDate: Yup.string().required('Return date is required'),
     paymentTerm: Yup.string().required('Reimbursement method is required'),
     amountPaid: Yup.number().when('paymentTerm', {
@@ -694,7 +693,7 @@ const AddPurchaseReturn = () => {
               <Form className="p-6.5 space-y-6">
                 
                 {/* ── TOP METADATA BAR ── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   
                   {/* Return Memo ID */}
                   <div>
@@ -813,80 +812,6 @@ const AddPurchaseReturn = () => {
                         ) : (
                           <div className="p-3 text-center text-xs text-gray-400 italic">No matching vendors found</div>
                         )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Primary Pull Warehouse Location */}
-                  <div className="relative" ref={warehouseContainerRef}>
-                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
-                      Source Warehouse / Location: *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={warehouseSearchQuery}
-                        onFocus={(e) => {
-                          setIsWarehouseDropdownOpen(true);
-                          e.target.select();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            setHighlightedWarehouseIndex(prev => Math.min(prev + 1, filteredWarehouses.length - 1));
-                          } else if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            setHighlightedWarehouseIndex(prev => Math.max(prev - 1, 0));
-                          } else if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (filteredWarehouses[highlightedWarehouseIndex]) {
-                              const wh = filteredWarehouses[highlightedWarehouseIndex];
-                              setFieldValue('sourceWarehouse', wh.name);
-                              setWarehouseSearchQuery(wh.name);
-                              setIsWarehouseDropdownOpen(false);
-                            }
-                          } else if (e.key === 'Escape') {
-                            setIsWarehouseDropdownOpen(false);
-                          }
-                        }}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setWarehouseSearchQuery(val);
-                          setFieldValue('sourceWarehouse', val);
-                          setIsWarehouseDropdownOpen(true);
-                          setHighlightedWarehouseIndex(0);
-                        }}
-                        placeholder="Type pull location..."
-                        className="w-full rounded border border-stroke dark:border-strokedark p-2 bg-white dark:bg-boxdark font-bold text-black dark:text-white text-xs outline-none focus:border-primary"
-                      />
-                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                        <MdKeyboardArrowDown className="text-gray-400" size={16} />
-                      </div>
-                    </div>
-
-                    {/* Warehouse Dropdown */}
-                    {isWarehouseDropdownOpen && (
-                      <div className="absolute left-0 top-full mt-1 z-[99999] w-full max-h-52 overflow-y-auto bg-white dark:bg-[#1A222C] border border-stroke dark:border-strokedark rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
-                        {filteredWarehouses.map((wh, wIdx) => (
-                          <div
-                            key={wh.id}
-                            onMouseEnter={() => setHighlightedWarehouseIndex(wIdx)}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setFieldValue('sourceWarehouse', wh.name);
-                              setWarehouseSearchQuery(wh.name);
-                              setIsWarehouseDropdownOpen(false);
-                            }}
-                            className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${
-                              highlightedWarehouseIndex === wIdx || values.sourceWarehouse === wh.name
-                                ? 'bg-primary/10 text-primary font-bold'
-                                : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-black dark:text-white'
-                            }`}
-                          >
-                            <span className="font-bold">{wh.name}</span>
-                            {wh.code && <span className="text-[10px] text-gray-400 font-mono">{wh.code}</span>}
-                          </div>
-                        ))}
                       </div>
                     )}
                   </div>

@@ -684,7 +684,7 @@ const AddSalesReturn = () => {
               <Form className="space-y-6">
                 
                 {/* ── TOP FORM HEADER GRID ── */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   
                   {/* Return Memo ID Code */}
                   <div>
@@ -711,73 +711,6 @@ const AddSalesReturn = () => {
                         touched.returnDate && errors.returnDate ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600'
                       }`}
                     />
-                  </div>
-
-                  {/* Receiving Warehouse Autocomplete */}
-                  <div className="relative" ref={warehouseContainerRef}>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1 flex items-center gap-1.5">
-                      <MdStore size={15} className="text-emerald-600" /> Receiving Warehouse: *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={warehouseSearchQuery || values.sourceWarehouse}
-                        onFocus={() => setIsWarehouseDropdownOpen(true)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            setHighlightedWarehouseIndex(prev => Math.min(prev + 1, filteredWarehouses.length - 1));
-                          } else if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            setHighlightedWarehouseIndex(prev => Math.max(prev - 1, 0));
-                          } else if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (filteredWarehouses[highlightedWarehouseIndex]) {
-                              const wh = filteredWarehouses[highlightedWarehouseIndex];
-                              setFieldValue('sourceWarehouse', wh.name);
-                              setWarehouseSearchQuery(wh.name);
-                              setIsWarehouseDropdownOpen(false);
-                            }
-                          } else if (e.key === 'Escape') {
-                            setIsWarehouseDropdownOpen(false);
-                          }
-                        }}
-                        onChange={(e) => {
-                          setWarehouseSearchQuery(e.target.value);
-                          setFieldValue('sourceWarehouse', e.target.value);
-                          setIsWarehouseDropdownOpen(true);
-                          setHighlightedWarehouseIndex(0);
-                        }}
-                        placeholder="Search warehouse..."
-                        className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 pr-8 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-emerald-600"
-                      />
-                      <MdKeyboardArrowDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    </div>
-
-                    {isWarehouseDropdownOpen && (
-                      <div className="absolute left-0 top-full mt-1 z-[9999] w-full max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                        {filteredWarehouses.map((wh, wIdx) => (
-                          <div
-                            key={wh.id}
-                            onMouseEnter={() => setHighlightedWarehouseIndex(wIdx)}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setFieldValue('sourceWarehouse', wh.name);
-                              setWarehouseSearchQuery(wh.name);
-                              setIsWarehouseDropdownOpen(false);
-                            }}
-                            className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                              highlightedWarehouseIndex === wIdx || values.sourceWarehouse === wh.name
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-bold'
-                                : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                            }`}
-                          >
-                            <span className="font-bold">{wh.name}</span>
-                            {wh.code && <span className="text-[10px] text-slate-400 font-mono">({wh.code})</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   {/* Target Customer Autocomplete */}
