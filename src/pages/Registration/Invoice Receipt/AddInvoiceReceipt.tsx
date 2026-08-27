@@ -226,20 +226,19 @@ function AddInvoiceReceipt() {
       let totalVouchersPaid = 0;
       let unallocatedGeneralVouchers = 0;
 
-      // Initialize all Invoices
+      // Initialize each Invoice allocation by unique invoice ID
       sortedCustomerInvoices.forEach(i => {
-        const key = `INV-${String(i.id).padStart(4, '0')}`;
-        const rawKey = String(i.id);
+        const invId = String(i.id);
         const gross = Number(i.total_amount) || 0;
         const upfront = Number(i.cash_amount_paid || 0) + Number(i.bank_amount || 0);
 
         // Find returns for this specific invoice
         const invoiceReturns = customerReturns.filter(r => {
-          const rInv = String(r.original_invoice_no || '').replace('INV-', '').trim();
-          return rInv === rawKey;
+          const rInv = String(r.original_invoice_no || '').replace(/\D/g, '').trim();
+          return rInv === invId;
         }).reduce((sum, r) => sum + (Number(r.total_amount) || 0), 0);
 
-        const initAlloc = {
+        allocations[invId] = {
           gross,
           upfront,
           returns: invoiceReturns,
@@ -248,9 +247,6 @@ function AddInvoiceReceipt() {
           pastReceipts: 0,
           due: Math.max(0, gross - upfront - invoiceReturns)
         };
-
-        allocations[key] = initAlloc;
-        allocations[rawKey] = initAlloc;
       });
 
       // Assign Invoice-specific vouchers and accumulate general unallocated vouchers
@@ -262,13 +258,8 @@ function AddInvoiceReceipt() {
         const vInvRef = v.original_invoice_no || v.metadata?.linkedInvoiceNo || '';
         if (vInvRef) {
           const cleanInvId = String(vInvRef).replace(/\D/g, '');
-          const matchedInv = sortedCustomerInvoices.find(i => String(i.id) === cleanInvId || `INV-${String(i.id).padStart(4, '0')}` === vInvRef);
-          if (matchedInv) {
-            const key = `INV-${String(matchedInv.id).padStart(4, '0')}`;
-            if (allocations[key]) {
-              allocations[key].specificVouchers += vAmt;
-              allocations[String(matchedInv.id)].specificVouchers += vAmt;
-            }
+          if (cleanInvId && allocations[cleanInvId]) {
+            allocations[cleanInvId].specificVouchers += vAmt;
           } else {
             unallocatedGeneralVouchers += vAmt;
           }
@@ -280,31 +271,37 @@ function AddInvoiceReceipt() {
       // Allocate general unallocated vouchers across open Invoices (FIFO order)
       let generalRemaining = unallocatedGeneralVouchers;
       sortedCustomerInvoices.forEach(i => {
-        const key = `INV-${String(i.id).padStart(4, '0')}`;
-        const alloc = allocations[key];
+        const invId = String(i.id);
+        const alloc = allocations[invId];
         if (alloc) {
           const dueBeforeGeneral = Math.max(0, alloc.gross - alloc.upfront - alloc.returns - alloc.specificVouchers);
           if (dueBeforeGeneral > 0 && generalRemaining > 0) {
             const toDistribute = Math.min(dueBeforeGeneral, generalRemaining);
             alloc.generalAllocated += toDistribute;
-            allocations[String(i.id)].generalAllocated += toDistribute;
             generalRemaining -= toDistribute;
           }
           alloc.pastReceipts = alloc.specificVouchers + alloc.generalAllocated;
           alloc.due = Math.max(0, alloc.gross - alloc.upfront - alloc.returns - alloc.pastReceipts);
-          allocations[String(i.id)].pastReceipts = alloc.pastReceipts;
-          allocations[String(i.id)].due = alloc.due;
         }
       });
 
-      setInvAllocationsMap(allocations);
+      // Create dual-key map for easy lookup by either '5' or 'INV-0005'
+      const finalMap: Record<string, typeof allocations[string]> = {};
+      sortedCustomerInvoices.forEach(i => {
+        const invId = String(i.id);
+        const formattedKey = `INV-${invId.padStart(4, '0')}`;
+        finalMap[invId] = allocations[invId];
+        finalMap[formattedKey] = allocations[invId];
+      });
+
+      setInvAllocationsMap(finalMap);
 
       const netCustomerReceivable = Math.max(0, totalInvoicesGross - totalInvoicesUpfrontPaid - totalCustomerReturns - totalVouchersPaid);
       setCustomerTotalOutstanding(netCustomerReceivable);
 
       // If a specific Invoice is selected
       const cleanRefId = String(invoiceRef).replace(/\D/g, '');
-      const selectedAlloc = allocations[invoiceRef] || allocations[cleanRefId];
+      const selectedAlloc = finalMap[invoiceRef] || finalMap[cleanRefId];
 
       if (invoiceRef && selectedAlloc) {
         setInvGrossBill(selectedAlloc.gross);
