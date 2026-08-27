@@ -50,10 +50,11 @@ const AddPurchaseReturnReceipt: React.FC = () => {
   // Balances
   const [vendorTotalOutstandingReceivable, setVendorTotalOutstandingReceivable] = useState<number>(0);
   const [returnGrossBill, setReturnGrossBill] = useState<number>(0);
+  const [returnCreditAdjusted, setReturnCreditAdjusted] = useState<number>(0);
   const [returnPaidUpfront, setReturnPaidUpfront] = useState<number>(0);
   const [returnPastReceiptsPaid, setReturnPastReceiptsPaid] = useState<number>(0);
   const [effectiveDueForThisReceipt, setEffectiveDueForThisReceipt] = useState<number>(0);
-  const [returnAllocationsMap, setReturnAllocationsMap] = useState<Record<string, { gross: number; upfront: number; pastReceipts: number; due: number }>>({});
+  const [returnAllocationsMap, setReturnAllocationsMap] = useState<Record<string, { gross: number; upfront: number; creditAdjusted: number; pastReceipts: number; due: number }>>({});
 
   const [shouldPrintAfterSave, setShouldPrintAfterSave] = useState(false);
 
@@ -159,6 +160,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
     if (!vendorName) {
       setVendorTotalOutstandingReceivable(0);
       setReturnGrossBill(0);
+      setReturnCreditAdjusted(0);
       setReturnPaidUpfront(0);
       setReturnPastReceiptsPaid(0);
       setEffectiveDueForThisReceipt(0);
@@ -167,7 +169,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
     }
 
     try {
-      // 1. Fetch vendor's returns sorted chronologically (oldest first for FIFO general clearing)
+      // 1. Fetch vendor's returns sorted chronologically
       const vendorReturns = allReturns.filter(r => 
         (r.vendor_name || r.supplier_name || '').toLowerCase() === vendorName.toLowerCase()
       );
@@ -190,19 +192,13 @@ const AddPurchaseReturnReceipt: React.FC = () => {
         .select('id, amount_received, return_no, metadata')
         .eq('vendor_name', vendorName);
 
-      // Gross returns total and upfront collected
+      // Gross returns total, credit adjusted to open invoices, and upfront collected
       let totalReturnsGross = 0;
       let totalReturnsUpfrontCollected = 0;
-
-      vendorReturns.forEach(r => {
-        const gross = Number(r.total_amount) || 0;
-        const upfront = Number(r.amount_paid) || 0;
-        totalReturnsGross += gross;
-        totalReturnsUpfrontCollected += upfront;
-      });
+      let totalReturnsCreditAdjusted = 0;
 
       // Track Return allocations
-      const allocations: Record<string, { gross: number; upfront: number; specificReceipts: number; generalAllocated: number; pastReceipts: number; due: number }> = {};
+      const allocations: Record<string, { gross: number; upfront: number; creditAdjusted: number; specificReceipts: number; generalAllocated: number; pastReceipts: number; due: number }> = {};
       let totalReceiptsCollected = 0;
       let unallocatedGeneralReceipts = 0;
 
@@ -211,13 +207,26 @@ const AddPurchaseReturnReceipt: React.FC = () => {
         const key = r.return_no;
         const gross = Number(r.total_amount) || 0;
         const upfront = Number(r.amount_paid) || 0;
+        
+        // Check if return was made on credit / absorbed against purchase invoices
+        const isCreditReturn = r.payment_term === 'On Credit' || 
+                               r.metadata?.paymentTerm === 'On Credit' || 
+                               (Array.isArray(r.metadata?.matchedInvoices) && r.metadata.matchedInvoices.length > 0);
+        
+        const creditAdjusted = isCreditReturn ? Math.max(0, gross - upfront) : 0;
+
+        totalReturnsGross += gross;
+        totalReturnsUpfrontCollected += upfront;
+        totalReturnsCreditAdjusted += creditAdjusted;
+
         allocations[key] = {
           gross,
           upfront,
+          creditAdjusted,
           specificReceipts: 0,
           generalAllocated: 0,
           pastReceipts: 0,
-          due: Math.max(0, gross - upfront)
+          due: Math.max(0, gross - upfront - creditAdjusted)
         };
       });
 
@@ -246,32 +255,34 @@ const AddPurchaseReturnReceipt: React.FC = () => {
         const key = r.return_no;
         const alloc = allocations[key];
         if (alloc) {
-          const dueBeforeGeneral = Math.max(0, alloc.gross - alloc.upfront - alloc.specificReceipts);
+          const dueBeforeGeneral = Math.max(0, alloc.gross - alloc.upfront - alloc.creditAdjusted - alloc.specificReceipts);
           if (dueBeforeGeneral > 0 && generalRemaining > 0) {
             const toDistribute = Math.min(dueBeforeGeneral, generalRemaining);
             alloc.generalAllocated += toDistribute;
             generalRemaining -= toDistribute;
           }
           alloc.pastReceipts = alloc.specificReceipts + alloc.generalAllocated;
-          alloc.due = Math.max(0, alloc.gross - alloc.upfront - alloc.pastReceipts);
+          alloc.due = Math.max(0, alloc.gross - alloc.upfront - alloc.creditAdjusted - alloc.pastReceipts);
         }
       });
 
       setReturnAllocationsMap(allocations);
 
-      const netVendorReceivable = Math.max(0, totalReturnsGross - totalReturnsUpfrontCollected - totalReceiptsCollected);
+      const netVendorReceivable = Math.max(0, totalReturnsGross - totalReturnsUpfrontCollected - totalReturnsCreditAdjusted - totalReceiptsCollected);
       setVendorTotalOutstandingReceivable(netVendorReceivable);
 
       // If a specific Return Note is selected
       if (returnNumber && allocations[returnNumber]) {
         const currentAlloc = allocations[returnNumber];
         setReturnGrossBill(currentAlloc.gross);
+        setReturnCreditAdjusted(currentAlloc.creditAdjusted);
         setReturnPaidUpfront(currentAlloc.upfront);
         setReturnPastReceiptsPaid(currentAlloc.pastReceipts);
         setEffectiveDueForThisReceipt(currentAlloc.due);
       } else {
         // No specific return note selected -> recovery against overall vendor return credit balance
         setReturnGrossBill(totalReturnsGross);
+        setReturnCreditAdjusted(totalReturnsCreditAdjusted);
         setReturnPaidUpfront(totalReturnsUpfrontCollected);
         setReturnPastReceiptsPaid(totalReceiptsCollected);
         setEffectiveDueForThisReceipt(netVendorReceivable);
@@ -1183,20 +1194,29 @@ const AddPurchaseReturnReceipt: React.FC = () => {
                         </strong>
                       </div>
 
-                      <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
-                        <span className="font-sans">Refund Collected Upfront:</span>
-                        <span>Rs. {formatMoney(returnPaidUpfront)}</span>
-                      </div>
+                      {returnCreditAdjusted > 0 && (
+                        <div className="flex justify-between items-center text-purple-700 dark:text-purple-400 font-semibold">
+                          <span className="font-sans">Adjusted on Credit (Payables):</span>
+                          <span>- Rs. {formatMoney(returnCreditAdjusted)}</span>
+                        </div>
+                      )}
+
+                      {returnPaidUpfront > 0 && (
+                        <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
+                          <span className="font-sans">Refund Collected Upfront:</span>
+                          <span>- Rs. {formatMoney(returnPaidUpfront)}</span>
+                        </div>
+                      )}
 
                       {returnPastReceiptsPaid > 0 && (
                         <div className="flex justify-between items-center text-teal-700 dark:text-teal-400">
                           <span className="font-sans">Past Voucher Collections:</span>
-                          <span>Rs. {formatMoney(returnPastReceiptsPaid)}</span>
+                          <span>- Rs. {formatMoney(returnPastReceiptsPaid)}</span>
                         </div>
                       )}
 
                       <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 font-black">
-                        <span className="font-sans">Current Collectable Balance:</span>
+                        <span className="font-sans">Current Collectable Cash Balance:</span>
                         <strong className="text-base">Rs. {formatMoney(effectiveDueForThisReceipt)}</strong>
                       </div>
 
