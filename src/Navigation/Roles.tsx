@@ -406,7 +406,17 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales-Return/Debit-Notes/Edit/:id',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Sales/Sales-Return/Add',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/Sales-Return/Edit/:id',
     component: <AddSalesReturn />,
     hideFromSidebar: true
   },

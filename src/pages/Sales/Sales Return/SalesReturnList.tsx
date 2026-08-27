@@ -240,7 +240,7 @@ const SalesReturnList = () => {
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
                           onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales-Return/Debit-Notes/Print/${ret.id}`)}
-                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales-Return/Debit-Notes/Add`, { state: { returnData: ret } })}
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales-Return/Debit-Notes/Edit/${ret.id}`, { state: { returnData: ret } })}
                           onDelete={() => handleDeleteReturn(ret.id)}
                           printTitle="Print Voucher"
                           editTitle="Edit Return"

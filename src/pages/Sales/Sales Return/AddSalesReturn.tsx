@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
@@ -26,6 +26,7 @@ const AddSalesReturn = () => {
   const { tenantId } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { id: routeId } = useParams<{ id?: string }>();
 
   const [loading, setLoading] = useState(false);
   const [metadataLoading, setMetadataLoading] = useState(true);
@@ -67,15 +68,30 @@ const AddSalesReturn = () => {
   const customerContainerRef = useRef<HTMLDivElement>(null);
   const invContainerRef = useRef<HTMLDivElement>(null);
 
-  const editData = location.state?.invoice || location.state?.item || location.state?.record || location.state?.returnRecord;
+  const [fetchedEditRecord, setFetchedEditRecord] = useState<any>(null);
+
+  const rawStateData = location.state?.returnData || 
+                       location.state?.editData || 
+                       location.state?.returnRecord || 
+                       location.state?.invoice || 
+                       location.state?.item || 
+                       location.state?.record;
+
+  const editData = rawStateData || fetchedEditRecord;
+
   const isEditMode = !!editData && (
     editData.hasOwnProperty('original_invoice_no') ||
     editData.hasOwnProperty('return_no') ||
-    editData.hasOwnProperty('payout_amount_paid')
+    editData.hasOwnProperty('payout_amount_paid') ||
+    editData.hasOwnProperty('total_amount') ||
+    !!location.state?.returnData ||
+    !!location.state?.editData ||
+    !!location.state?.returnRecord ||
+    !!fetchedEditRecord
   );
   const isDirectInvoiceLink = !!editData && !isEditMode;
 
-  const [defaultReturnNo] = useState(() => isEditMode && editData?.return_no ? editData.return_no : `RTN-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [defaultReturnNo] = useState(() => (isEditMode && editData?.return_no ? editData.return_no : `RTN-${Math.floor(100000 + Math.random() * 900000)}`));
   const [shouldPrintAfterSave, setShouldPrintAfterSave] = useState(false);
 
   const formatMoney = (val: number | string | undefined | null): string => {
@@ -120,6 +136,21 @@ const AddSalesReturn = () => {
     const fetchReturnMetadata = async () => {
       try {
         setMetadataLoading(true);
+
+        // Fetch edit record if ID passed in URL and state is empty
+        let currentEdit = rawStateData;
+        const targetId = routeId || new URLSearchParams(location.search).get('id');
+        if (!currentEdit && targetId) {
+          const { data: rtnRecord } = await supabase
+            .from('sales_returns')
+            .select('*')
+            .eq('id', targetId)
+            .maybeSingle();
+          if (rtnRecord) {
+            currentEdit = rtnRecord;
+            setFetchedEditRecord(rtnRecord);
+          }
+        }
 
         // 1. Fetch Customers & Sales Invoices
         const { data: cData } = await supabase.from('customers').select('*');
@@ -178,14 +209,14 @@ const AddSalesReturn = () => {
         if (bankData) setBankAccountsList(bankData);
 
         // If in Edit Mode or Direct Invoice Link, restore state
-        if (isEditMode && editData) {
-          const cName = editData.customer_name || '';
+        if (currentEdit) {
+          const cName = currentEdit.customer_name || '';
           setCustomerSearchQuery(cName);
 
-          const whName = editData.warehouse_name || editData.source_warehouse || '';
-          setWarehouseSearchQuery(whName);
+          const whName = currentEdit.warehouse_name || currentEdit.source_warehouse || '';
+          if (whName) setWarehouseSearchQuery(whName);
 
-          const invRef = editData.original_invoice_no || editData.invoice_no || editData.metadata?.linkedInvoiceNo || '';
+          const invRef = currentEdit.original_invoice_no || currentEdit.invoice_no || currentEdit.metadata?.linkedInvoiceNo || '';
           if (invRef) {
             setSelectedInvNo(invRef);
             setInvSearchQuery(invRef);
@@ -194,16 +225,6 @@ const AddSalesReturn = () => {
             if (matchedInv) setSelectedInvObj(matchedInv);
           } else {
             setInvSearchQuery('-- General Return (All Invoices FIFO) --');
-          }
-        } else if (isDirectInvoiceLink && editData) {
-          const cName = editData.customer_name || '';
-          setCustomerSearchQuery(cName);
-          const formattedInv = `INV-${String(editData.id).padStart(4, '0')}`;
-          setSelectedInvNo(formattedInv);
-          setInvSearchQuery(formattedInv);
-          setSelectedInvObj(editData);
-          if (editData.dispatch_warehouse) {
-            setWarehouseSearchQuery(editData.dispatch_warehouse);
           }
         }
       } catch (err: any) {
@@ -214,7 +235,7 @@ const AddSalesReturn = () => {
     };
 
     fetchReturnMetadata();
-  }, [isEditMode, isDirectInvoiceLink, editData]);
+  }, [routeId, rawStateData]);
 
   // Filtered lists
   const filteredCustomers = customers.filter(c =>
@@ -387,21 +408,28 @@ const AddSalesReturn = () => {
             customerName: editData.customer_name || '',
             sourceWarehouse: editData.warehouse_name || editData.source_warehouse || (locations[0]?.name || 'Main Warehouse'),
             invoiceNo: editData.original_invoice_no || editData.invoice_no || editData.metadata?.linkedInvoiceNo || '',
-            returnDate: editData.return_date || new Date().toISOString().split('T')[0],
-            paymentTerm: editData.settlement_mode || editData.payment_term || (editData.metadata?.cashPayoutPaid && editData.metadata?.bankPayoutPaid ? 'Split' : 'On Credit'),
+            returnDate: editData.return_date || (editData.created_at ? editData.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+            paymentTerm: editData.settlement_mode || editData.payment_term || (editData.metadata?.cashPayoutPaid && editData.metadata?.bankPayoutPaid ? 'Split' : (Number(editData.payout_amount_paid || editData.amount_paid || 0) > 0 ? 'By Cash' : 'On Credit')),
             selectedBankId: editData.metadata?.selectedBankId || editData.bank_name || '',
             amountPaid: editData.payout_amount_paid || editData.amount_paid || 0,
             cashAmountPaid: editData.metadata?.cashPayoutPaid || '',
             bankAmountPaid: editData.metadata?.bankPayoutPaid || '',
-            remarks: editData.remarks || '',
-            items: (editData.items || []).map((i: any) => ({
+            remarks: editData.remarks || editData.notes || '',
+            items: ((Array.isArray(editData.items) ? editData.items : (typeof editData.items === 'string' ? JSON.parse(editData.items) : []))).length > 0 ? (Array.isArray(editData.items) ? editData.items : JSON.parse(editData.items)).map((i: any) => ({
               skuCode: i.sku || i.skuCode || '',
               itemName: i.itemName || i.product_name || '',
               warehouse: i.warehouse || editData.warehouse_name || editData.source_warehouse || (locations[0]?.name || 'Main Warehouse'),
               qty: Number(i.qty || i.returnedQty || i.quantity || 1),
-              rate: Number(i.rate || i.price || i.sale_price || 0),
+              rate: Number(i.rate || i.price || i.sale_price || i.rp || 0),
               uom: i.uom || 'Nos'
-            }))
+            })) : [{
+              skuCode: '',
+              itemName: '',
+              warehouse: locations[0]?.name || 'Main Warehouse',
+              qty: 1,
+              rate: 0,
+              uom: 'Nos'
+            }]
           } : (isDirectInvoiceLink && editData ? {
             returnNo: defaultReturnNo,
             customerName: editData.customer_name || '',
@@ -414,7 +442,7 @@ const AddSalesReturn = () => {
             cashAmountPaid: '',
             bankAmountPaid: '',
             remarks: '',
-            items: (editData.items || []).map((i: any) => ({
+            items: (Array.isArray(editData.items) ? editData.items : (typeof editData.items === 'string' ? JSON.parse(editData.items) : [])).map((i: any) => ({
               skuCode: i.sku || i.skuCode || '',
               itemName: i.itemName || i.product_name || '',
               warehouse: editData.dispatch_warehouse || (locations[0]?.name || 'Main Warehouse'),
@@ -443,7 +471,7 @@ const AddSalesReturn = () => {
               uom: 'Nos'
             }]
           })}
-          enableReinitialize={isEditMode || isDirectInvoiceLink}
+          enableReinitialize={true}
           validationSchema={validationSchema}
           onSubmit={async (values) => {
             if (!values.customerName) {
