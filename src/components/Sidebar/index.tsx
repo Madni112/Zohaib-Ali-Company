@@ -287,9 +287,11 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
   const sidebar = useRef<any>(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  const rawTenant = tenantId || (pathname.split('/')[1] || '');
-  const cleanSlug = rawTenant.replace(/^tenant=/, '').replace(/^tenant-/, '').toLowerCase().trim();
-  const cleanPrefix = cleanSlug && !['auth', 'dev', 'assets', 'api'].includes(cleanSlug) ? `/${cleanSlug}` : '';
+  const isTenantRoute = pathname.startsWith('/tenant=') || pathname.startsWith('/tenant-');
+  const rawTenant = tenantId || (isTenantRoute ? pathname.split('/')[1] : '');
+  const cleanSlug = rawTenant ? rawTenant.replace(/^tenant=/, '').replace(/^tenant-/, '').toLowerCase().trim() : '';
+  const reservedPrefixes = ['auth', 'dev', 'assets', 'api', 'purchase', 'sales', 'reports', 'registration', 'administration', 'dashboard', 'sales-return'];
+  const cleanPrefix = cleanSlug && !reservedPrefixes.includes(cleanSlug) ? `/${cleanSlug}` : '';
 
   const getTenantPath = (path?: string) => {
     if (!path || typeof path !== 'string') return '';

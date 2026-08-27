@@ -53,19 +53,20 @@ const ReportDashboard = () => {
   }
 
   // --- Chart Configurations ---
+  const trend = metrics.monthlySalesTrend || [];
   const salesVsPurchasesOptions: any = {
     chart: { type: 'bar', height: 260, toolbar: { show: false } },
     colors: ['#10B981', '#E74C3C'],
     plotOptions: { bar: { columnWidth: '45%', borderRadius: 3 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: metrics.monthlySalesTrend.map(m => m.month) },
+    xaxis: { categories: trend.map(m => m.month) },
     yaxis: { labels: { formatter: (val: number) => `Rs. ${(val / 1000).toFixed(0)}k` } },
     tooltip: { y: { formatter: (val: number) => `Rs. ${val.toLocaleString()}` } }
   };
 
   const salesVsPurchasesSeries = [
-    { name: 'Gross Sales', data: metrics.monthlySalesTrend.map(m => m.sales) },
-    { name: 'Procurement Expenses', data: metrics.monthlySalesTrend.map(m => m.purchases) }
+    { name: 'Gross Sales', data: trend.map(m => m.sales) },
+    { name: 'Procurement Expenses', data: trend.map(m => m.purchases) }
   ];
 
   const [exporting, setExporting] = useState(false);
@@ -81,14 +82,14 @@ const ReportDashboard = () => {
         { header: 'Current Balance / Valuation (Rs.)', key: 'value', width: 28, type: 'currency' }
       ];
       const kpiData = [
-        { indicator: 'Gross Monthly Sales Revenue', value: metrics.thisMonthSales },
-        { indicator: 'App Liquid Cash in Hand', value: metrics.cashBalance },
-        { indicator: 'Total Bank Ledger Balances', value: metrics.totalBankBalance },
-        { indicator: 'Accounts Receivable (Customers)', value: metrics.accountsReceivable },
-        { indicator: 'Merchandise Inventory Stock Valuation', value: metrics.inventoryValuation },
-        { indicator: 'Total Balance Sheet Assets', value: metrics.totalAssets },
-        { indicator: 'Total Accounts Payable (Suppliers)', value: metrics.accountsPayable },
-        { indicator: 'Total Owner Equity & Retained Earnings', value: metrics.totalEquity }
+        { indicator: 'Gross Monthly Sales Revenue', value: metrics.thisMonthSales || 0 },
+        { indicator: 'App Liquid Cash in Hand', value: metrics.cashBalance || 0 },
+        { indicator: 'Total Bank Ledger Balances', value: metrics.totalBankBalance || 0 },
+        { indicator: 'Accounts Receivable (Customers)', value: metrics.totalReceivables || metrics.accountsReceivable || 0 },
+        { indicator: 'Merchandise Inventory Stock Valuation', value: metrics.inventoryAssetValue || 0 },
+        { indicator: 'Total Balance Sheet Assets', value: metrics.totalAssets || 0 },
+        { indicator: 'Total Accounts Payable (Suppliers)', value: metrics.totalPayables || metrics.accountsPayable || 0 },
+        { indicator: 'Total Owner Equity & Retained Earnings', value: metrics.totalEquity || 0 }
       ];
 
       // Sheet 2: Recent Sales Invoices
