@@ -772,6 +772,15 @@ const AddSalesReturn = () => {
                                 setSelectedInvNo('');
                                 setInvSearchQuery('-- General Return (All Invoices FIFO) --');
                                 setSelectedInvObj(null);
+                                setFieldValue('invoiceNo', '');
+                                setFieldValue('items', [{
+                                  skuCode: '',
+                                  itemName: '',
+                                  warehouse: locations[0]?.name || 'Main Warehouse',
+                                  qty: 1,
+                                  rate: 0,
+                                  uom: 'Nos'
+                                }]);
                                 setIsCustomerDropdownOpen(false);
                               }}
                               className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
@@ -811,6 +820,14 @@ const AddSalesReturn = () => {
                             setInvSearchQuery('-- General Return (All Invoices FIFO) --');
                             setSelectedInvObj(null);
                             setFieldValue('invoiceNo', '');
+                            setFieldValue('items', [{
+                              skuCode: '',
+                              itemName: '',
+                              warehouse: locations[0]?.name || 'Main Warehouse',
+                              qty: 1,
+                              rate: 0,
+                              uom: 'Nos'
+                            }]);
                           }}
                           className="text-[10px] text-emerald-600 hover:underline font-bold"
                         >
@@ -838,6 +855,14 @@ const AddSalesReturn = () => {
                               setInvSearchQuery('-- General Return (All Invoices FIFO) --');
                               setSelectedInvObj(null);
                               setFieldValue('invoiceNo', '');
+                              setFieldValue('items', [{
+                                skuCode: '',
+                                itemName: '',
+                                warehouse: locations[0]?.name || 'Main Warehouse',
+                                qty: 1,
+                                rate: 0,
+                                uom: 'Nos'
+                              }]);
                               setIsInvDropdownOpen(false);
                             } else if (filteredInvoices[highlightedInvIndex - 1]) {
                               const inv = filteredInvoices[highlightedInvIndex - 1];
@@ -846,6 +871,22 @@ const AddSalesReturn = () => {
                               setInvSearchQuery(formattedInv);
                               setSelectedInvObj(inv);
                               setFieldValue('invoiceNo', formattedInv);
+
+                              // Auto-populate all line items from the selected invoice
+                              const rawItems = Array.isArray(inv.items) ? inv.items : [];
+                              if (rawItems.length > 0) {
+                                const populated = rawItems.map((pi: any) => ({
+                                  skuCode: pi.skuCode || pi.sku || '',
+                                  itemName: pi.itemName || pi.product_name || '',
+                                  warehouse: pi.warehouse || inv.dispatch_warehouse || locations[0]?.name || 'Main Warehouse',
+                                  qty: Number(pi.qty || pi.quantity || 1),
+                                  rate: Number(pi.rp ?? pi.rate ?? pi.sale_price ?? pi.price ?? 0),
+                                  uom: pi.uom || 'Nos'
+                                }));
+                                setFieldValue('items', populated);
+                                toast.success(`Loaded ${populated.length} items from ${formattedInv}! You can now adjust quantities, prices, or remove rows.`);
+                              }
+
                               setIsInvDropdownOpen(false);
                             }
                           } else if (e.key === 'Escape') {
@@ -873,6 +914,14 @@ const AddSalesReturn = () => {
                             setInvSearchQuery('-- General Return (All Invoices FIFO) --');
                             setSelectedInvObj(null);
                             setFieldValue('invoiceNo', '');
+                            setFieldValue('items', [{
+                              skuCode: '',
+                              itemName: '',
+                              warehouse: locations[0]?.name || 'Main Warehouse',
+                              qty: 1,
+                              rate: 0,
+                              uom: 'Nos'
+                            }]);
                             setIsInvDropdownOpen(false);
                           }}
                           className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
@@ -900,6 +949,22 @@ const AddSalesReturn = () => {
                                 setInvSearchQuery(formattedInv);
                                 setSelectedInvObj(inv);
                                 setFieldValue('invoiceNo', formattedInv);
+
+                                // Auto-populate all line items from the selected invoice
+                                const rawItems = Array.isArray(inv.items) ? inv.items : [];
+                                if (rawItems.length > 0) {
+                                  const populated = rawItems.map((pi: any) => ({
+                                    skuCode: pi.skuCode || pi.sku || '',
+                                    itemName: pi.itemName || pi.product_name || '',
+                                    warehouse: pi.warehouse || inv.dispatch_warehouse || locations[0]?.name || 'Main Warehouse',
+                                    qty: Number(pi.qty || pi.quantity || 1),
+                                    rate: Number(pi.rp ?? pi.rate ?? pi.sale_price ?? pi.price ?? 0),
+                                    uom: pi.uom || 'Nos'
+                                  }));
+                                  setFieldValue('items', populated);
+                                  toast.success(`Loaded ${populated.length} items from ${formattedInv}! You can now adjust quantities, prices, or remove rows.`);
+                                }
+
                                 setIsInvDropdownOpen(false);
                               }}
                               className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
@@ -1149,15 +1214,24 @@ const AddSalesReturn = () => {
 
                                     {/* Delete Row */}
                                     <td className="p-2.5 text-center">
-                                      {values.items.length > 1 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => remove(idx)}
-                                          className="p-1 text-slate-400 hover:text-rose-600 transition"
-                                        >
-                                          <MdDelete size={17} />
-                                        </button>
-                                      )}
+                                      <button
+                                        type="button"
+                                        title={values.items.length > 1 ? "Remove this item row" : "Clear this row"}
+                                        onClick={() => {
+                                          if (values.items.length > 1) {
+                                            remove(idx);
+                                          } else {
+                                            setFieldValue(`items.0.skuCode`, '');
+                                            setFieldValue(`items.0.itemName`, '');
+                                            setFieldValue(`items.0.rate`, 0);
+                                            setFieldValue(`items.0.qty`, 1);
+                                            setFieldValue(`items.0.uom`, 'Nos');
+                                          }
+                                        }}
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                                      >
+                                        <MdDelete size={17} />
+                                      </button>
                                     </td>
                                   </tr>
                                 );
