@@ -169,7 +169,34 @@ const AddPurchaseReturnReceipt: React.FC = () => {
     }
 
     try {
-      // 1. Fetch vendor's returns sorted chronologically
+      // 1. Fetch vendor's purchases to determine available open payable capacity
+      const { data: vendorPurchases } = await supabase
+        .from('supplier_purchases')
+        .select('total_amount, cash_amount_paid, bank_amount_paid, remaining_balance')
+        .ilike('supplier_name', vendorName);
+
+      const { data: vendorPaymentVouchers } = await supabase
+        .from('financial_vouchers')
+        .select('total_amount')
+        .ilike('customer_name', vendorName)
+        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
+
+      let totalPurchasesGross = 0;
+      let totalPurchasesUpfrontPaid = 0;
+      (vendorPurchases || []).forEach((p: any) => {
+        totalPurchasesGross += Number(p.total_amount) || 0;
+        totalPurchasesUpfrontPaid += (Number(p.cash_amount_paid || 0) + Number(p.bank_amount_paid || 0));
+      });
+
+      let totalVouchersPaid = 0;
+      (vendorPaymentVouchers || []).forEach((v: any) => {
+        totalVouchersPaid += Number(v.total_amount) || 0;
+      });
+
+      // Total open payable capacity across all purchases before returns
+      const openPayableCapacity = Math.max(0, totalPurchasesGross - totalPurchasesUpfrontPaid - totalVouchersPaid);
+
+      // 2. Fetch vendor's returns sorted chronologically (oldest first for FIFO)
       const vendorReturns = allReturns.filter(r => 
         (r.vendor_name || r.supplier_name || '').toLowerCase() === vendorName.toLowerCase()
       );
@@ -186,34 +213,41 @@ const AddPurchaseReturnReceipt: React.FC = () => {
         return (Number(a.id) || 0) - (Number(b.id) || 0);
       });
 
-      // 2. Fetch past refund receipts for this vendor
+      // 3. Fetch past refund receipts for this vendor
       const { data: pastReceipts } = await supabase
         .from('purchase_return_receipts')
         .select('id, amount_received, return_no, metadata')
-        .eq('vendor_name', vendorName);
+        .ilike('vendor_name', vendorName);
 
       // Gross returns total, credit adjusted to open invoices, and upfront collected
       let totalReturnsGross = 0;
       let totalReturnsUpfrontCollected = 0;
       let totalReturnsCreditAdjusted = 0;
 
-      // Track Return allocations
       const allocations: Record<string, { gross: number; upfront: number; creditAdjusted: number; specificReceipts: number; generalAllocated: number; pastReceipts: number; due: number }> = {};
       let totalReceiptsCollected = 0;
       let unallocatedGeneralReceipts = 0;
 
-      // Initialize all returns
+      // Track remaining open payable capacity available to absorb returns
+      let remainingPayablePool = openPayableCapacity;
+
+      // Initialize all returns chronologically
       sortedVendorReturns.forEach(r => {
         const key = r.return_no;
         const gross = Number(r.total_amount) || 0;
         const upfront = Number(r.amount_paid) || 0;
-        
-        // Check if return was made on credit / absorbed against purchase invoices
+        const returnNetAfterUpfront = Math.max(0, gross - upfront);
+
         const isCreditReturn = r.payment_term === 'On Credit' || 
                                r.metadata?.paymentTerm === 'On Credit' || 
                                (Array.isArray(r.metadata?.matchedInvoices) && r.metadata.matchedInvoices.length > 0);
         
-        const creditAdjusted = isCreditReturn ? Math.max(0, gross - upfront) : 0;
+        let creditAdjusted = 0;
+        if (isCreditReturn) {
+          // Can only absorb up to the remaining open payable debt on purchases!
+          creditAdjusted = Math.min(returnNetAfterUpfront, remainingPayablePool);
+          remainingPayablePool -= creditAdjusted;
+        }
 
         totalReturnsGross += gross;
         totalReturnsUpfrontCollected += upfront;
