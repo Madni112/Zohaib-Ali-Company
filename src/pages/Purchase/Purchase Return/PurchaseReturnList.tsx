@@ -171,14 +171,14 @@ const PurchaseReturnList = () => {
           <table className="w-full table-auto border-collapse">
             <thead>
               <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                <th className="py-4 px-4 font-semibold w-16 text-center">S#</th>
-                <th className="py-4 px-4 font-semibold">Debit Note #</th>
-                <th className="py-4 px-4 font-semibold">Wholesale Vendor</th>
-                <th className="py-4 px-4 font-semibold">Source Warehouse</th>
-                <th className="py-4 px-4 text-center font-semibold">Return Date</th>
-                <th className="py-4 px-4 text-center font-semibold">Reimbursement Status</th>
-                <th className="py-4 px-4 text-right pr-6 font-semibold">Gross Return</th>
-                <th className="py-4 px-4 w-24 text-center font-semibold">Actions</th>
+                <th className="py-4 px-4 font-semibold w-16 text-center whitespace-nowrap">S#</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">Debit Note #</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">Wholesale Vendor</th>
+                <th className="py-4 px-4 font-semibold whitespace-nowrap">Source Warehouse</th>
+                <th className="py-4 px-4 text-center font-semibold whitespace-nowrap">Return Date</th>
+                <th className="py-4 px-4 text-center font-semibold whitespace-nowrap">Reimbursement Status</th>
+                <th className="py-4 px-4 text-right pr-6 font-semibold whitespace-nowrap">Gross Return</th>
+                <th className="py-4 px-4 w-24 text-center font-semibold whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -207,26 +207,26 @@ const PurchaseReturnList = () => {
 
                   return (
                     <tr key={rtn.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-black dark:text-white text-xs">
-                      <td className="py-3.5 px-4 text-center text-gray-400">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-primary">{rtn.return_no}</td>
-                      <td className="py-3.5 px-4 flex items-center gap-1.5"><MdPerson className="text-gray-400" size={16} />{rtn.vendor_name}</td>
-                      <td className="py-3.5 px-4">
-                        <span className="bg-slate-100 dark:bg-meta-4 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1">
-                          <MdStore size={12} className="text-primary" />{rtn.source_warehouse}
+                      <td className="py-3.5 px-4 text-center text-gray-400 whitespace-nowrap">{serialNumber}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-primary whitespace-nowrap">{rtn.return_no}</td>
+                      <td className="py-3.5 px-4 flex items-center gap-1.5 whitespace-nowrap"><MdPerson className="text-gray-400 shrink-0" size={16} />{rtn.vendor_name}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="bg-slate-100 dark:bg-meta-4 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide inline-flex items-center gap-1 whitespace-nowrap">
+                          <MdStore size={12} className="text-primary shrink-0" />{rtn.source_warehouse}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-center text-gray-500">
-                        <span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{rtn.return_date}</span>
+                      <td className="py-3.5 px-4 text-center text-gray-500 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-[11px] whitespace-nowrap"><MdEvent size={13} className="shrink-0" />{rtn.return_date}</span>
                       </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${returnStatusColor}`}>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border whitespace-nowrap ${returnStatusColor}`}>
                           {returnStatusText}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-black dark:text-white pr-6">
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-black dark:text-white pr-6 whitespace-nowrap">
                         Rs. {formatMoney(totalAmt)}
                       </td>
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <TableActions
                           onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Print/${rtn.id}`)}
                           onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Add`, { state: { returnRecord: rtn } })}
