@@ -73,7 +73,7 @@ const HoldingReportPrint: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'navy'
+          theme: 'emerald'
         });
       } else if (perspective === 'salesman') {
         const columns: ExcelColumn[] = [
@@ -135,7 +135,7 @@ const HoldingReportPrint: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'navy'
+          theme: 'emerald'
         });
       } else if (perspective === 'gatepass') {
         const columns: ExcelColumn[] = [
@@ -163,7 +163,7 @@ const HoldingReportPrint: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'purple'
+          theme: 'emerald'
         });
       } else if (perspective === 'invoice') {
         const columns: ExcelColumn[] = [
@@ -191,7 +191,7 @@ const HoldingReportPrint: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'slate'
+          theme: 'emerald'
         });
       }
 

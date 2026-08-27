@@ -194,7 +194,7 @@ const ReportDashboard: React.FC = () => {
             columns: kpiCols,
             data: kpiData,
             summaryRow: false,
-            theme: 'navy'
+            theme: 'emerald'
           },
           {
             sheetName: 'Sales Invoices',
@@ -208,7 +208,7 @@ const ReportDashboard: React.FC = () => {
             reportTitle: 'Supplier Purchases Ledger Snapshot',
             columns: purCols,
             data: purExport,
-            theme: 'purple'
+            theme: 'emerald'
           }
         ]
       });

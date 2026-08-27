@@ -487,7 +487,7 @@ const StockReportPrint = () => {
                 filterSummary: filterMeta,
                 columns,
                 data: exportData,
-                theme: 'navy'
+                theme: 'emerald'
             });
 
             toast.success('Excel workbook exported successfully!');

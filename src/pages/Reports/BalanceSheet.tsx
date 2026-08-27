@@ -84,7 +84,7 @@ const BalanceSheet: React.FC = () => {
         columns,
         data: exportData,
         summaryRow: false,
-        theme: 'navy'
+        theme: 'emerald'
       });
 
       toast.success('Balance Sheet exported to Excel successfully!');

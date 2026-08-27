@@ -458,7 +458,7 @@ const HoldingReport: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'navy'
+          theme: 'emerald'
         });
       } else if (activePerspective === 'salesman') {
         const columns: ExcelColumn[] = [
@@ -499,7 +499,7 @@ const HoldingReport: React.FC = () => {
           { header: 'Invoices Count', key: 'invCount', width: 16, type: 'number' },
           { header: 'Held Items Count', key: 'itemsCount', width: 18, type: 'number' },
           { header: 'Total Held Quantity', key: 'totalHeldQty', width: 20, type: 'number' },
-          { header: 'Total Holding Valuation (Rs.)', key: 'totalHeldValue', width: 26, type: 'currency' }
+          { header: 'Total Holding Value (Rs.)', key: 'totalHeldValue', width: 26, type: 'currency' }
         ];
 
         const exportData = customerSummary.map((c, i) => ({
@@ -520,7 +520,7 @@ const HoldingReport: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'navy'
+          theme: 'emerald'
         });
       } else if (activePerspective === 'gatepass') {
         const columns: ExcelColumn[] = [
@@ -549,7 +549,7 @@ const HoldingReport: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'purple'
+          theme: 'emerald'
         });
       } else if (activePerspective === 'invoice') {
         const columns: ExcelColumn[] = [
@@ -577,7 +577,7 @@ const HoldingReport: React.FC = () => {
           filterSummary: filterMeta,
           columns,
           data: exportData,
-          theme: 'slate'
+          theme: 'emerald'
         });
       }
 

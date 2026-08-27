@@ -36,6 +36,16 @@ export interface MultiSheetExcelConfig {
 }
 
 const THEMES = {
+  emerald: {
+    primary: '064E3B',    // Deep Emerald Pine
+    secondary: '059669',  // Software Theme Primary Emerald (#059669)
+    headerText: 'FFFFFF',
+    subHeaderText: 'FFFFFF',
+    zebra: 'F0FDF4',     // Ultra light mint zebra (#F0FDF4)
+    totalBg: 'D1FAE5',    // Mint Total Accent (#D1FAE5)
+    totalText: '064E3B',
+    borderColor: 'CBD5E1'
+  },
   navy: {
     primary: '1E3A8A',    // Royal Navy Blue
     secondary: '2563EB',  // Vibrant Blue
@@ -45,16 +55,6 @@ const THEMES = {
     totalBg: 'E2E8F0',    // Soft Slate Total
     totalText: '0F172A',
     borderColor: 'CBD5E1'
-  },
-  emerald: {
-    primary: '065F46',    // Deep Emerald Green
-    secondary: '059669',  // Vibrant Emerald
-    headerText: 'FFFFFF',
-    subHeaderText: 'FFFFFF',
-    zebra: 'F0FDF4',     // Light emerald
-    totalBg: 'D1FAE5',    // Mint Total
-    totalText: '064E3B',
-    borderColor: 'A7F3D0'
   },
   purple: {
     primary: '4C1D95',    // Deep Purple
@@ -97,10 +97,10 @@ const createStyledWorksheet = (config: {
     columns,
     data,
     summaryRow = true,
-    theme = 'navy'
+    theme = 'emerald'
   } = config;
 
-  const activeTheme = THEMES[theme] || THEMES.navy;
+  const activeTheme = THEMES[theme] || THEMES.emerald;
   const numCols = Math.max(columns.length, 4);
   const endColLetter = XLSX.utils.encode_col(columns.length - 1);
 
@@ -411,7 +411,7 @@ export const exportMultiSheetExcel = async (config: MultiSheetExcelConfig) => {
       columns: sheetCfg.columns,
       data: sheetCfg.data,
       summaryRow: sheetCfg.summaryRow,
-      theme: sheetCfg.theme || 'navy'
+      theme: sheetCfg.theme || 'emerald'
     });
 
     XLSX.utils.book_append_sheet(wb, ws, sheetCfg.sheetName);
