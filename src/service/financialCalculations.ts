@@ -30,30 +30,44 @@ export interface FinancialSummary {
 
 export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
   try {
-    // 1. Fetch data from Supabase tables with fallbacks
-    const { data: salesInvoices } = await supabase.from('sales_invoices').select('*');
-    const { data: supplierPurchases } = await supabase.from('supplier_purchases').select('*');
-    const { data: salesReturns } = await supabase.from('sales_returns').select('*');
-    const { data: salesReturnReceipts } = await supabase.from('sales_return_receipts').select('*');
-    const { data: purchaseReturns } = await supabase.from('purchase_returns').select('*');
-    const { data: purchaseReturnReceipts } = await supabase.from('purchase_return_receipts').select('*');
-    const { data: vouchers } = await supabase.from('financial_vouchers').select('*');
-    const { data: banks } = await supabase.from('banks').select('*');
-    const { data: inventory } = await supabase.from('warehouse_inventory').select('*');
-    const { data: products } = await supabase.from('products').select('*');
-    const { data: customerReceipts } = await supabase.from('customer_recoveries').select('*');
+    // 1. Fetch data from Supabase tables in parallel with full fault tolerance
+    const [
+      salesInvoicesRes,
+      supplierPurchasesRes,
+      salesReturnsRes,
+      salesReturnReceiptsRes,
+      purchaseReturnsRes,
+      purchaseReturnReceiptsRes,
+      vouchersRes,
+      banksRes,
+      inventoryRes,
+      productsRes,
+      customerReceiptsRes
+    ] = await Promise.allSettled([
+      supabase.from('sales_invoices').select('*'),
+      supabase.from('supplier_purchases').select('*'),
+      supabase.from('sales_returns').select('*'),
+      supabase.from('sales_return_receipts').select('*'),
+      supabase.from('purchase_returns').select('*'),
+      supabase.from('purchase_return_receipts').select('*'),
+      supabase.from('financial_vouchers').select('*'),
+      supabase.from('banks').select('*'),
+      supabase.from('warehouse_inventory').select('*'),
+      supabase.from('products').select('*'),
+      supabase.from('customer_recoveries').select('*')
+    ]);
 
-    const invoicesList = salesInvoices || [];
-    const purchasesList = supplierPurchases || [];
-    const salesReturnsList = salesReturns || [];
-    const salesReturnRecList = salesReturnReceipts || [];
-    const purchaseReturnsList = purchaseReturns || [];
-    const purchaseReturnRecList = purchaseReturnReceipts || [];
-    const vouchersList = vouchers || [];
-    const banksList = banks || [];
-    const inventoryList = inventory || [];
-    const productsList = products || [];
-    const customerRecList = customerReceipts || [];
+    const invoicesList = (salesInvoicesRes.status === 'fulfilled' && Array.isArray(salesInvoicesRes.value.data)) ? salesInvoicesRes.value.data : [];
+    const purchasesList = (supplierPurchasesRes.status === 'fulfilled' && Array.isArray(supplierPurchasesRes.value.data)) ? supplierPurchasesRes.value.data : [];
+    const salesReturnsList = (salesReturnsRes.status === 'fulfilled' && Array.isArray(salesReturnsRes.value.data)) ? salesReturnsRes.value.data : [];
+    const salesReturnRecList = (salesReturnReceiptsRes.status === 'fulfilled' && Array.isArray(salesReturnReceiptsRes.value.data)) ? salesReturnReceiptsRes.value.data : [];
+    const purchaseReturnsList = (purchaseReturnsRes.status === 'fulfilled' && Array.isArray(purchaseReturnsRes.value.data)) ? purchaseReturnsRes.value.data : [];
+    const purchaseReturnRecList = (purchaseReturnReceiptsRes.status === 'fulfilled' && Array.isArray(purchaseReturnReceiptsRes.value.data)) ? purchaseReturnReceiptsRes.value.data : [];
+    const vouchersList = (vouchersRes.status === 'fulfilled' && Array.isArray(vouchersRes.value.data)) ? vouchersRes.value.data : [];
+    const banksList = (banksRes.status === 'fulfilled' && Array.isArray(banksRes.value.data)) ? banksRes.value.data : [];
+    const inventoryList = (inventoryRes.status === 'fulfilled' && Array.isArray(inventoryRes.value.data)) ? inventoryRes.value.data : [];
+    const productsList = (productsRes.status === 'fulfilled' && Array.isArray(productsRes.value.data)) ? productsRes.value.data : [];
+    const customerRecList = (customerReceiptsRes.status === 'fulfilled' && Array.isArray(customerReceiptsRes.value.data)) ? customerReceiptsRes.value.data : [];
 
     const todayStr = new Date().toISOString().split('T')[0];
     const currentYear = new Date().getFullYear();

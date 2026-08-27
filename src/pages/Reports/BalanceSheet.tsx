@@ -6,18 +6,40 @@ import { useAuth } from '../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../utils/excelExport';
 import { toast } from 'react-hot-toast';
 
+const defaultMetrics: FinancialSummary = {
+  cashBalance: 0,
+  totalBankBalance: 0,
+  bankAccounts: [],
+  todaysSales: 0,
+  thisMonthSales: 0,
+  thisMonthPurchases: 0,
+  totalReceivables: 0,
+  totalPayables: 0,
+  inventoryAssetValue: 0,
+  totalAssets: 0,
+  totalLiabilities: 0,
+  totalEquity: 0,
+  monthlySalesTrend: [],
+  cashFlowTrend: []
+};
+
 const BalanceSheet: React.FC = () => {
   const { businessName } = useAuth();
-  const [metrics, setMetrics] = useState<FinancialSummary | null>(null);
+  const [metrics, setMetrics] = useState<FinancialSummary>(defaultMetrics);
   const [loading, setLoading] = useState(true);
 
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
 
   const loadData = async () => {
-    setLoading(true);
-    const res = await fetchFinancialMetrics();
-    setMetrics(res);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const res = await fetchFinancialMetrics();
+      if (res) setMetrics(res);
+    } catch (err: any) {
+      console.error('BalanceSheet loadData failure:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -28,18 +50,9 @@ const BalanceSheet: React.FC = () => {
     window.print();
   };
 
-  if (loading || !metrics) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
-
   const [exporting, setExporting] = useState(false);
 
   const handleExportExcel = async () => {
-    if (!metrics) return;
     try {
       setExporting(true);
       const columns: ExcelColumn[] = [
@@ -83,7 +96,15 @@ const BalanceSheet: React.FC = () => {
     }
   };
 
-  const isBalanced = Math.abs(metrics.totalAssets - (metrics.totalLiabilities + metrics.totalEquity)) < 1;
+  const isBalanced = Math.abs((metrics.totalAssets || 0) - ((metrics.totalLiabilities || 0) + (metrics.totalEquity || 0))) < 1;
+
+  if (loading && !metrics.totalAssets && !metrics.totalLiabilities) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-white text-xs print:p-0">
@@ -163,22 +184,22 @@ const BalanceSheet: React.FC = () => {
                 Statement Audit Status: {isBalanced ? <span className="text-success font-extrabold">BALANCED STATEMENT ✅</span> : <span className="text-danger font-extrabold">UNBALANCED STATEMENT ⚠️</span>}
               </h3>
               <p className="text-gray-400 text-xs">
-                Formula: Total Assets (Rs. {metrics.totalAssets.toLocaleString()}) = Liabilities (Rs. {metrics.totalLiabilities.toLocaleString()}) + Equity (Rs. {metrics.totalEquity.toLocaleString()})
+                Formula: Total Assets (Rs. {Number(metrics.totalAssets || 0).toLocaleString()}) = Liabilities (Rs. {Number(metrics.totalLiabilities || 0).toLocaleString()}) + Equity (Rs. {Number(metrics.totalEquity || 0).toLocaleString()})
               </p>
             </div>
           </div>
           <div className="flex gap-4 font-mono text-xs text-right">
             <div className="bg-gray-50 dark:bg-meta-4/20 p-2 rounded">
               <span className="text-gray-400 block text-[10px] uppercase font-bold">Total Assets</span>
-              <b className="text-success text-sm font-black">Rs. {metrics.totalAssets.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+              <b className="text-success text-sm font-black">Rs. {Number(metrics.totalAssets || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
             </div>
             <div className="bg-gray-50 dark:bg-meta-4/20 p-2 rounded">
               <span className="text-gray-400 block text-[10px] uppercase font-bold">Total Liabilities</span>
-              <b className="text-danger text-sm font-black">Rs. {metrics.totalLiabilities.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+              <b className="text-danger text-sm font-black">Rs. {Number(metrics.totalLiabilities || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
             </div>
             <div className="bg-gray-50 dark:bg-meta-4/20 p-2 rounded">
               <span className="text-gray-400 block text-[10px] uppercase font-bold">Total Equity</span>
-              <b className="text-primary text-sm font-black">Rs. {metrics.totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
+              <b className="text-primary text-sm font-black">Rs. {Number(metrics.totalEquity || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
             </div>
           </div>
         </div>
@@ -191,7 +212,7 @@ const BalanceSheet: React.FC = () => {
               <h3 className="text-base font-bold text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
                 <MdMonetizationOn className="text-success" size={20} /> Current & Fixed Assets
               </h3>
-              <span className="text-xs font-mono font-black text-success">Total: Rs. {metrics.totalAssets.toLocaleString()}</span>
+              <span className="text-xs font-mono font-black text-success">Total: Rs. {Number(metrics.totalAssets || 0).toLocaleString()}</span>
             </div>
 
             <table className="w-full text-left font-mono">
@@ -203,7 +224,7 @@ const BalanceSheet: React.FC = () => {
                     Cash in Hand (App Cash Box Liquidity)
                   </td>
                   <td className="py-3 text-right font-black text-success">
-                    Rs. {metrics.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Rs. {Number(metrics.cashBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
 
@@ -211,7 +232,7 @@ const BalanceSheet: React.FC = () => {
                 <tr className="bg-gray-50/50 dark:bg-meta-4/10 font-sans font-bold text-gray-500 text-[11px]">
                   <td colSpan={2} className="py-2 px-1 uppercase tracking-wider">Corporate Bank Account Ledgers</td>
                 </tr>
-                {metrics.bankAccounts.length === 0 ? (
+                {(!metrics.bankAccounts || metrics.bankAccounts.length === 0) ? (
                   <tr className="border-b border-stroke dark:border-strokedark text-gray-400 italic">
                     <td className="py-2 pl-4">No bank ledgers logged</td>
                     <td className="py-2 text-right">Rs. 0.00</td>
@@ -223,7 +244,7 @@ const BalanceSheet: React.FC = () => {
                         🏦 {b.bankName} - {b.accountTitle} {b.accountNumber ? `(${b.accountNumber})` : ''}
                       </td>
                       <td className="py-2.5 text-right font-bold text-primary">
-                        Rs. {b.netBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        Rs. {Number(b.netBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                     </tr>
                   ))
@@ -236,7 +257,7 @@ const BalanceSheet: React.FC = () => {
                     Accounts Receivable (Client Debt Outstanding)
                   </td>
                   <td className="py-3 text-right font-black text-emerald-600 dark:text-emerald-400">
-                    Rs. {metrics.totalReceivables.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Rs. {Number(metrics.totalReceivables || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
 
@@ -247,7 +268,7 @@ const BalanceSheet: React.FC = () => {
                     Merchandise Inventory Asset Value
                   </td>
                   <td className="py-3 text-right font-black text-purple-600">
-                    Rs. {metrics.inventoryAssetValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Rs. {Number(metrics.inventoryAssetValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               </tbody>
@@ -255,7 +276,7 @@ const BalanceSheet: React.FC = () => {
                 <tr className="border-t-2 border-stroke dark:border-strokedark font-black text-sm bg-success/5">
                   <td className="py-3 font-sans uppercase">TOTAL ASSETS</td>
                   <td className="py-3 text-right text-success">
-                    Rs. {metrics.totalAssets.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Rs. {Number(metrics.totalAssets || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               </tfoot>
@@ -269,7 +290,7 @@ const BalanceSheet: React.FC = () => {
                 <h3 className="text-base font-bold text-black dark:text-white uppercase tracking-wider flex items-center gap-2">
                   <MdAssignmentReturn className="text-danger" size={20} /> Liabilities & Equity
                 </h3>
-                <span className="text-xs font-mono font-black text-danger">Total: Rs. {(metrics.totalLiabilities + metrics.totalEquity).toLocaleString()}</span>
+                <span className="text-xs font-mono font-black text-danger">Total: Rs. {(Number(metrics.totalLiabilities || 0) + Number(metrics.totalEquity || 0)).toLocaleString()}</span>
               </div>
 
               <table className="w-full text-left font-mono">
@@ -284,14 +305,14 @@ const BalanceSheet: React.FC = () => {
                       Accounts Payable (Supplier Credit Unpaid Bills)
                     </td>
                     <td className="py-3 text-right font-black text-danger">
-                      Rs. {metrics.totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      Rs. {Number(metrics.totalPayables || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
 
                   <tr className="border-b-2 border-stroke dark:border-strokedark font-bold bg-danger/5">
                     <td className="py-2.5 font-sans uppercase text-xs">Total Liabilities</td>
                     <td className="py-2.5 text-right text-danger font-black">
-                      Rs. {metrics.totalLiabilities.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      Rs. {Number(metrics.totalLiabilities || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
 
@@ -305,7 +326,7 @@ const BalanceSheet: React.FC = () => {
                       Net Capital / Retained Earnings Accumulated
                     </td>
                     <td className="py-3 text-right font-black text-primary">
-                      Rs. {metrics.totalEquity.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      Rs. {Number(metrics.totalEquity || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 </tbody>
@@ -313,7 +334,7 @@ const BalanceSheet: React.FC = () => {
                   <tr className="border-t-2 border-stroke dark:border-strokedark font-black text-sm bg-primary/5">
                     <td className="py-3 font-sans uppercase">TOTAL LIABILITIES & EQUITY</td>
                     <td className="py-3 text-right text-primary">
-                      Rs. {(metrics.totalLiabilities + metrics.totalEquity).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      Rs. {(Number(metrics.totalLiabilities || 0) + Number(metrics.totalEquity || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 </tfoot>
