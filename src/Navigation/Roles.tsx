@@ -70,6 +70,7 @@ import AccountReport from '../pages/Reports/Account Report/AccountReport';
 import SaleReportPrint from '../pages/Reports/Sales Report/SaleReportPrint';
 import SaleReturnReceiptList from '../pages/Sales/Sales Return Receipt/SaleReturnReceiptList';
 import SaleReturnReceiptAdd from '../pages/Sales/Sales Return Receipt/SalesReturnReceiptAdd';
+import PrintSalesReturnReceipt from '../pages/Sales/Sales Return Receipt/PrintSalesReturnReceipt';
 import PurchaseReportPrint from '../pages/Reports/Purchase Report/PurchaseReportPrint';
 import StockReportPrint from '../pages/Reports/Stock Report/StockReportPrint';
 import AccountReportPrint from '../pages/Reports/Account Report/AccountReportPrint';
@@ -610,6 +611,24 @@ export const adminRoutes = [
   {
     path: '/purchase/purchase-receipt/print/:id',
     component: <PrintPurchaseReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/Sales-Return-Receipt/Print/:id',
+    component: <PrintSalesReturnReceipt />,
+    label: 'Print Sales Return Receipt',
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales/sales-return-receipt/print/:id',
+    component: <PrintSalesReturnReceipt />,
+    label: 'Print Sales Return Receipt',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales-Return-Receipt/Print/:id',
+    component: <PrintSalesReturnReceipt />,
+    label: 'Print Sales Return Receipt',
     hideFromSidebar: true
   }
 ];
