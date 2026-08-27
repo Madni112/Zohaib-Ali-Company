@@ -4,7 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
-import { FiPrinter, FiArrowLeft, FiPhone, FiMapPin, FiCheckCircle, FiRotateCcw, FiTag } from 'react-icons/fi';
+import { FiPrinter, FiArrowLeft, FiPhone, FiMapPin, FiCheckCircle, FiRotateCcw } from 'react-icons/fi';
 
 interface ReturnItem {
   itemName?: string;
@@ -314,7 +314,7 @@ const PrintPurchaseReturn: React.FC = () => {
         <button
           type="button"
           onClick={() => window.print()}
-          className="flex items-center gap-2 px-6 py-2.5 text-xs font-black bg-rose-500 hover:bg-rose-400 text-white rounded-lg shadow-md transition cursor-pointer"
+          className="flex items-center gap-2 px-6 py-2.5 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-lg shadow-md transition cursor-pointer"
         >
           <FiPrinter size={16} /> Print Debit Note
         </button>
@@ -327,18 +327,18 @@ const PrintPurchaseReturn: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-slate-900 pb-5 mb-5 gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-8 h-8 rounded-lg bg-rose-700 text-white font-black flex items-center justify-center text-base shadow-sm">Z</span>
+              <span className="w-8 h-8 rounded-lg bg-emerald-700 text-white font-black flex items-center justify-center text-base shadow-sm">Z</span>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 uppercase">ZOHAIB ALI & COMPANY</h2>
             </div>
             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">Wholesale Tile & Sanitary Procurement Hub</p>
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 mt-2 font-medium">
-              <span className="flex items-center gap-1.5"><FiMapPin className="text-rose-700" size={13} /> Main Showroom & Warehouse Yard, Pakistan</span>
-              <span className="flex items-center gap-1.5"><FiPhone className="text-rose-700" size={13} /> Hotline: 0312-8039911</span>
+              <span className="flex items-center gap-1.5"><FiMapPin className="text-emerald-700" size={13} /> Main Showroom & Warehouse Yard, Pakistan</span>
+              <span className="flex items-center gap-1.5"><FiPhone className="text-emerald-700" size={13} /> Hotline: 0312-8039911</span>
             </div>
           </div>
 
           <div className="bg-slate-50 border border-slate-300 rounded-xl p-3.5 min-w-[240px] text-right font-mono">
-            <div className="text-[10px] font-black text-rose-800 uppercase tracking-widest flex items-center justify-end gap-1">
+            <div className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center justify-end gap-1">
               <FiRotateCcw size={12} /> Official Vendor Debit Note
             </div>
             <div className="text-lg sm:text-xl font-black text-slate-950 tracking-tight mt-0.5">{returnNoFormatted}</div>
@@ -346,7 +346,7 @@ const PrintPurchaseReturn: React.FC = () => {
               Dispatch Date: <strong className="text-slate-900 font-mono">{returnDateFormatted}</strong>
             </div>
             <div className="mt-1.5">
-              <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-rose-100 text-rose-900 border border-rose-300">
+              <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">
                 Mode: {returnData.payment_term || 'On Credit'}
               </span>
             </div>
@@ -358,7 +358,7 @@ const PrintPurchaseReturn: React.FC = () => {
           {/* Vendor Card */}
           <div className="bg-slate-50/80 border border-slate-300 rounded-xl p-4 text-xs">
             <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <FiCheckCircle className="text-rose-700" size={13} /> Wholesale Vendor Profile (Credited)
+              <FiCheckCircle className="text-emerald-700" size={13} /> Wholesale Vendor Profile (Credited)
             </div>
             <h3 className="font-black text-slate-900 text-sm">{returnData.vendor_name || returnData.supplier_name || 'General Factory Vendor'}</h3>
             {vendorInfo?.contact_name && (
@@ -375,7 +375,7 @@ const PrintPurchaseReturn: React.FC = () => {
           {/* Dispatch Warehouse Card */}
           <div className="bg-slate-50/80 border border-slate-300 rounded-xl p-4 text-xs">
             <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <FiMapPin className="text-rose-700" size={13} /> Dispatch Source & Inbound PO Links
+              <FiMapPin className="text-emerald-700" size={13} /> Dispatch Source & Inbound PO Links
             </div>
             <p className="text-slate-700"><strong className="text-slate-900">Source Warehouse:</strong> {returnData.source_warehouse || returnData.warehouse_name || 'Main Warehouse'}</p>
             <p className="text-slate-700 mt-1"><strong className="text-slate-900">Outbound Purpose:</strong> Vendor Return / Debit Note Adjustment</p>
@@ -403,17 +403,17 @@ const PrintPurchaseReturn: React.FC = () => {
                 <th className="py-2.5 px-3 w-24">SKU Code</th>
                 <th className="py-2.5 px-3">Product Description</th>
                 <th className="py-2.5 px-3 w-28">Source Location</th>
-                <th className="py-2.5 px-3 w-28 font-mono">Matched PO</th>
-                <th className="py-2.5 px-3 w-32 text-center">Returned Qty</th>
-                <th className="py-2.5 px-3 w-28 text-right">Cost Rate</th>
-                <th className="py-2.5 px-3 w-32 text-right pr-4">Credit Amount</th>
+                <th className="py-2.5 px-3 w-24 font-mono">Matched PO</th>
+                <th className="py-2.5 px-3 w-28 text-center">Returned Qty</th>
+                <th className="py-2.5 px-3 w-24 text-right">Cost Rate</th>
+                <th className="py-2.5 px-3 w-28 text-right pr-4">Credit Amount</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-slate-800">
               {processedItems.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50 print:hover:bg-transparent">
                   <td className="py-2.5 px-3 text-center text-slate-500 font-mono">{idx + 1}</td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-rose-700">{item.sku}</td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-emerald-800">{item.sku}</td>
                   <td className="py-2.5 px-3 font-bold text-slate-900">{item.pName}</td>
                   <td className="py-2.5 px-3 text-slate-600 text-[11px]">{item.warehouse}</td>
                   <td className="py-2.5 px-3 font-mono text-[11px] font-bold text-slate-700">{item.linkedPoDisplay}</td>
@@ -450,7 +450,7 @@ const PrintPurchaseReturn: React.FC = () => {
                 <td colSpan={2} className="py-2.5 px-3 text-right pr-4 bg-slate-200/50">
                   <div className="inline-flex items-baseline justify-end gap-2">
                     <span className="text-slate-600 font-sans text-[11px] font-bold uppercase tracking-wider">Gross Credit:</span>
-                    <strong className="font-mono font-black text-rose-950 text-sm whitespace-nowrap">
+                    <strong className="font-mono font-black text-slate-950 text-sm whitespace-nowrap">
                       Rs. {formatMoney(grandTotal)}
                     </strong>
                   </div>
@@ -507,9 +507,9 @@ const PrintPurchaseReturn: React.FC = () => {
               </div>
             )}
 
-            <div className="flex justify-between items-center text-rose-700 pt-2 border-t-2 border-slate-300">
+            <div className="flex justify-between items-center text-emerald-900 pt-2 border-t-2 border-slate-300">
               <span className="font-sans font-black">Net Debit Applied to Vendor Ledger:</span>
-              <strong className="font-black text-base text-rose-900">Rs. {formatMoney(creditAppliedToLedger)}</strong>
+              <strong className="font-black text-base text-emerald-900">Rs. {formatMoney(creditAppliedToLedger)}</strong>
             </div>
             <p className="text-[10px] text-slate-500 font-sans italic pt-1">
               * This amount has been credited to your supplier balance and deducted from open purchase bills in chronological FIFO order.
