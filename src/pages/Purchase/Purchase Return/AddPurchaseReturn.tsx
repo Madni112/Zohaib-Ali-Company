@@ -447,11 +447,19 @@ const AddPurchaseReturn = () => {
               }
 
               // 2. Smart Price-Matching & Newest-First Purchase Invoice Deduction
-              const { data: vendorPurchases } = await supabase
+              // 2. Smart Price-Matching & Oldest-First (FIFO) Purchase Invoice Deduction
+              const { data: vendorPurchasesRaw } = await supabase
                 .from('supplier_purchases')
                 .select('*')
-                .ilike('vendor_name', values.vendorName)
-                .order('id', { ascending: false });
+                .ilike('vendor_name', values.vendorName);
+
+              // Sort vendor purchases strictly oldest to newest (FIFO)
+              const vendorPurchases = [...(vendorPurchasesRaw || [])].sort((a, b) => {
+                const timeA = new Date(a.purchase_date || a.created_at || 0).getTime();
+                const timeB = new Date(b.purchase_date || b.created_at || 0).getTime();
+                if (timeA !== timeB) return timeA - timeB;
+                return (Number(a.id) || 0) - (Number(b.id) || 0);
+              });
 
               const matchedInvoicesSummary: any[] = [];
               let primaryLinkedPo = values.purchaseNo || selectedPoNo || null;
@@ -464,7 +472,7 @@ const AddPurchaseReturn = () => {
                 let remainingToMatch = reqQty;
                 if (!vendorPurchases || vendorPurchases.length === 0) continue;
 
-                // Tier 1: Look for purchases containing this product at the EXACT entered cost price (newest to oldest)
+                // Tier 1: Look for purchases containing this product at the EXACT entered cost price (oldest to newest)
                 const exactRatePurchases = vendorPurchases.filter((pur: any) => {
                   const pItems = Array.isArray(pur.items) ? pur.items : [];
                   return pItems.some((pi: any) => {
@@ -474,7 +482,7 @@ const AddPurchaseReturn = () => {
                   });
                 });
 
-                // Tier 2: Fallback to all purchases containing this product (newest to oldest)
+                // Tier 2: Fallback to all purchases containing this product (oldest to newest)
                 const candidateList = exactRatePurchases.length > 0
                   ? exactRatePurchases
                   : vendorPurchases.filter((pur: any) => {
@@ -500,6 +508,7 @@ const AddPurchaseReturn = () => {
                     invoice_rate: invoiceRate,
                     entered_rate: enteredRate,
                     deducted_qty: deductQty,
+                    deducted_value: deductQty * invoiceRate,
                     is_exact_rate_match: Math.abs(invoiceRate - enteredRate) < 0.01
                   });
 

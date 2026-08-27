@@ -102,20 +102,35 @@ const PurchaseList = () => {
           }
         });
 
-        // 2. Allocate Returns (Debit Notes)
+        // 2. Allocate Returns (Debit Notes) item-by-item
         vendorReturns.forEach(r => {
-          const rAmt = Number(r.total_amount) || 0;
-          const rPoRef = r.purchase_no || r.original_invoice_no || r.metadata?.linkedPurchaseNo || '';
-          if (rPoRef) {
-            const cleanId = String(rPoRef).replace(/\D/g, '');
-            const matched = vendorPurs.find(p => p.purchase_no === rPoRef || String(p.id) === cleanId);
-            if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
-              poAlloc[matched.purchase_no || String(matched.id)].specificReturns += rAmt;
+          const matchedInvoices = r.metadata?.matchedInvoices;
+          if (Array.isArray(matchedInvoices) && matchedInvoices.length > 0) {
+            matchedInvoices.forEach((mi: any) => {
+              const poTarget = mi.purchase_no;
+              const val = Number(mi.deducted_value || (Number(mi.deducted_qty || 0) * Number(mi.invoice_rate || mi.entered_rate || 0)) || 0);
+              const cleanId = String(poTarget).replace(/\D/g, '');
+              const matched = vendorPurs.find(p => p.purchase_no === poTarget || String(p.id) === cleanId);
+              if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
+                poAlloc[matched.purchase_no || String(matched.id)].specificReturns += val;
+              } else {
+                unallocatedGeneral += val;
+              }
+            });
+          } else {
+            const rAmt = Number(r.total_amount) || 0;
+            const rPoRef = r.purchase_no || r.original_invoice_no || r.metadata?.linkedPurchaseNo || '';
+            if (rPoRef) {
+              const cleanId = String(rPoRef).replace(/\D/g, '');
+              const matched = vendorPurs.find(p => p.purchase_no === rPoRef || String(p.id) === cleanId);
+              if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
+                poAlloc[matched.purchase_no || String(matched.id)].specificReturns += rAmt;
+              } else {
+                unallocatedGeneral += rAmt;
+              }
             } else {
               unallocatedGeneral += rAmt;
             }
-          } else {
-            unallocatedGeneral += rAmt;
           }
         });
 
