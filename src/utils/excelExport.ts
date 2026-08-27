@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 
 export interface ExcelColumn {
   header: string;
@@ -35,17 +35,60 @@ export interface MultiSheetExcelConfig {
   }[];
 }
 
+const THEMES = {
+  navy: {
+    primary: '1E3A8A',    // Royal Navy Blue
+    secondary: '2563EB',  // Vibrant Blue
+    headerText: 'FFFFFF',
+    subHeaderText: 'FFFFFF',
+    zebra: 'F8FAFC',     // Light slate
+    totalBg: 'E2E8F0',    // Soft Slate Total
+    totalText: '0F172A',
+    borderColor: 'CBD5E1'
+  },
+  emerald: {
+    primary: '065F46',    // Deep Emerald Green
+    secondary: '059669',  // Vibrant Emerald
+    headerText: 'FFFFFF',
+    subHeaderText: 'FFFFFF',
+    zebra: 'F0FDF4',     // Light emerald
+    totalBg: 'D1FAE5',    // Mint Total
+    totalText: '064E3B',
+    borderColor: 'A7F3D0'
+  },
+  purple: {
+    primary: '4C1D95',    // Deep Purple
+    secondary: '7C3AED',  // Vibrant Purple
+    headerText: 'FFFFFF',
+    subHeaderText: 'FFFFFF',
+    zebra: 'FAF5FF',     // Light purple
+    totalBg: 'EDE9FE',    // Lavender Total
+    totalText: '3B0764',
+    borderColor: 'DDD6FE'
+  },
+  slate: {
+    primary: '1E293B',    // Slate Dark
+    secondary: '475569',  // Slate Medium
+    headerText: 'FFFFFF',
+    subHeaderText: 'FFFFFF',
+    zebra: 'F8FAFC',
+    totalBg: 'E2E8F0',
+    totalText: '0F172A',
+    borderColor: 'CBD5E1'
+  }
+};
+
 /**
- * Formats data into a structured XLSX Worksheet with company headers,
- * auto column widths, formatted numbers, and summary totals.
+ * Creates a beautifully styled and formatted Excel Worksheet
  */
-const createWorksheet = (config: {
+const createStyledWorksheet = (config: {
   companyName?: string;
   reportTitle: string;
   filterSummary?: Record<string, string | number | boolean | undefined | null>;
   columns: ExcelColumn[];
   data: any[];
   summaryRow?: Record<string, any> | boolean;
+  theme?: 'navy' | 'emerald' | 'purple' | 'slate';
 }): XLSX.WorkSheet => {
   const {
     companyName = 'ZOHAIB ALI & COMPANY',
@@ -53,163 +96,326 @@ const createWorksheet = (config: {
     filterSummary,
     columns,
     data,
-    summaryRow = true
+    summaryRow = true,
+    theme = 'navy'
   } = config;
 
+  const activeTheme = THEMES[theme] || THEMES.navy;
   const numCols = Math.max(columns.length, 4);
-  const rows: any[][] = [];
+  const endColLetter = XLSX.utils.encode_col(columns.length - 1);
+
+  const ws: XLSX.WorkSheet = {};
   const merges: XLSX.Range[] = [];
+  const rowHeights: { hpt: number }[] = [];
 
-  // Row 0: Company Name
-  rows.push([companyName]);
-  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } });
+  let currentRow = 0;
 
-  // Row 1: Report Title
-  rows.push([reportTitle.toUpperCase()]);
-  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: numCols - 1 } });
+  // Thin border definition for standard cells
+  const standardBorder = {
+    top: { style: 'thin', color: { rgb: activeTheme.borderColor } },
+    bottom: { style: 'thin', color: { rgb: activeTheme.borderColor } },
+    left: { style: 'thin', color: { rgb: activeTheme.borderColor } },
+    right: { style: 'thin', color: { rgb: activeTheme.borderColor } }
+  };
 
-  // Row 2: Generated Timestamp
+  // Header border definition
+  const headerBorder = {
+    top: { style: 'medium', color: { rgb: '0F172A' } },
+    bottom: { style: 'medium', color: { rgb: '0F172A' } },
+    left: { style: 'thin', color: { rgb: activeTheme.borderColor } },
+    right: { style: 'thin', color: { rgb: activeTheme.borderColor } }
+  };
+
+  // Total border definition (Accounting Double Underline)
+  const totalBorder = {
+    top: { style: 'thin', color: { rgb: '0F172A' } },
+    bottom: { style: 'double', color: { rgb: '0F172A' } },
+    left: { style: 'thin', color: { rgb: activeTheme.borderColor } },
+    right: { style: 'thin', color: { rgb: activeTheme.borderColor } }
+  };
+
+  // ==========================================
+  // ROW 1: COMPANY BANNER
+  // ==========================================
+  const compRef = `A${currentRow + 1}`;
+  ws[compRef] = {
+    v: companyName.toUpperCase(),
+    t: 's',
+    s: {
+      font: { name: 'Calibri', sz: 16, bold: true, color: { rgb: activeTheme.headerText } },
+      fill: { fgColor: { rgb: activeTheme.primary } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    }
+  };
+  // Fill other cells in merge range so background & borders render properly
+  for (let c = 1; c < columns.length; c++) {
+    const ref = `${XLSX.utils.encode_col(c)}${currentRow + 1}`;
+    ws[ref] = { v: '', t: 's', s: { fill: { fgColor: { rgb: activeTheme.primary } } } };
+  }
+  merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: columns.length - 1 } });
+  rowHeights.push({ hpt: 32 });
+  currentRow++;
+
+  // ==========================================
+  // ROW 2: REPORT TITLE BANNER
+  // ==========================================
+  const titleRef = `A${currentRow + 1}`;
+  ws[titleRef] = {
+    v: reportTitle.toUpperCase(),
+    t: 's',
+    s: {
+      font: { name: 'Calibri', sz: 12, bold: true, color: { rgb: activeTheme.subHeaderText } },
+      fill: { fgColor: { rgb: activeTheme.secondary } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    }
+  };
+  for (let c = 1; c < columns.length; c++) {
+    const ref = `${XLSX.utils.encode_col(c)}${currentRow + 1}`;
+    ws[ref] = { v: '', t: 's', s: { fill: { fgColor: { rgb: activeTheme.secondary } } } };
+  }
+  merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: columns.length - 1 } });
+  rowHeights.push({ hpt: 24 });
+  currentRow++;
+
+  // ==========================================
+  // ROW 3: GENERATION TIMESTAMP & METADATA
+  // ==========================================
   const now = new Date();
-  const timestampStr = `Generated on: ${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} at ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
-  rows.push([timestampStr]);
-  merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: numCols - 1 } });
+  const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const metaRef = `A${currentRow + 1}`;
+  ws[metaRef] = {
+    v: `Generated on: ${dateStr} at ${timeStr}  |  Official ERP Financial & Audit Statement`,
+    t: 's',
+    s: {
+      font: { name: 'Calibri', sz: 9, italic: true, color: { rgb: '475569' } },
+      fill: { fgColor: { rgb: 'F1F5F9' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: standardBorder
+    }
+  };
+  for (let c = 1; c < columns.length; c++) {
+    const ref = `${XLSX.utils.encode_col(c)}${currentRow + 1}`;
+    ws[ref] = { v: '', t: 's', s: { fill: { fgColor: { rgb: 'F1F5F9' } }, border: standardBorder } };
+  }
+  merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: columns.length - 1 } });
+  rowHeights.push({ hpt: 18 });
+  currentRow++;
 
-  // Row 3: Filters Applied (if any)
-  let currentRowIdx = 3;
+  // ==========================================
+  // ROW 4: APPLIED FILTERS (IF APPLICABLE)
+  // ==========================================
   if (filterSummary && Object.keys(filterSummary).length > 0) {
-    const activeFilters = Object.entries(filterSummary)
-      .filter(([_, v]) => v !== undefined && v !== null && v !== '' && v !== 'All')
+    const filterText = Object.entries(filterSummary)
+      .filter(([_, v]) => v !== undefined && v !== null && v !== '')
       .map(([k, v]) => `${k}: ${v}`)
-      .join('  |  ');
+      .join('   |   ');
 
-    if (activeFilters) {
-      rows.push([`Filters Applied: ${activeFilters}`]);
-      merges.push({ s: { r: currentRowIdx, c: 0 }, e: { r: currentRowIdx, c: numCols - 1 } });
-      currentRowIdx++;
+    if (filterText) {
+      const filterRef = `A${currentRow + 1}`;
+      ws[filterRef] = {
+        v: `Filters Applied: ${filterText}`,
+        t: 's',
+        s: {
+          font: { name: 'Calibri', sz: 9, bold: true, color: { rgb: '334155' } },
+          fill: { fgColor: { rgb: 'F8FAFC' } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: standardBorder
+        }
+      };
+      for (let c = 1; c < columns.length; c++) {
+        const ref = `${XLSX.utils.encode_col(c)}${currentRow + 1}`;
+        ws[ref] = { v: '', t: 's', s: { fill: { fgColor: { rgb: 'F8FAFC' } }, border: standardBorder } };
+      }
+      merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: columns.length - 1 } });
+      rowHeights.push({ hpt: 18 });
+      currentRow++;
     }
   }
 
-  // Row (currentRowIdx): Spacer
-  rows.push([]);
-  currentRowIdx++;
+  // Blank spacing row
+  rowHeights.push({ hpt: 8 });
+  currentRow++;
 
-  // Row (currentRowIdx): Table Column Headers
-  const headerRowIdx = currentRowIdx;
-  rows.push(columns.map(c => c.header));
-  currentRowIdx++;
+  // ==========================================
+  // ROW 5: TABLE COLUMN HEADERS
+  // ==========================================
+  const headerRowIdx = currentRow;
+  columns.forEach((col, colIdx) => {
+    const cellRef = `${XLSX.utils.encode_col(colIdx)}${headerRowIdx + 1}`;
+    const align = col.alignment || (col.type === 'currency' || col.type === 'number' ? 'right' : col.type === 'date' ? 'center' : 'left');
 
-  // Data Rows
-  const dataStartRowIdx = currentRowIdx;
-  data.forEach(item => {
-    const rowValues = columns.map(col => {
-      const val = item[col.key];
-      if (val === undefined || val === null) return '';
-      if (col.type === 'number' || col.type === 'currency' || col.type === 'percent') {
-        const num = Number(val);
-        return isNaN(num) ? val : num;
+    ws[cellRef] = {
+      v: col.header,
+      t: 's',
+      s: {
+        font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: activeTheme.headerText } },
+        fill: { fgColor: { rgb: activeTheme.primary } },
+        alignment: { horizontal: align, vertical: 'center', wrapText: true },
+        border: headerBorder
       }
-      return val;
-    });
-    rows.push(rowValues);
-    currentRowIdx++;
+    };
   });
-  const dataEndRowIdx = currentRowIdx - 1;
+  rowHeights.push({ hpt: 26 });
+  currentRow++;
 
-  // Summary / Totals Row
-  if (data.length > 0 && summaryRow) {
-    const totals: any[] = [];
-    columns.forEach((col, idx) => {
-      if (idx === 0) {
-        totals.push('TOTAL SUMMARY:');
-      } else if (typeof summaryRow === 'object' && summaryRow[col.key] !== undefined) {
-        totals.push(summaryRow[col.key]);
-      } else if (col.type === 'currency' || col.type === 'number') {
-        const sum = data.reduce((acc, row) => {
-          const val = Number(row[col.key]);
-          return acc + (isNaN(val) ? 0 : val);
-        }, 0);
-        totals.push(sum);
+  // ==========================================
+  // DATA ROWS WITH ZEBRA STRIPING & BORDERS
+  // ==========================================
+  data.forEach((item, rowIdx) => {
+    const isZebra = rowIdx % 2 === 1;
+    const rowBg = isZebra ? activeTheme.zebra : 'FFFFFF';
+
+    columns.forEach((col, colIdx) => {
+      const cellRef = `${XLSX.utils.encode_col(colIdx)}${currentRow + 1}`;
+      const rawVal = item[col.key];
+      const align = col.alignment || (col.type === 'currency' || col.type === 'number' ? 'right' : col.type === 'date' ? 'center' : 'left');
+
+      let cellValue: any = rawVal;
+      let cellType = 's';
+      let numFmt: string | undefined = undefined;
+
+      if (col.type === 'currency') {
+        const num = Number(rawVal || 0);
+        cellValue = isNaN(num) ? 0 : num;
+        cellType = 'n';
+        numFmt = '#,##0.00';
+      } else if (col.type === 'number') {
+        const num = Number(rawVal || 0);
+        cellValue = isNaN(num) ? 0 : num;
+        cellType = 'n';
+        numFmt = '#,##0';
+      } else if (col.type === 'date') {
+        cellValue = rawVal ? String(rawVal).split('T')[0] : '-';
+        cellType = 's';
       } else {
-        totals.push('');
+        cellValue = rawVal !== undefined && rawVal !== null ? String(rawVal) : '-';
+        cellType = 's';
+      }
+
+      ws[cellRef] = {
+        v: cellValue,
+        t: cellType,
+        s: {
+          font: { name: 'Calibri', sz: 10, color: { rgb: '1E293B' } },
+          fill: { fgColor: { rgb: rowBg } },
+          alignment: { horizontal: align, vertical: 'center' },
+          border: standardBorder,
+          ...(numFmt ? { numFmt } : {})
+        }
+      };
+    });
+
+    rowHeights.push({ hpt: 20 });
+    currentRow++;
+  });
+
+  // ==========================================
+  // TOTAL / SUMMARY ROW (IF APPLICABLE)
+  // ==========================================
+  if (summaryRow && data.length > 0) {
+    const summaryData: Record<string, any> = typeof summaryRow === 'object' ? summaryRow : {};
+
+    // Calculate sum for currency and number columns if not provided
+    columns.forEach((col) => {
+      if (summaryData[col.key] === undefined && (col.type === 'currency' || col.type === 'number')) {
+        const sum = data.reduce((acc, row) => acc + (Number(row[col.key]) || 0), 0);
+        summaryData[col.key] = sum;
       }
     });
-    rows.push(totals);
+
+    columns.forEach((col, colIdx) => {
+      const cellRef = `${XLSX.utils.encode_col(colIdx)}${currentRow + 1}`;
+      const isFirstCol = colIdx === 0;
+      const align = col.alignment || (col.type === 'currency' || col.type === 'number' ? 'right' : 'left');
+
+      let val = summaryData[col.key];
+      let cellType = 's';
+      let numFmt: string | undefined = undefined;
+
+      if (isFirstCol && !val) {
+        val = 'TOTAL STATEMENT SUMMARY';
+      }
+
+      if (col.type === 'currency' && typeof val === 'number') {
+        cellType = 'n';
+        numFmt = '#,##0.00';
+      } else if (col.type === 'number' && typeof val === 'number') {
+        cellType = 'n';
+        numFmt = '#,##0';
+      } else {
+        val = val !== undefined && val !== null ? String(val) : '';
+      }
+
+      ws[cellRef] = {
+        v: val,
+        t: cellType,
+        s: {
+          font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: activeTheme.totalText } },
+          fill: { fgColor: { rgb: activeTheme.totalBg } },
+          alignment: { horizontal: align, vertical: 'center' },
+          border: totalBorder,
+          ...(numFmt ? { numFmt } : {})
+        }
+      };
+    });
+
+    rowHeights.push({ hpt: 24 });
+    currentRow++;
   }
 
-  // Create worksheet from arrays of arrays
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-
-  // Set merges
-  ws['!merges'] = merges;
-
-  // Calculate auto column widths
-  ws['!cols'] = columns.map(col => {
-    let maxLen = col.header.length;
-    data.forEach(row => {
-      const cellVal = row[col.key];
-      if (cellVal !== undefined && cellVal !== null) {
-        const str = String(cellVal);
-        if (str.length > maxLen) maxLen = str.length;
-      }
-    });
-    if (col.type === 'currency') maxLen += 6;
-    return { wch: Math.min(Math.max(col.width || 0, maxLen + 4, 12), 48) };
+  // ==========================================
+  // COLUMN WIDTHS AUTO-CALCULATION
+  // ==========================================
+  const colWidths = columns.map((col) => {
+    if (col.width) return { wch: col.width };
+    const maxDataLen = data.reduce((max, row) => {
+      const valStr = String(row[col.key] || '');
+      return Math.max(max, valStr.length);
+    }, col.header.length);
+    return { wch: Math.max(maxDataLen + 4, 12) };
   });
+
+  // Assign metadata to worksheet
+  ws['!ref'] = `A1:${endColLetter}${currentRow}`;
+  ws['!merges'] = merges;
+  ws['!cols'] = colWidths;
+  ws['!rows'] = rowHeights;
 
   return ws;
 };
 
 /**
- * Universal 1-Click Excel Exporter (.xlsx)
+ * Exports a single sheet styled Excel document with corporate branding
  */
-export const exportToExcel = async (config: ExcelExportConfig): Promise<void> => {
-  try {
-    const wb = XLSX.utils.book_new();
-    const sheetName = (config.sheetName || 'Report').substring(0, 31).replace(/[\\/?*[\]]/g, '_');
-    const ws = createWorksheet({
-      companyName: config.companyName,
-      reportTitle: config.reportTitle,
-      filterSummary: config.filterSummary,
-      columns: config.columns,
-      data: config.data,
-      summaryRow: config.summaryRow
-    });
+export const exportToExcel = async (config: ExcelExportConfig) => {
+  const ws = createStyledWorksheet(config);
+  const wb = XLSX.utils.book_new();
+  const sheetName = config.sheetName || 'Report Summary';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-    const cleanFileName = config.fileName.endsWith('.xlsx') ? config.fileName : `${config.fileName}.xlsx`;
-    XLSX.writeFile(wb, cleanFileName);
-  } catch (error) {
-    console.error('Failed to export Excel report:', error);
-    throw error;
-  }
+  XLSX.writeFile(wb, config.fileName.endsWith('.xlsx') ? config.fileName : `${config.fileName}.xlsx`);
 };
 
 /**
- * Multi-Sheet Consolidated Excel Exporter (.xlsx)
+ * Exports a multi-sheet corporate financial workbook with styling
  */
-export const exportMultiSheetExcel = async (config: MultiSheetExcelConfig): Promise<void> => {
-  try {
-    const wb = XLSX.utils.book_new();
+export const exportMultiSheetExcel = async (config: MultiSheetExcelConfig) => {
+  const wb = XLSX.utils.book_new();
 
-    config.sheets.forEach(sheetConfig => {
-      const sheetName = sheetConfig.sheetName.substring(0, 31).replace(/[\\/?*[\]]/g, '_');
-      const ws = createWorksheet({
-        companyName: config.companyName,
-        reportTitle: sheetConfig.reportTitle,
-        filterSummary: sheetConfig.filterSummary,
-        columns: sheetConfig.columns,
-        data: sheetConfig.data,
-        summaryRow: sheetConfig.summaryRow
-      });
-
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  config.sheets.forEach((sheetCfg) => {
+    const ws = createStyledWorksheet({
+      companyName: config.companyName,
+      reportTitle: sheetCfg.reportTitle,
+      filterSummary: sheetCfg.filterSummary,
+      columns: sheetCfg.columns,
+      data: sheetCfg.data,
+      summaryRow: sheetCfg.summaryRow,
+      theme: sheetCfg.theme || 'navy'
     });
 
-    const cleanFileName = config.fileName.endsWith('.xlsx') ? config.fileName : `${config.fileName}.xlsx`;
-    XLSX.writeFile(wb, cleanFileName);
-  } catch (error) {
-    console.error('Failed to export multi-sheet Excel report:', error);
-    throw error;
-  }
+    XLSX.utils.book_append_sheet(wb, ws, sheetCfg.sheetName);
+  });
+
+  XLSX.writeFile(wb, config.fileName.endsWith('.xlsx') ? config.fileName : `${config.fileName}.xlsx`);
 };
