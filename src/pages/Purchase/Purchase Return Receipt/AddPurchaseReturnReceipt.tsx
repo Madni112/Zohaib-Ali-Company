@@ -492,7 +492,11 @@ const AddPurchaseReturnReceipt: React.FC = () => {
               vendor_name: selectedVendor,
               payment_date: values.paymentDate,
               payment_method: values.paymentMethod,
+              payment_mode: values.paymentMethod,
               amount_received: finalAmount,
+              amount_paid: finalAmount,
+              bank_name: selectedBankObj?.bankName || null,
+              notes: values.notes.trim() || null,
               remarks: values.notes.trim() || null,
               metadata: {
                 selectedBankId: (values.paymentMethod === 'By Bank' || values.paymentMethod === 'Split') ? values.selectedBankId : null,
