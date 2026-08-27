@@ -440,12 +440,77 @@ const AddPurchaseReturn = () => {
                 }
               }
 
+              // 2. Smart Price-Matching & Newest-First Purchase Invoice Deduction
+              const { data: vendorPurchases } = await supabase
+                .from('supplier_purchases')
+                .select('*')
+                .ilike('vendor_name', values.vendorName)
+                .order('id', { ascending: false });
+
+              const matchedInvoicesSummary: any[] = [];
+              let primaryLinkedPo = values.purchaseNo || selectedPoNo || null;
+
+              for (const item of values.items) {
+                const reqQty = Number(item.qty || 0);
+                const enteredRate = Number(item.rate || 0);
+                const pName = (item.itemName || '').trim().toLowerCase();
+
+                let remainingToMatch = reqQty;
+                if (!vendorPurchases || vendorPurchases.length === 0) continue;
+
+                // Tier 1: Look for purchases containing this product at the EXACT entered cost price (newest to oldest)
+                const exactRatePurchases = vendorPurchases.filter((pur: any) => {
+                  const pItems = Array.isArray(pur.items) ? pur.items : [];
+                  return pItems.some((pi: any) => {
+                    const matchName = (pi.itemName || pi.product_name || '').trim().toLowerCase() === pName;
+                    const matchRate = Math.abs(Number(pi.rate ?? pi.purchase_price ?? pi.cost_price ?? 0) - enteredRate) < 0.01;
+                    return matchName && matchRate;
+                  });
+                });
+
+                // Tier 2: Fallback to all purchases containing this product (newest to oldest)
+                const candidateList = exactRatePurchases.length > 0
+                  ? exactRatePurchases
+                  : vendorPurchases.filter((pur: any) => {
+                      const pItems = Array.isArray(pur.items) ? pur.items : [];
+                      return pItems.some((pi: any) => (pi.itemName || pi.product_name || '').trim().toLowerCase() === pName);
+                    });
+
+                for (const pur of candidateList) {
+                  if (remainingToMatch <= 0) break;
+                  const pItems = Array.isArray(pur.items) ? pur.items : [];
+                  const matchedLine = pItems.find((pi: any) => (pi.itemName || pi.product_name || '').trim().toLowerCase() === pName);
+                  if (!matchedLine) continue;
+
+                  const purQty = Number(matchedLine.qty || matchedLine.quantity || 1);
+                  const deductQty = Math.min(remainingToMatch, purQty);
+                  const invoiceRate = Number(matchedLine.rate ?? matchedLine.purchase_price ?? matchedLine.cost_price ?? enteredRate);
+
+                  matchedInvoicesSummary.push({
+                    item_name: item.itemName,
+                    sku: item.skuCode || '',
+                    purchase_no: pur.purchase_no || `PUR-${pur.id}`,
+                    purchase_date: pur.purchase_date || pur.created_at,
+                    invoice_rate: invoiceRate,
+                    entered_rate: enteredRate,
+                    deducted_qty: deductQty,
+                    is_exact_rate_match: Math.abs(invoiceRate - enteredRate) < 0.01
+                  });
+
+                  if (!primaryLinkedPo) {
+                    primaryLinkedPo = pur.purchase_no || `PUR-${pur.id}`;
+                  }
+
+                  remainingToMatch -= deductQty;
+                }
+              }
+
               const databasePayload = {
                 return_no: values.returnNo,
                 vendor_name: values.vendorName,
                 source_warehouse: values.sourceWarehouse,
                 warehouse_name: values.sourceWarehouse,
-                purchase_no: values.purchaseNo || selectedPoNo || null,
+                purchase_no: primaryLinkedPo,
                 return_date: values.returnDate,
                 payment_term: values.paymentTerm,
                 remarks: values.remarks.trim(),
@@ -463,7 +528,8 @@ const AddPurchaseReturn = () => {
                 })),
                 metadata: { 
                   selectedBankId: (values.paymentTerm === 'By Bank' || values.paymentTerm === 'Split') ? values.selectedBankId : null,
-                  linkedPurchaseNo: values.purchaseNo || selectedPoNo || null,
+                  linkedPurchaseNo: primaryLinkedPo,
+                  matchedInvoices: matchedInvoicesSummary,
                   cashAmount: values.paymentTerm === 'Split' ? cashRefund : (values.paymentTerm === 'By Cash' ? totalRefundCollected : 0),
                   bankAmount: values.paymentTerm === 'Split' ? bankRefund : (values.paymentTerm === 'By Bank' ? totalRefundCollected : 0),
                   paymentTerm: values.paymentTerm
