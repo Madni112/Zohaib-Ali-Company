@@ -94,11 +94,14 @@ function AddInvoiceReceipt() {
         setMetadataLoading(true);
 
         // 1. Fetch Customers
-        const { data: custData } = await supabase.from('customers').select('*').order('customer_name', { ascending: true });
+        const { data: custData } = await supabase.from('customers').select('*');
         const normalizedCust = (custData || []).map((c: any) => ({
           ...c,
-          customer_name: c.customer_name || c.name || 'Unnamed Customer'
-        }));
+          customer_name: c.customerName || c.customername || c.customer_name || c.name || 'Unnamed Customer',
+          contact_name: c.company || c.contact_person || c.contact_name || '',
+          phone: c.primaryPhone || c.phone || c.cell_no || '',
+          city: c.city || ''
+        })).sort((a: any, b: any) => (a.customer_name || '').localeCompare(b.customer_name || ''));
         setCustomersList(normalizedCust);
 
         // 2. Fetch Banks & COA
