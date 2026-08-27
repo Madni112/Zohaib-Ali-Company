@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    _global: "globalThis" 
+    global: "globalThis" 
   },
   server: {
     port: 2500
