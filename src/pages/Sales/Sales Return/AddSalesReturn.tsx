@@ -257,12 +257,18 @@ const AddSalesReturn = () => {
     if (selectedInvNo && selectedInvObj && selectedInvObj.items) {
       return (selectedInvObj.items || []).map((item: any) => {
         const pName = item.itemName || item.product_name || '';
-        const matchingProd = productList.find(p => (p.product_name || '').toLowerCase() === pName.toLowerCase());
+        const itemSku = item.sku || item.skuCode || '';
+        const matchingProd = productList.find(p => 
+          (p.product_name || '').toLowerCase() === pName.toLowerCase() || 
+          (itemSku && (p.item_sr_no || '').toLowerCase() === itemSku.toLowerCase())
+        );
+        const effectivePrice = Number(item.rp ?? item.rate ?? item.sale_price ?? item.price ?? matchingProd?.retail_price ?? matchingProd?.sales_price ?? matchingProd?.price ?? 0);
+
         return {
           id: matchingProd?.id || pName,
           product_name: pName,
-          item_sr_no: item.sku || item.skuCode || matchingProd?.item_sr_no || matchingProd?.sku || '',
-          sale_price: Number(item.rate || item.sale_price || item.price || matchingProd?.sales_price || 0),
+          item_sr_no: itemSku || matchingProd?.item_sr_no || matchingProd?.sku || '',
+          sale_price: effectivePrice,
           uom: item.uom || matchingProd?.uom || 'Nos',
           totalSoldQty: Number(item.qty || item.quantity || 0),
           lastInvNo: selectedInvNo,
@@ -277,16 +283,20 @@ const AddSalesReturn = () => {
         const pName = item.itemName || item.product_name || '';
         if (!pName) return;
         const key = pName.toLowerCase();
-        const matchingProd = productList.find(p => (p.product_name || '').toLowerCase() === key);
+        const itemSku = item.sku || item.skuCode || '';
+        const matchingProd = productList.find(p => 
+          (p.product_name || '').toLowerCase() === key || 
+          (itemSku && (p.item_sr_no || '').toLowerCase() === itemSku.toLowerCase())
+        );
         const qty = Number(item.qty || item.quantity || 0);
-        const price = Number(item.rate || item.sale_price || item.price || 0);
+        const price = Number(item.rp ?? item.rate ?? item.sale_price ?? item.price ?? matchingProd?.retail_price ?? matchingProd?.sales_price ?? matchingProd?.price ?? 0);
 
         if (!prodMap[key]) {
           prodMap[key] = {
             id: matchingProd?.id || pName,
             product_name: pName,
-            item_sr_no: item.sku || item.skuCode || matchingProd?.item_sr_no || matchingProd?.sku || '',
-            sale_price: price || Number(matchingProd?.sales_price || 0),
+            item_sr_no: itemSku || matchingProd?.item_sr_no || matchingProd?.sku || '',
+            sale_price: price,
             uom: item.uom || matchingProd?.uom || 'Nos',
             totalSoldQty: qty,
             lastInvNo: `INV-${String(inv.id).padStart(4, '0')}`,
@@ -1108,6 +1118,33 @@ const AddSalesReturn = () => {
                                         const query = (item.skuCode || '').toLowerCase().trim();
                                         const filteredSkuList = customerSoldProducts.filter(p => (p.item_sr_no || '').toLowerCase().includes(query) || (p.product_name || '').toLowerCase().includes(query));
 
+                                        const lookupItem = (queryStr: string) => {
+                                          const q = (queryStr || '').trim().toLowerCase();
+                                          if (!q) return null;
+                                          const inSold = customerSoldProducts.find(p => 
+                                            (p.item_sr_no || '').toLowerCase() === q || 
+                                            (p.product_name || '').toLowerCase() === q ||
+                                            (`SKU-${p.id || ''}`).toLowerCase() === q
+                                          );
+                                          if (inSold && Number(inSold.sale_price) > 0) return inSold;
+
+                                          const inProd = productList.find(p => 
+                                            (p.item_sr_no || '').toLowerCase() === q || 
+                                            (p.product_name || '').toLowerCase() === q ||
+                                            (`SKU-${p.id || ''}`).toLowerCase() === q
+                                          );
+                                          if (inProd) {
+                                            const salePrice = Number(inSold?.sale_price || inProd.retail_price || inProd.sales_price || inProd.price || 0);
+                                            return {
+                                              product_name: inProd.product_name,
+                                              item_sr_no: inProd.item_sr_no || `SKU-${inProd.id}`,
+                                              sale_price: salePrice,
+                                              uom: inProd.uom || inSold?.uom || 'Nos'
+                                            };
+                                          }
+                                          return inSold || null;
+                                        };
+
                                         return (
                                           <div className="relative">
                                             <input
@@ -1129,9 +1166,12 @@ const AddSalesReturn = () => {
                                                   e.preventDefault();
                                                   if (filteredSkuList[highlightedSkuIndex]) {
                                                     const prod = filteredSkuList[highlightedSkuIndex];
+                                                    const effectivePrice = Number(prod.sale_price) > 0
+                                                      ? Number(prod.sale_price)
+                                                      : Number(lookupItem(prod.item_sr_no || prod.product_name)?.sale_price || 0);
                                                     setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
                                                     setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                    setFieldValue(`items.${idx}.rate`, prod.sale_price);
+                                                    setFieldValue(`items.${idx}.rate`, effectivePrice);
                                                     setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
                                                     setActiveSkuIndex(null);
                                                   }
@@ -1144,10 +1184,12 @@ const AddSalesReturn = () => {
                                                 setFieldValue(`items.${idx}.skuCode`, val);
                                                 setActiveSkuIndex(idx);
                                                 setHighlightedSkuIndex(0);
-                                                const matched = customerSoldProducts.find(p => p.item_sr_no?.toLowerCase() === val.toLowerCase());
+                                                const matched = lookupItem(val);
                                                 if (matched) {
                                                   setFieldValue(`items.${idx}.itemName`, matched.product_name);
-                                                  setFieldValue(`items.${idx}.rate`, matched.sale_price);
+                                                  if (Number(matched.sale_price) > 0 || !item.rate) {
+                                                    setFieldValue(`items.${idx}.rate`, Number(matched.sale_price) || 0);
+                                                  }
                                                   setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
                                                 }
                                               }}
@@ -1157,31 +1199,37 @@ const AddSalesReturn = () => {
 
                                             {activeSkuIndex === idx && filteredSkuList.length > 0 && (
                                               <div className="absolute left-0 top-full mt-1.5 z-[999999] w-72 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                                                {filteredSkuList.map((prod, pIdx) => (
-                                                  <div
-                                                    key={pIdx}
-                                                    onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
-                                                    onMouseDown={(e) => {
-                                                      e.preventDefault();
-                                                      setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
-                                                      setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                      setFieldValue(`items.${idx}.rate`, prod.sale_price);
-                                                      setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
-                                                      setActiveSkuIndex(null);
-                                                    }}
-                                                    className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                                      highlightedSkuIndex === pIdx
-                                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
-                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                                                    }`}
-                                                  >
-                                                    <div className="flex flex-col">
-                                                      <span className="font-mono font-black text-emerald-700">{prod.item_sr_no || 'NO-SKU'}</span>
-                                                      <span className="text-[10px] text-slate-400">{prod.product_name}</span>
+                                                {filteredSkuList.map((prod, pIdx) => {
+                                                  const displayPrice = Number(prod.sale_price) > 0 
+                                                    ? Number(prod.sale_price) 
+                                                    : Number(lookupItem(prod.item_sr_no || prod.product_name)?.sale_price || 0);
+
+                                                  return (
+                                                    <div
+                                                      key={pIdx}
+                                                      onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
+                                                      onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
+                                                        setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                        setFieldValue(`items.${idx}.rate`, displayPrice);
+                                                        setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                        setActiveSkuIndex(null);
+                                                      }}
+                                                      className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                        highlightedSkuIndex === pIdx
+                                                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
+                                                          : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                                      }`}
+                                                    >
+                                                      <div className="flex flex-col">
+                                                        <span className="font-mono font-black text-emerald-700">{prod.item_sr_no || 'NO-SKU'}</span>
+                                                        <span className="text-[10px] text-slate-400">{prod.product_name}</span>
+                                                      </div>
+                                                      <span className="text-[10px] font-mono font-bold text-slate-500">Rs. {formatMoney(displayPrice)}</span>
                                                     </div>
-                                                    <span className="text-[10px] font-mono font-bold text-slate-500">Rs. {formatMoney(prod.sale_price)}</span>
-                                                  </div>
-                                                ))}
+                                                  );
+                                                })}
                                               </div>
                                             )}
                                           </div>
@@ -1194,6 +1242,33 @@ const AddSalesReturn = () => {
                                       {(() => {
                                         const query = (item.itemName || '').toLowerCase().trim();
                                         const filteredNameList = customerSoldProducts.filter(p => (p.product_name || '').toLowerCase().includes(query) || (p.item_sr_no || '').toLowerCase().includes(query));
+
+                                        const lookupItem = (queryStr: string) => {
+                                          const q = (queryStr || '').trim().toLowerCase();
+                                          if (!q) return null;
+                                          const inSold = customerSoldProducts.find(p => 
+                                            (p.item_sr_no || '').toLowerCase() === q || 
+                                            (p.product_name || '').toLowerCase() === q ||
+                                            (`SKU-${p.id || ''}`).toLowerCase() === q
+                                          );
+                                          if (inSold && Number(inSold.sale_price) > 0) return inSold;
+
+                                          const inProd = productList.find(p => 
+                                            (p.item_sr_no || '').toLowerCase() === q || 
+                                            (p.product_name || '').toLowerCase() === q ||
+                                            (`SKU-${p.id || ''}`).toLowerCase() === q
+                                          );
+                                          if (inProd) {
+                                            const salePrice = Number(inSold?.sale_price || inProd.retail_price || inProd.sales_price || inProd.price || 0);
+                                            return {
+                                              product_name: inProd.product_name,
+                                              item_sr_no: inProd.item_sr_no || `SKU-${inProd.id}`,
+                                              sale_price: salePrice,
+                                              uom: inProd.uom || inSold?.uom || 'Nos'
+                                            };
+                                          }
+                                          return inSold || null;
+                                        };
 
                                         return (
                                           <div className="relative">
@@ -1216,9 +1291,12 @@ const AddSalesReturn = () => {
                                                   e.preventDefault();
                                                   if (filteredNameList[highlightedProdNameIndex]) {
                                                     const prod = filteredNameList[highlightedProdNameIndex];
+                                                    const effectivePrice = Number(prod.sale_price) > 0 
+                                                      ? Number(prod.sale_price) 
+                                                      : Number(lookupItem(prod.product_name || prod.item_sr_no)?.sale_price || 0);
                                                     setFieldValue(`items.${idx}.itemName`, prod.product_name);
                                                     setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
-                                                    setFieldValue(`items.${idx}.rate`, prod.sale_price);
+                                                    setFieldValue(`items.${idx}.rate`, effectivePrice);
                                                     setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
                                                     setActiveProdNameIndex(null);
                                                   }
@@ -1231,10 +1309,12 @@ const AddSalesReturn = () => {
                                                 setFieldValue(`items.${idx}.itemName`, val);
                                                 setActiveProdNameIndex(idx);
                                                 setHighlightedProdNameIndex(0);
-                                                const matched = customerSoldProducts.find(p => p.product_name?.toLowerCase() === val.toLowerCase());
+                                                const matched = lookupItem(val);
                                                 if (matched) {
                                                   setFieldValue(`items.${idx}.skuCode`, matched.item_sr_no);
-                                                  setFieldValue(`items.${idx}.rate`, matched.sale_price);
+                                                  if (Number(matched.sale_price) > 0 || !item.rate) {
+                                                    setFieldValue(`items.${idx}.rate`, Number(matched.sale_price) || 0);
+                                                  }
                                                   setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
                                                 }
                                               }}
@@ -1244,36 +1324,42 @@ const AddSalesReturn = () => {
 
                                             {activeProdNameIndex === idx && filteredNameList.length > 0 && (
                                               <div className="absolute left-0 top-full mt-1.5 z-[999999] w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                                                {filteredNameList.map((prod, pIdx) => (
-                                                  <div
-                                                    key={pIdx}
-                                                    onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
-                                                    onMouseDown={(e) => {
-                                                      e.preventDefault();
-                                                      setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                      setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
-                                                      setFieldValue(`items.${idx}.rate`, prod.sale_price);
-                                                      setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
-                                                      setActiveProdNameIndex(null);
-                                                    }}
-                                                    className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
-                                                      highlightedProdNameIndex === pIdx
-                                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
-                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
-                                                    }`}
-                                                  >
-                                                    <div className="flex flex-col">
-                                                      <span className="font-bold">{prod.product_name}</span>
-                                                      <span className="text-[10px] text-slate-400">
-                                                        {prod.item_sr_no ? `SKU: ${prod.item_sr_no} • ` : ''}Sold Qty: {prod.totalSoldQty} {prod.uom}
-                                                      </span>
+                                                {filteredNameList.map((prod, pIdx) => {
+                                                  const displayPrice = Number(prod.sale_price) > 0 
+                                                    ? Number(prod.sale_price) 
+                                                    : Number(lookupItem(prod.product_name || prod.item_sr_no)?.sale_price || 0);
+
+                                                  return (
+                                                    <div
+                                                      key={pIdx}
+                                                      onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
+                                                      onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                        setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
+                                                        setFieldValue(`items.${idx}.rate`, displayPrice);
+                                                        setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                        setActiveProdNameIndex(null);
+                                                      }}
+                                                      className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                        highlightedProdNameIndex === pIdx
+                                                          ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
+                                                          : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                                      }`}
+                                                    >
+                                                      <div className="flex flex-col">
+                                                        <span className="font-bold">{prod.product_name}</span>
+                                                        <span className="text-[10px] text-slate-400">
+                                                          {prod.item_sr_no ? `SKU: ${prod.item_sr_no} • ` : ''}Sold Qty: {prod.totalSoldQty} {prod.uom}
+                                                        </span>
+                                                      </div>
+                                                      <div className="text-right font-mono">
+                                                        <span className="font-black text-emerald-700 block">Rs. {formatMoney(displayPrice)}</span>
+                                                        <span className="text-[10px] text-slate-400">{prod.lastInvNo}</span>
+                                                      </div>
                                                     </div>
-                                                    <div className="text-right font-mono">
-                                                      <span className="font-black text-emerald-700 block">Rs. {formatMoney(prod.sale_price)}</span>
-                                                      <span className="text-[10px] text-slate-400">{prod.lastInvNo}</span>
-                                                    </div>
-                                                  </div>
-                                                ))}
+                                                  );
+                                                })}
                                               </div>
                                             )}
                                           </div>
