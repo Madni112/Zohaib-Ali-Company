@@ -992,7 +992,7 @@ const AddSalesReturn = () => {
                 {/* ── RETURN LINE ITEMS DYNAMIC TABLE ── */}
                 <FieldArray name="items">
                   {({ push, remove }) => (
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-boxdark p-5 shadow-xs space-y-4">
+                    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-boxdark p-5 shadow-xs space-y-4 overflow-visible">
                       <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -1032,7 +1032,7 @@ const AddSalesReturn = () => {
                           Please select a target customer above to inspect and return their purchased items
                         </div>
                       ) : (
-                        <div className="overflow-x-auto">
+                        <div className="overflow-visible min-h-[140px]">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
                               <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
@@ -1050,20 +1050,24 @@ const AddSalesReturn = () => {
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                               {values.items.map((item: any, idx: number) => {
                                 const rowAmount = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                const isRowActive = activeSkuIndex === idx || activeProdNameIndex === idx;
 
                                 return (
-                                  <tr key={idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
+                                  <tr key={idx} className={`transition ${isRowActive ? 'relative z-[99999] bg-slate-50/90 dark:bg-slate-800/90 shadow-xs' : 'relative z-[1]'} hover:bg-slate-50/60 dark:hover:bg-slate-800/40`}>
                                     {/* S# */}
                                     <td className="p-3 text-center font-bold text-slate-400 font-mono">
                                       {idx + 1}
                                     </td>
 
                                     {/* SKU Autocomplete */}
-                                    <td className="p-2.5 relative sku-container">
+                                    <td className={`p-2.5 relative sku-container ${activeSkuIndex === idx ? 'z-[999999]' : ''}`}>
                                       <input
                                         type="text"
                                         value={item.skuCode}
-                                        onFocus={() => setActiveSkuIndex(idx)}
+                                        onFocus={() => {
+                                          setActiveSkuIndex(idx);
+                                          setActiveProdNameIndex(null);
+                                        }}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           setFieldValue(`items.${idx}.skuCode`, val);
@@ -1080,7 +1084,7 @@ const AddSalesReturn = () => {
                                       />
 
                                       {activeSkuIndex === idx && (
-                                        <div className="absolute left-0 top-full mt-1 z-[9999] w-64 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                                        <div className="absolute left-0 top-full mt-1.5 z-[999999] w-72 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
                                           {customerSoldProducts
                                             .filter(p => (p.item_sr_no || '').toLowerCase().includes((item.skuCode || '').toLowerCase()))
                                             .map((prod, pIdx) => (
@@ -1094,7 +1098,7 @@ const AddSalesReturn = () => {
                                                   setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
                                                   setActiveSkuIndex(null);
                                                 }}
-                                                className="p-2 cursor-pointer text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-100 flex justify-between items-center"
+                                                className="p-2.5 cursor-pointer text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-100 flex justify-between items-center"
                                               >
                                                 <div className="flex flex-col">
                                                   <span className="font-mono font-black text-emerald-700">{prod.item_sr_no || 'NO-SKU'}</span>
@@ -1108,11 +1112,14 @@ const AddSalesReturn = () => {
                                     </td>
 
                                     {/* Item Name Autocomplete */}
-                                    <td className="p-2.5 relative prod-name-container">
+                                    <td className={`p-2.5 relative prod-name-container ${activeProdNameIndex === idx ? 'z-[999999]' : ''}`}>
                                       <input
                                         type="text"
                                         value={item.itemName}
-                                        onFocus={() => setActiveProdNameIndex(idx)}
+                                        onFocus={() => {
+                                          setActiveProdNameIndex(idx);
+                                          setActiveSkuIndex(null);
+                                        }}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           setFieldValue(`items.${idx}.itemName`, val);
@@ -1129,7 +1136,7 @@ const AddSalesReturn = () => {
                                       />
 
                                       {activeProdNameIndex === idx && (
-                                        <div className="absolute left-0 top-full mt-1 z-[9999] w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                                        <div className="absolute left-0 top-full mt-1.5 z-[999999] w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
                                           {customerSoldProducts
                                             .filter(p => (p.product_name || '').toLowerCase().includes((item.itemName || '').toLowerCase()))
                                             .map((prod, pIdx) => (
