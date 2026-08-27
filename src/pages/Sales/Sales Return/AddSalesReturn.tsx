@@ -121,20 +121,46 @@ const AddSalesReturn = () => {
       try {
         setMetadataLoading(true);
 
-        // 1. Fetch Customers
-        const { data: cData } = await supabase.from('customers').select('*').order('name', { ascending: true });
-        const normalizedCustomers = (cData || []).map((c: any) => ({
-          id: c.id,
-          customer_name: c.customer_name || c.name || 'Unnamed Customer',
-          contact_name: c.contact_name || c.contact_person || '',
-          phone: c.cell_no || c.phone_no || c.phone || '',
-          city: c.city || '',
-          address: c.address || ''
-        }));
+        // 1. Fetch Customers & Sales Invoices
+        const { data: cData } = await supabase.from('customers').select('*');
+        const { data: invData } = await supabase.from('sales_invoices').select('*').order('id', { ascending: false });
+        if (invData) setSalesInvoicesList(invData);
+
+        // Combine customers from customers table + unique customer names from sales_invoices
+        const customerMap = new Map<string, any>();
+        (cData || []).forEach((c: any) => {
+          const name = (c.customername || c.customerName || c.customer_name || c.name || '').trim();
+          if (name) {
+            customerMap.set(name.toLowerCase(), {
+              id: c.id,
+              customer_name: name,
+              contact_name: c.company || c.contact_name || '',
+              phone: c.phone || c.primaryPhone || c.cell_no || '',
+              city: c.city || '',
+              address: c.address || ''
+            });
+          }
+        });
+
+        (invData || []).forEach((inv: any) => {
+          const name = (inv.customer_name || inv.customerName || '').trim();
+          if (name && !customerMap.has(name.toLowerCase())) {
+            customerMap.set(name.toLowerCase(), {
+              id: `inv-${inv.id}`,
+              customer_name: name,
+              contact_name: '',
+              phone: '',
+              city: '',
+              address: ''
+            });
+          }
+        });
+
+        const normalizedCustomers = Array.from(customerMap.values()).sort((a, b) => a.customer_name.localeCompare(b.customer_name));
         setCustomers(normalizedCustomers);
 
         // 2. Fetch Locations / Warehouses
-        const { data: locData } = await supabase.from('inventory_locations').select('*').order('name', { ascending: true });
+        const { data: locData } = await supabase.from('inventory_locations').select('*');
         const normalizedLocs = (locData || []).map((l: any) => ({
           id: l.id,
           name: l.name || 'Main Warehouse',
@@ -150,10 +176,6 @@ const AddSalesReturn = () => {
         // 4. Fetch Banks
         const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
         if (bankData) setBankAccountsList(bankData);
-
-        // 5. Fetch Sales Invoices
-        const { data: invData } = await supabase.from('sales_invoices').select('*').order('id', { ascending: false });
-        if (invData) setSalesInvoicesList(invData);
 
         // If in Edit Mode or Direct Invoice Link, restore state
         if (isEditMode && editData) {
