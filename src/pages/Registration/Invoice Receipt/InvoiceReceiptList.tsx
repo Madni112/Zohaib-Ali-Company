@@ -110,17 +110,10 @@ function InvoiceReceiptList() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/MultiInvoiceReceipt/Add`)}
-            className="flex items-center justify-center rounded bg-success py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer"
-          >
-            + Process Bulk Multi-Invoice
-          </button>
-          <button
-            type="button"
             onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/Add`)}
-            className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer"
+            className="flex items-center justify-center rounded-lg bg-primary py-2.5 px-5 text-xs font-bold text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer gap-2"
           >
-            + Clear Single Invoice
+            + Create Receipt Voucher
           </button>
         </div>
 
