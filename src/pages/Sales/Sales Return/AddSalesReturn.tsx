@@ -1061,111 +1061,181 @@ const AddSalesReturn = () => {
 
                                     {/* SKU Autocomplete */}
                                     <td className={`p-2.5 relative sku-container ${activeSkuIndex === idx ? 'z-[999999]' : ''}`}>
-                                      <input
-                                        type="text"
-                                        value={item.skuCode}
-                                        onFocus={() => {
-                                          setActiveSkuIndex(idx);
-                                          setActiveProdNameIndex(null);
-                                        }}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          setFieldValue(`items.${idx}.skuCode`, val);
-                                          setActiveSkuIndex(idx);
-                                          const matched = customerSoldProducts.find(p => p.item_sr_no?.toLowerCase() === val.toLowerCase());
-                                          if (matched) {
-                                            setFieldValue(`items.${idx}.itemName`, matched.product_name);
-                                            setFieldValue(`items.${idx}.rate`, matched.sale_price);
-                                            setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
-                                          }
-                                        }}
-                                        placeholder="Type SKU..."
-                                        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600"
-                                      />
+                                      {(() => {
+                                        const query = (item.skuCode || '').toLowerCase().trim();
+                                        const filteredSkuList = customerSoldProducts.filter(p => (p.item_sr_no || '').toLowerCase().includes(query) || (p.product_name || '').toLowerCase().includes(query));
 
-                                      {activeSkuIndex === idx && (
-                                        <div className="absolute left-0 top-full mt-1.5 z-[999999] w-72 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                                          {customerSoldProducts
-                                            .filter(p => (p.item_sr_no || '').toLowerCase().includes((item.skuCode || '').toLowerCase()))
-                                            .map((prod, pIdx) => (
-                                              <div
-                                                key={pIdx}
-                                                onMouseDown={(e) => {
+                                        return (
+                                          <div className="relative">
+                                            <input
+                                              type="text"
+                                              value={item.skuCode}
+                                              onFocus={() => {
+                                                setActiveSkuIndex(idx);
+                                                setActiveProdNameIndex(null);
+                                                setHighlightedSkuIndex(0);
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'ArrowDown') {
                                                   e.preventDefault();
-                                                  setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
-                                                  setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                  setFieldValue(`items.${idx}.rate`, prod.sale_price);
-                                                  setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                  setHighlightedSkuIndex(prev => Math.min(prev + 1, filteredSkuList.length - 1));
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  setHighlightedSkuIndex(prev => Math.max(prev - 1, 0));
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  if (filteredSkuList[highlightedSkuIndex]) {
+                                                    const prod = filteredSkuList[highlightedSkuIndex];
+                                                    setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
+                                                    setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                    setFieldValue(`items.${idx}.rate`, prod.sale_price);
+                                                    setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                    setActiveSkuIndex(null);
+                                                  }
+                                                } else if (e.key === 'Escape' || e.key === 'Tab') {
                                                   setActiveSkuIndex(null);
-                                                }}
-                                                className="p-2.5 cursor-pointer text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-100 flex justify-between items-center"
-                                              >
-                                                <div className="flex flex-col">
-                                                  <span className="font-mono font-black text-emerald-700">{prod.item_sr_no || 'NO-SKU'}</span>
-                                                  <span className="text-[10px] text-slate-400">{prod.product_name}</span>
-                                                </div>
-                                                <span className="text-[10px] font-mono font-bold text-slate-500">Rs. {formatMoney(prod.sale_price)}</span>
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                setFieldValue(`items.${idx}.skuCode`, val);
+                                                setActiveSkuIndex(idx);
+                                                setHighlightedSkuIndex(0);
+                                                const matched = customerSoldProducts.find(p => p.item_sr_no?.toLowerCase() === val.toLowerCase());
+                                                if (matched) {
+                                                  setFieldValue(`items.${idx}.itemName`, matched.product_name);
+                                                  setFieldValue(`items.${idx}.rate`, matched.sale_price);
+                                                  setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
+                                                }
+                                              }}
+                                              placeholder="Type SKU..."
+                                              className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600"
+                                            />
+
+                                            {activeSkuIndex === idx && filteredSkuList.length > 0 && (
+                                              <div className="absolute left-0 top-full mt-1.5 z-[999999] w-72 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                                                {filteredSkuList.map((prod, pIdx) => (
+                                                  <div
+                                                    key={pIdx}
+                                                    onMouseEnter={() => setHighlightedSkuIndex(pIdx)}
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
+                                                      setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                      setFieldValue(`items.${idx}.rate`, prod.sale_price);
+                                                      setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                      setActiveSkuIndex(null);
+                                                    }}
+                                                    className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                      highlightedSkuIndex === pIdx
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                                    }`}
+                                                  >
+                                                    <div className="flex flex-col">
+                                                      <span className="font-mono font-black text-emerald-700">{prod.item_sr_no || 'NO-SKU'}</span>
+                                                      <span className="text-[10px] text-slate-400">{prod.product_name}</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-mono font-bold text-slate-500">Rs. {formatMoney(prod.sale_price)}</span>
+                                                  </div>
+                                                ))}
                                               </div>
-                                            ))}
-                                        </div>
-                                      )}
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </td>
 
                                     {/* Item Name Autocomplete */}
                                     <td className={`p-2.5 relative prod-name-container ${activeProdNameIndex === idx ? 'z-[999999]' : ''}`}>
-                                      <input
-                                        type="text"
-                                        value={item.itemName}
-                                        onFocus={() => {
-                                          setActiveProdNameIndex(idx);
-                                          setActiveSkuIndex(null);
-                                        }}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          setFieldValue(`items.${idx}.itemName`, val);
-                                          setActiveProdNameIndex(idx);
-                                          const matched = customerSoldProducts.find(p => p.product_name?.toLowerCase() === val.toLowerCase());
-                                          if (matched) {
-                                            setFieldValue(`items.${idx}.skuCode`, matched.item_sr_no);
-                                            setFieldValue(`items.${idx}.rate`, matched.sale_price);
-                                            setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
-                                          }
-                                        }}
-                                        placeholder="Search customer purchased item..."
-                                        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600"
-                                      />
+                                      {(() => {
+                                        const query = (item.itemName || '').toLowerCase().trim();
+                                        const filteredNameList = customerSoldProducts.filter(p => (p.product_name || '').toLowerCase().includes(query) || (p.item_sr_no || '').toLowerCase().includes(query));
 
-                                      {activeProdNameIndex === idx && (
-                                        <div className="absolute left-0 top-full mt-1.5 z-[999999] w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
-                                          {customerSoldProducts
-                                            .filter(p => (p.product_name || '').toLowerCase().includes((item.itemName || '').toLowerCase()))
-                                            .map((prod, pIdx) => (
-                                              <div
-                                                key={pIdx}
-                                                onMouseDown={(e) => {
+                                        return (
+                                          <div className="relative">
+                                            <input
+                                              type="text"
+                                              value={item.itemName}
+                                              onFocus={() => {
+                                                setActiveProdNameIndex(idx);
+                                                setActiveSkuIndex(null);
+                                                setHighlightedProdNameIndex(0);
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'ArrowDown') {
                                                   e.preventDefault();
-                                                  setFieldValue(`items.${idx}.itemName`, prod.product_name);
-                                                  setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
-                                                  setFieldValue(`items.${idx}.rate`, prod.sale_price);
-                                                  setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                  setHighlightedProdNameIndex(prev => Math.min(prev + 1, filteredNameList.length - 1));
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  setHighlightedProdNameIndex(prev => Math.max(prev - 1, 0));
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  if (filteredNameList[highlightedProdNameIndex]) {
+                                                    const prod = filteredNameList[highlightedProdNameIndex];
+                                                    setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                    setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
+                                                    setFieldValue(`items.${idx}.rate`, prod.sale_price);
+                                                    setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                    setActiveProdNameIndex(null);
+                                                  }
+                                                } else if (e.key === 'Escape' || e.key === 'Tab') {
                                                   setActiveProdNameIndex(null);
-                                                }}
-                                                className="p-2.5 cursor-pointer text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-800 dark:text-slate-100 flex justify-between items-center"
-                                              >
-                                                <div className="flex flex-col">
-                                                  <span className="font-bold">{prod.product_name}</span>
-                                                  <span className="text-[10px] text-slate-400">
-                                                    {prod.item_sr_no ? `SKU: ${prod.item_sr_no} • ` : ''}Sold Qty: {prod.totalSoldQty} {prod.uom}
-                                                  </span>
-                                                </div>
-                                                <div className="text-right font-mono">
-                                                  <span className="font-black text-emerald-700 block">Rs. {formatMoney(prod.sale_price)}</span>
-                                                  <span className="text-[10px] text-slate-400">{prod.lastInvNo}</span>
-                                                </div>
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                setFieldValue(`items.${idx}.itemName`, val);
+                                                setActiveProdNameIndex(idx);
+                                                setHighlightedProdNameIndex(0);
+                                                const matched = customerSoldProducts.find(p => p.product_name?.toLowerCase() === val.toLowerCase());
+                                                if (matched) {
+                                                  setFieldValue(`items.${idx}.skuCode`, matched.item_sr_no);
+                                                  setFieldValue(`items.${idx}.rate`, matched.sale_price);
+                                                  setFieldValue(`items.${idx}.uom`, matched.uom || 'Nos');
+                                                }
+                                              }}
+                                              placeholder="Search customer purchased item..."
+                                              className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-bold text-slate-900 dark:text-white bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600"
+                                            />
+
+                                            {activeProdNameIndex === idx && filteredNameList.length > 0 && (
+                                              <div className="absolute left-0 top-full mt-1.5 z-[999999] w-80 max-h-56 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl divide-y divide-slate-100 dark:divide-slate-700/60">
+                                                {filteredNameList.map((prod, pIdx) => (
+                                                  <div
+                                                    key={pIdx}
+                                                    onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      setFieldValue(`items.${idx}.itemName`, prod.product_name);
+                                                      setFieldValue(`items.${idx}.skuCode`, prod.item_sr_no);
+                                                      setFieldValue(`items.${idx}.rate`, prod.sale_price);
+                                                      setFieldValue(`items.${idx}.uom`, prod.uom || 'Nos');
+                                                      setActiveProdNameIndex(null);
+                                                    }}
+                                                    className={`p-2.5 cursor-pointer text-xs flex justify-between items-center transition ${
+                                                      highlightedProdNameIndex === pIdx
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100'
+                                                    }`}
+                                                  >
+                                                    <div className="flex flex-col">
+                                                      <span className="font-bold">{prod.product_name}</span>
+                                                      <span className="text-[10px] text-slate-400">
+                                                        {prod.item_sr_no ? `SKU: ${prod.item_sr_no} • ` : ''}Sold Qty: {prod.totalSoldQty} {prod.uom}
+                                                      </span>
+                                                    </div>
+                                                    <div className="text-right font-mono">
+                                                      <span className="font-black text-emerald-700 block">Rs. {formatMoney(prod.sale_price)}</span>
+                                                      <span className="text-[10px] text-slate-400">{prod.lastInvNo}</span>
+                                                    </div>
+                                                  </div>
+                                                ))}
                                               </div>
-                                            ))}
-                                        </div>
-                                      )}
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </td>
 
                                     {/* Warehouse */}
