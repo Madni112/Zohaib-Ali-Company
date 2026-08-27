@@ -64,6 +64,7 @@ const AddPurchaseReturn = () => {
 
   const editData = location.state?.returnRecord || location.state?.record;
   const isEditMode = !!editData;
+  const [defaultReturnNo] = useState(() => isEditMode && editData?.return_no ? editData.return_no : `RTN-${Math.floor(100000 + Math.random() * 900000)}`);
 
   const formatMoney = (val: number | string | undefined | null): string => {
     const num = Number(val) || 0;
@@ -79,18 +80,20 @@ const AddPurchaseReturn = () => {
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (warehouseContainerRef.current && !warehouseContainerRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (warehouseContainerRef.current && !warehouseContainerRef.current.contains(target)) {
         setIsWarehouseDropdownOpen(false);
       }
-      if (vendorContainerRef.current && !vendorContainerRef.current.contains(e.target as Node)) {
+      if (vendorContainerRef.current && !vendorContainerRef.current.contains(target)) {
         setIsVendorDropdownOpen(false);
       }
-      if (poContainerRef.current && !poContainerRef.current.contains(e.target as Node)) {
+      if (poContainerRef.current && !poContainerRef.current.contains(target)) {
         setIsPoDropdownOpen(false);
       }
-      const target = e.target as HTMLElement;
-      if (!target.closest('.sku-container') && !target.closest('.prod-name-container')) {
+      if (!target.closest('.sku-container')) {
         setActiveSkuIndex(null);
+      }
+      if (!target.closest('.prod-name-container')) {
         setActiveProdNameIndex(null);
       }
     };
@@ -323,7 +326,7 @@ const AddPurchaseReturn = () => {
 
         <Formik
           initialValues={isEditMode && editData ? {
-            returnNo: editData.return_no || '',
+            returnNo: editData.return_no || defaultReturnNo,
             vendorName: editData.vendor_name || '',
             sourceWarehouse: editData.source_warehouse || (locations[0]?.name || 'Main Warehouse'),
             purchaseNo: editData.purchase_no || editData.original_purchase_no || editData.metadata?.linkedPurchaseNo || '',
@@ -343,7 +346,7 @@ const AddPurchaseReturn = () => {
               uom: i.uom || 'Nos'
             }))
           } : {
-            returnNo: `RTN-${Date.now().toString().slice(-6)}`,
+            returnNo: defaultReturnNo,
             vendorName: '',
             sourceWarehouse: locations[0]?.name || 'Central Warehouse A',
             purchaseNo: '',
@@ -363,7 +366,7 @@ const AddPurchaseReturn = () => {
               uom: 'Nos'
             }]
           }}
-          enableReinitialize={true}
+          enableReinitialize={isEditMode}
           validationSchema={validationSchema}
           onSubmit={async (values) => {
             if (!values.vendorName) {
@@ -574,6 +577,17 @@ const AddPurchaseReturn = () => {
               const price = Number(p.purchase_price ?? p.cost_price ?? p.rate ?? 0);
               const uom = p.uom || 'Nos';
 
+              const updatedItems = [...values.items];
+              const cur = updatedItems[rowIndex] || {};
+              updatedItems[rowIndex] = {
+                ...cur,
+                skuCode: displaySku,
+                itemName: p.product_name,
+                rate: price,
+                uom: uom
+              };
+
+              setFieldValue('items', updatedItems);
               setFieldValue(`items.${rowIndex}.skuCode`, displaySku);
               setFieldValue(`items.${rowIndex}.itemName`, p.product_name);
               setFieldValue(`items.${rowIndex}.rate`, price);
