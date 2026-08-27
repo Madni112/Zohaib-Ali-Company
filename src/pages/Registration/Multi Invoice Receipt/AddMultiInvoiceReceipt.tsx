@@ -197,7 +197,7 @@ const AddMultiInvoiceReceipt = () => {
                     <h3 className="font-medium text-black dark:text-white flex items-center gap-2 text-base">
                         <MdReceipt className="text-primary text-xl" /> Create Multi-Invoice Settlement Voucher
                     </h3>
-                    <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`)} className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline cursor-pointer">
+                    <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/List`)} className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline cursor-pointer">
                         <MdArrowBack /> Back to Logs
                     </button>
                 </div>
@@ -320,7 +320,7 @@ const AddMultiInvoiceReceipt = () => {
                             }
 
                             toast.success(`Bulk receipts processed successfully! ${activeRowsToClear.length} invoices updated.`);
-                            navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`);
+                            navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/List`);
 
                         } catch (err: any) {
                             toast.error('Bulk submission failure event: ' + err.message);
@@ -646,7 +646,7 @@ const AddMultiInvoiceReceipt = () => {
                             <div className="flex items-center justify-end gap-3 pt-4 border-t border-stroke dark:border-strokedark">
                                 <button
                                     type="button"
-                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`)}
+                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/List`)}
                                     className="rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-3 px-6 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer"
                                 >
                                     Cancel

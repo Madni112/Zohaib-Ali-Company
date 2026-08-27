@@ -168,11 +168,11 @@ export const adminRoutes = [
       {
         label: 'Invoice',
         icon: MdReceipt,
-        path: '/sales/invoice/list',
+        path: '/Sales/Invoice/List',
         component: <SalesHistory />
       },
       {
-        path: '/Registration/InvoiceReceipt/List',
+        path: '/Sales/InvoiceReceipt/List',
         component: <InvoiceReceiptList />,
         label: 'Invoice Receipt',
         icon: MdReceipt
@@ -180,30 +180,30 @@ export const adminRoutes = [
       {
         label: 'Sales Return',
         icon: MdEdit,
-        path: '/Sales-Return/Debit-Notes/List',
+        path: '/Sales/Sales-Return/List',
         component: <SalesReturnList />,
       },
       {
         label: 'Sales Return Receipt',
         icon: MdEdit,
-        path: '/sales/sales-return-receipt/list',
+        path: '/Sales/Sales-Return-Receipt/List',
         component: <SaleReturnReceiptList />
       },
       {
         label: 'Customers',
-        path: '/Customers/list',
+        path: '/Sales/Customers/List',
         component: <CustomerHistory />,
         icon: MdPeople,
       },
       {
         label: 'Salesman',
-        path: '/Salesman/list',
+        path: '/Sales/Salesman/List',
         component: <SalesmanHistory />,
         icon: MdPeople,
       },
       {
         label: 'Delivery Challan',
-        path: '/Delivery-Challan/List',
+        path: '/Sales/Delivery-Challan/List',
         component: <DeliveryChallanHistory />,
         icon: MdEmojiTransportation,
       }
@@ -223,68 +223,68 @@ export const adminRoutes = [
         label: 'Purchase Receipt',
         path: '/Purchase/Purchase-Receipt/List',
         component: <PurchaseReceiptList />,
-        icon: MdOutlineLaptop
+        icon: MdPayment
       },
       {
         label: 'Purchase Return',
         path: '/Purchase/Purchase-Return/List',
         component: <PurchaseReturnList />,
-        icon: MdRequestPage
+        icon: MdAssignmentReturn
       },
       {
         label: 'Purchase Return Receipt',
         path: '/Purchase/Purchase-Return-Receipt/List',
         component: <PurchaseReturnReceiptList />,
-        icon: MdOutlineRequestPage
+        icon: MdReceiptLong
       },
       {
         label: 'Vendor',
         path: '/Purchase/Vendor/List',
         component: <VendorList />,
-        icon: MdMan
+        icon: MdPeople
       }
 
     ]
   },
   {
     label: 'Reports',
-    icon: MdPageview,
+    icon: MdAssessment,
     children: [
       {
-        label: 'Report Dashboard',
+        label: 'Reports Dashboard',
         path: '/Reports/Reports-Dashboard',
         component: <ReportDashboard />,
-        icon: MdSpaceDashboard
+        icon: MdDashboardCustomize
       },
       {
-        label: 'Sales Reports',
+        label: 'Sales Report',
         path: '/Reports/Sales-Report',
         component: <SalesReport />,
-
+        icon: MdTrendingUp
       },
       {
-        label: 'Purchase Reports',
+        label: 'Purchase Report',
         path: '/Reports/Purchase-Report',
         component: <PurchaseReport />,
-
+        icon: MdBarChart
       },
       {
-        label: 'Stock Reports',
+        label: 'Stock Report',
         path: '/Reports/Stock-Report',
         component: <StockReport />,
-
+        icon: MdInventory
       },
       {
-        label: 'Account Reports',
+        label: 'Account Report',
         path: '/Reports/Account-Report',
         component: <AccountReport />,
-
+        icon: MdAccountBalanceWallet
       },
       {
         label: 'Balance Sheet',
         path: '/Reports/Balance-Sheet',
         component: <BalanceSheet />,
-        icon: MdAccountBalance
+        icon: MdBalance
       }
     ]
   },
@@ -313,8 +313,9 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
-    path: '/Registration/Chart-of-Account/Add',
+    path: '/Registration/Chart-of-Account/AddAccount',
     component: <AddChartOfAccount />,
+    label: 'Add Account',
     hideFromSidebar: true
   },
   {
@@ -330,13 +331,31 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Delivery-Challan/Print/:id',
+    component: <PrintChallan />,
+    label: 'Print Challan',
+    hideFromSidebar: true
+  },
+  {
     path: '/Sales-Return/Debit-Notes/Print/:id',
     component: <PrintSalesReturn />,
     label: 'Print Voucher',
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Sales-Return/Print/:id',
+    component: <PrintSalesReturn />,
+    label: 'Print Voucher',
+    hideFromSidebar: true
+  },
+  {
     path: '/sales/invoice/print/:id',
+    component: <PrintInvoice />,
+    label: 'Print Invoice',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/Invoice/Print/:id',
     component: <PrintInvoice />,
     label: 'Print Invoice',
     hideFromSidebar: true
@@ -359,8 +378,29 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Invoice/Add',
+    component: <NewInvoice />,
+    label: 'New Invoice',
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales/invoice/list',
+    component: <SalesHistory />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Sales-Return/Debit-Notes/Add',
     component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/Sales-Return/Add',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales-Return/Debit-Notes/List',
+    component: <SalesReturnList />,
     hideFromSidebar: true
   },
   {
@@ -369,8 +409,28 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales/InvoiceReceipt/Add',
+    component: <AddInvoiceReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Registration/InvoiceReceipt/List',
+    component: <InvoiceReceiptList />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Customers/customer-details',
     component: <AddCustomer />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/Customers/Add',
+    component: <AddCustomer />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Customers/list',
+    component: <CustomerHistory />,
     hideFromSidebar: true
   },
   {
@@ -379,12 +439,37 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Salesman/Add',
+    component: <AddSalesman />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Salesman/list',
+    component: <SalesmanHistory />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Delivery-Challan/Details',
     component: <AddDeliveryChallan />,
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Delivery-Challan/Add',
+    component: <AddDeliveryChallan />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Delivery-Challan/List',
+    component: <DeliveryChallanHistory />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Registration/MultiInvoiceReceipt/Add',
+    component: <AddMultiInvoiceReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/MultiInvoiceReceipt/Add',
     component: <AddMultiInvoiceReceipt />,
     hideFromSidebar: true
   },
@@ -436,6 +521,16 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/Sales/Sales-Return-Receipt/Add',
+    component: <SaleReturnReceiptAdd />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales/sales-return-receipt/list',
+    component: <SaleReturnReceiptList />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Reports/Purchase-Report/Print',
     component: <PurchaseReportPrint />,
     hideFromSidebar: true
@@ -452,6 +547,11 @@ export const adminRoutes = [
   },
   {
     path: '/Registration/InvoiceReceipt/Print/:id',
+    component: <PrintInvoiceReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales/InvoiceReceipt/Print/:id',
     component: <PrintInvoiceReceipt />,
     hideFromSidebar: true
   },

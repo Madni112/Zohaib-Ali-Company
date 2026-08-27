@@ -110,14 +110,14 @@ function InvoiceReceiptList() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/MultiInvoiceReceipt/Add`)}
+            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/MultiInvoiceReceipt/Add`)}
             className="flex items-center justify-center rounded bg-success py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer"
           >
             + Process Bulk Multi-Invoice
           </button>
           <button
             type="button"
-            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/Add`)}
+            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/Add`)}
             className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white hover:bg-opacity-90 transition duration-150 shadow-sm cursor-pointer"
           >
             + Clear Single Invoice
@@ -194,8 +194,8 @@ function InvoiceReceiptList() {
                       <td className="py-3.5 px-4 text-center text-gray-500 font-medium whitespace-nowrap">{r.voucher_date}</td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
-                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/Print/${r.id}`)}
-                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/Add`, { state: { receipt: r } })}
+                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/Print/${r.id}`)}
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/Add`, { state: { receipt: r } })}
                           onDelete={() => handleDeleteReceipt(r.id)}
                           printTitle="Print Receipt Voucher"
                           editTitle="Modify Receipt"

@@ -46,7 +46,7 @@ const PrintInvoiceReceipt: React.FC = () => {
         }
       } catch (err: any) {
         toast.error('Error loading receipt print data: ' + err.message);
-        navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`);
+        navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/List`);
       } finally {
         setLoading(false);
       }
@@ -119,7 +119,7 @@ const PrintInvoiceReceipt: React.FC = () => {
       <div className="no-print flex justify-between items-center mb-6 bg-slate-900 text-white p-4 rounded-xl shadow-md">
         <button
           type="button"
-          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Registration/InvoiceReceipt/List`)}
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/InvoiceReceipt/List`)}
           className="flex items-center gap-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg transition"
         >
           <FiArrowLeft size={16} /> Back to Receipts
