@@ -31,19 +31,23 @@ const PurchaseList = () => {
       const { data: vouchersData } = await supabase
         .from('financial_vouchers')
         .select('*')
-        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher');
+        .or('voucher_type.eq.Cash Payment Voucher,voucher_type.eq.Bank Payment Voucher,voucher_type.eq.Cash & Bank Payment Voucher');
+
+      const { data: pReturnsData } = await supabase
+        .from('purchase_returns')
+        .select('*');
 
       // Group purchases by vendor
       const purchasesByVendor: Record<string, any[]> = {};
       (purData || []).forEach(p => {
-        const vKey = (p.supplier_name || p.vendor_name || 'General Vendor').toLowerCase();
+        const vKey = (p.supplier_name || p.vendor_name || 'General Vendor').trim().toLowerCase();
         if (!purchasesByVendor[vKey]) purchasesByVendor[vKey] = [];
         purchasesByVendor[vKey].push(p);
       });
 
       const allocMap: Record<string, { totalPaid: number; due: number }> = {};
 
-      // For each vendor, allocate vouchers (specific + general unallocated)
+      // For each vendor, allocate vouchers + returns (specific + general unallocated FIFO)
       Object.keys(purchasesByVendor).forEach(vKey => {
         const vendorPurs = [...purchasesByVendor[vKey]].sort((a, b) => {
           const timeA = new Date(a.purchase_date || a.created_at || 0).getTime();
@@ -57,20 +61,31 @@ const PurchaseList = () => {
           return (Number(a.id) || 0) - (Number(b.id) || 0);
         });
 
-        const vendorVouchers = (vouchersData || []).filter(v => 
-          (v.customer_name || v.customerName || '').toLowerCase() === vKey
-        );
+        const vendorVouchers = (vouchersData || []).filter(v => {
+          const vName = (v.customer_name || v.customerName || v.vendor_name || v.vendorName || '').trim().toLowerCase();
+          return vName === vKey || vName.includes(vKey) || vKey.includes(vName);
+        });
 
-        const poAlloc: Record<string, { gross: number; upfront: number; specific: number; general: number; totalPaid: number; due: number }> = {};
+        const vendorReturns = (pReturnsData || []).filter(r => {
+          const rName = (r.vendor_name || r.vendorName || r.supplier_name || '').trim().toLowerCase();
+          return (rName === vKey || rName.includes(vKey) || vKey.includes(rName)) && String(r.status || '').toLowerCase() !== 'cancel';
+        });
+
+        const poAlloc: Record<string, { gross: number; upfront: number; specificVouchers: number; specificReturns: number; generalAllocated: number; totalPaid: number; due: number }> = {};
         let unallocatedGeneral = 0;
 
         vendorPurs.forEach(p => {
           const key = p.purchase_no || String(p.id);
+          const rawId = String(p.id);
           const gross = Number(p.total_amount) || 0;
           const upfront = Number(p.cash_amount_paid || 0) + Number(p.bank_amount_paid || 0);
-          poAlloc[key] = { gross, upfront, specific: 0, general: 0, totalPaid: upfront, due: Math.max(0, gross - upfront) };
+
+          const initObj = { gross, upfront, specificVouchers: 0, specificReturns: 0, generalAllocated: 0, totalPaid: upfront, due: Math.max(0, gross - upfront) };
+          poAlloc[key] = initObj;
+          poAlloc[rawId] = initObj;
         });
 
+        // 1. Allocate Vouchers
         vendorVouchers.forEach(v => {
           const vAmt = Number(v.total_amount) || 0;
           const vPoRef = v.original_invoice_no || v.metadata?.linkedPurchaseNo || '';
@@ -78,7 +93,7 @@ const PurchaseList = () => {
             const cleanId = String(vPoRef).replace(/\D/g, '');
             const matched = vendorPurs.find(p => p.purchase_no === vPoRef || String(p.id) === cleanId);
             if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
-              poAlloc[matched.purchase_no || String(matched.id)].specific += vAmt;
+              poAlloc[matched.purchase_no || String(matched.id)].specificVouchers += vAmt;
             } else {
               unallocatedGeneral += vAmt;
             }
@@ -87,21 +102,44 @@ const PurchaseList = () => {
           }
         });
 
+        // 2. Allocate Returns (Debit Notes)
+        vendorReturns.forEach(r => {
+          const rAmt = Number(r.total_amount) || 0;
+          const rPoRef = r.purchase_no || r.original_invoice_no || r.metadata?.linkedPurchaseNo || '';
+          if (rPoRef) {
+            const cleanId = String(rPoRef).replace(/\D/g, '');
+            const matched = vendorPurs.find(p => p.purchase_no === rPoRef || String(p.id) === cleanId);
+            if (matched && poAlloc[matched.purchase_no || String(matched.id)]) {
+              poAlloc[matched.purchase_no || String(matched.id)].specificReturns += rAmt;
+            } else {
+              unallocatedGeneral += rAmt;
+            }
+          } else {
+            unallocatedGeneral += rAmt;
+          }
+        });
+
+        // 3. FIFO Distribute Unallocated General Vouchers & Returns across oldest open POs
         let genRemaining = unallocatedGeneral;
         vendorPurs.forEach(p => {
           const key = p.purchase_no || String(p.id);
           const alloc = poAlloc[key];
-          const dueBeforeGen = Math.max(0, alloc.gross - alloc.upfront - alloc.specific);
-          if (dueBeforeGen > 0 && genRemaining > 0) {
-            const toDist = Math.min(dueBeforeGen, genRemaining);
-            alloc.general += toDist;
-            genRemaining -= toDist;
-          }
-          alloc.totalPaid = alloc.upfront + alloc.specific + alloc.general;
-          alloc.due = Math.max(0, alloc.gross - alloc.totalPaid);
+          if (alloc) {
+            const dueBeforeGen = Math.max(0, alloc.gross - alloc.upfront - alloc.specificVouchers - alloc.specificReturns);
+            if (dueBeforeGen > 0 && genRemaining > 0) {
+              const toDist = Math.min(dueBeforeGen, genRemaining);
+              alloc.generalAllocated += toDist;
+              genRemaining -= toDist;
+            }
+            alloc.totalPaid = alloc.upfront + alloc.specificVouchers + alloc.specificReturns + alloc.generalAllocated;
+            alloc.due = Math.max(0, alloc.gross - alloc.totalPaid);
 
-          allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due };
-          allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due };
+            allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due };
+            allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due };
+            if (p.purchase_no) {
+              allocMap[p.purchase_no] = { totalPaid: alloc.totalPaid, due: alloc.due };
+            }
+          }
         });
       });
 
@@ -270,7 +308,7 @@ const PurchaseList = () => {
                       <td className="py-3.5 px-4 font-mono font-black text-primary">{pur.purchase_no}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5"><MdPerson className="text-gray-400" size={16} />{vendorName}</td>
                       <td className="py-3.5 px-4"><span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1"><MdStore size={12} />{pur.target_warehouse}</span></td>
-                      <td className="py-3.5 px-4 text-center text-gray-500"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{pur.purchase_date}</span></td>
+                      <td className="py-3.5 px-4 text-center text-gray-500 whitespace-nowrap"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} />{pur.purchase_date}</span></td>
                       <td className="py-3.5 px-4 text-center">
                         <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border ${term === 'On Credit' ? 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300' : term === 'By Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300'}`}>
                           {term}
