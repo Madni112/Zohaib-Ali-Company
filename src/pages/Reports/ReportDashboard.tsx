@@ -3,7 +3,9 @@ import ReactApexChart from 'react-apexcharts';
 import { supabase } from '../../Context/supabaseClient';
 import { fetchFinancialMetrics, FinancialSummary } from '../../service/financialCalculations';
 import Spinner from '../../ui/Spinner';
-import { MdTrendingUp, MdLocalMall, MdLayers, MdAccountBalanceWallet, MdAccountBalance, MdAssessment, MdAssignment } from 'react-icons/md';
+import { MdTrendingUp, MdLocalMall, MdLayers, MdAccountBalanceWallet, MdAccountBalance, MdAssessment, MdAssignment, MdFileDownload } from 'react-icons/md';
+import { exportMultiSheetExcel, ExcelColumn } from '../../utils/excelExport';
+import { toast } from 'react-hot-toast';
 
 const ReportDashboard = () => {
   const [activeTab, setActiveTab] = useState<'sales' | 'purchase' | 'stock' | 'accounts' | 'bank' | 'cash' | 'balancesheet'>('sales');
@@ -66,13 +68,122 @@ const ReportDashboard = () => {
     { name: 'Procurement Expenses', data: metrics.monthlySalesTrend.map(m => m.purchases) }
   ];
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportConsolidatedPack = async () => {
+    if (!metrics) return;
+    try {
+      setExporting(true);
+
+      // Sheet 1: Executive KPIs
+      const kpiCols: ExcelColumn[] = [
+        { header: 'Financial Indicator KPI', key: 'indicator', width: 34 },
+        { header: 'Current Balance / Valuation (Rs.)', key: 'value', width: 28, type: 'currency' }
+      ];
+      const kpiData = [
+        { indicator: 'Gross Monthly Sales Revenue', value: metrics.thisMonthSales },
+        { indicator: 'App Liquid Cash in Hand', value: metrics.cashBalance },
+        { indicator: 'Total Bank Ledger Balances', value: metrics.totalBankBalance },
+        { indicator: 'Accounts Receivable (Customers)', value: metrics.accountsReceivable },
+        { indicator: 'Merchandise Inventory Stock Valuation', value: metrics.inventoryValuation },
+        { indicator: 'Total Balance Sheet Assets', value: metrics.totalAssets },
+        { indicator: 'Total Accounts Payable (Suppliers)', value: metrics.accountsPayable },
+        { indicator: 'Total Owner Equity & Retained Earnings', value: metrics.totalEquity }
+      ];
+
+      // Sheet 2: Recent Sales Invoices
+      const salesCols: ExcelColumn[] = [
+        { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+        { header: 'Invoice Code', key: 'invoiceNo', width: 16 },
+        { header: 'Date', key: 'date', width: 14, type: 'date' },
+        { header: 'Client Customer', key: 'customerName', width: 28 },
+        { header: 'Salesman', key: 'salesman', width: 20 },
+        { header: 'Sale Mode', key: 'mode', width: 16 },
+        { header: 'Gross Amount (Rs.)', key: 'amount', width: 22, type: 'currency' }
+      ];
+      const salesExport = salesData.map((s, i) => ({
+        idx: i + 1,
+        invoiceNo: `INV-${s.id}`,
+        date: s.sale_date || String(s.created_at || '').split('T')[0],
+        customerName: s.customer_name || 'Counter Retail Buyer',
+        salesman: s.salesman || 'Direct',
+        mode: (s.settlement_mode || s.payment_term || 'Cash').toUpperCase(),
+        amount: Number(s.total_amount || 0)
+      }));
+
+      // Sheet 3: Recent Purchases
+      const purCols: ExcelColumn[] = [
+        { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+        { header: 'Purchase Code', key: 'purchaseNo', width: 18 },
+        { header: 'Date', key: 'date', width: 14, type: 'date' },
+        { header: 'Supplier Merchant', key: 'supplierName', width: 28 },
+        { header: 'Warehouse Bin', key: 'warehouse', width: 18 },
+        { header: 'Bill Payables (Rs.)', key: 'amount', width: 22, type: 'currency' }
+      ];
+      const purExport = purchaseData.map((p, i) => ({
+        idx: i + 1,
+        purchaseNo: p.purchase_no || `PUR-${p.id}`,
+        date: p.purchase_date || String(p.created_at || '').split('T')[0],
+        supplierName: p.supplier_name || 'Vendor',
+        warehouse: p.target_warehouse || 'Main Warehouse',
+        amount: Number(p.total_amount || 0)
+      }));
+
+      await exportMultiSheetExcel({
+        fileName: `Corporate_Executive_Financial_Pack_${new Date().toISOString().split('T')[0]}.xlsx`,
+        companyName: 'ZOHAIB ALI & COMPANY',
+        sheets: [
+          {
+            sheetName: 'Financial KPIs',
+            reportTitle: 'Executive Financial Performance Summary',
+            columns: kpiCols,
+            data: kpiData,
+            summaryRow: false,
+            theme: 'navy'
+          },
+          {
+            sheetName: 'Sales Invoices',
+            reportTitle: 'Sales Invoices Ledger Snapshot',
+            columns: salesCols,
+            data: salesExport,
+            theme: 'emerald'
+          },
+          {
+            sheetName: 'Procurement Purchases',
+            reportTitle: 'Supplier Purchases Ledger Snapshot',
+            columns: purCols,
+            data: purExport,
+            theme: 'purple'
+          }
+        ]
+      });
+
+      toast.success('Executive Multi-Tab Excel Pack exported successfully!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-black dark:text-white">Corporate Analytics Reporting Center</h2>
           <p className="text-xs text-gray-400">Generate, filter and inspect transactional audit sheets, bank balances, and balance sheets</p>
         </div>
+
+        <button
+          type="button"
+          disabled={exporting}
+          onClick={handleExportConsolidatedPack}
+          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+        >
+          <MdFileDownload size={18} />
+          {exporting ? 'Exporting Pack...' : 'Export Executive Excel Pack (.xlsx)'}
+        </button>
       </div>
 
       {/* Top 4 KPI Summary Cards */}

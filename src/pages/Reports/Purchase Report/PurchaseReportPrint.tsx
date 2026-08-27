@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdPrint, MdArrowBack } from 'react-icons/md';
+import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
+import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
 const PurchaseReportPrint = () => {
   const location = useLocation();
@@ -79,6 +80,59 @@ const PurchaseReportPrint = () => {
     compilePurchaseStructuredDataset();
   }, [rType, filters]);
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const filterMeta = {
+        'Report Type': String(rType).toUpperCase(),
+        'Vendor': filters.vendor || 'All',
+        'Location': filters.location || 'All',
+        'Purchase Type': filters.purchaseType || 'All',
+        'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
+      };
+
+      const columns: ExcelColumn[] = [
+        { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+        { header: 'Purchase Doc Ref #', key: 'docRef', width: 20 },
+        { header: 'Vendor / Supplier Account', key: 'vendorName', width: 28 },
+        { header: 'Warehouse Bin', key: 'warehouse', width: 18 },
+        { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
+        { header: 'Settlement Status', key: 'status', width: 16, alignment: 'center' as const },
+        { header: 'Gross Matrix Valuation (Rs.)', key: 'totalAmount', width: 22, type: 'currency' as const }
+      ];
+
+      const exportData = reportRows.map((row, idx) => ({
+        idx: idx + 1,
+        docRef: row.purchase_no || row.return_no || `PUR-${String(row.id).padStart(4, '0')}`,
+        vendorName: row.supplier_name || row.vendor_name || 'Generic Wholesaler',
+        warehouse: row.target_warehouse || row.source_warehouse || 'Main Warehouse',
+        processingDate: row.purchase_date || row.return_date || String(row.created_at || '').split(' ')[0],
+        status: row.payment_term || row.status || 'Confirmed',
+        totalAmount: Number(row.total_amount || row.return_amount || 0)
+      }));
+
+      await exportToExcel({
+        fileName: `Purchase_Audit_Report_${rType}_${new Date().toISOString().split('T')[0]}.xlsx`,
+        sheetName: `${rType.toUpperCase()} Audit`,
+        companyName: businessName || 'ZOHAIB ALI & COMPANY',
+        reportTitle: `Corporate ${rType === 'return' ? 'Purchase Return' : 'Purchase'} Audit Statement Workbook`,
+        filterSummary: filterMeta,
+        columns,
+        data: exportData,
+        theme: 'emerald'
+      });
+
+      toast.success('Excel workbook exported successfully!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
   return (
     <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:absolute print:top-0 print:left-0 print:w-screen print:h-screen print:p-0 print:m-0 print:bg-white print:text-black">
@@ -95,7 +149,17 @@ const PurchaseReportPrint = () => {
       <div className="print-root-container w-full bg-white p-4 space-y-6">
         <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
           <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Purchase-Report`)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
-          <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={handleExportExcel}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+            >
+              <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+            </button>
+            <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+          </div>
         </div>
 
         <div className="text-center space-y-1 py-4 border-b border-double border-black">

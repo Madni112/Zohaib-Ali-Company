@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdPrint, MdArrowBack } from 'react-icons/md';
+import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
+import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
 const SaleReportPrint = () => {
   const location = useLocation();
@@ -107,6 +108,64 @@ const SaleReportPrint = () => {
     compileExcelStructuredDataset();
   }, [rType, filters, config]);
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const filterMeta = {
+        'Report Type': String(rType).toUpperCase(),
+        'Customer': filters.customer || 'All',
+        'Salesman': filters.salesman || 'All',
+        'Transportation': filters.transport || 'All',
+        'Location': filters.location || 'All',
+        'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
+      };
+
+      const columns: ExcelColumn[] = [
+        { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+        { header: 'Document Ref #', key: 'docRef', width: 18 },
+        { header: 'Customer / Account Title', key: 'customerName', width: 28 },
+        ...(rType === 'sale' ? [
+          { header: 'Officer Link', key: 'salesman', width: 18 },
+          { header: 'Carrier Fleet', key: 'transport', width: 18 }
+        ] : []),
+        { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
+        { header: 'Receipt Status', key: 'status', width: 14, alignment: 'center' as const },
+        { header: 'Gross Matrix Amount (Rs.)', key: 'totalAmount', width: 22, type: 'currency' as const }
+      ];
+
+      const exportData = reportRows.map((row, idx) => ({
+        idx: idx + 1,
+        docRef: rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`,
+        customerName: row.customer_name || 'Counter Retail Buyer',
+        salesman: row.salesman || 'Direct',
+        transport: row.transport_name || 'Self Pick',
+        processingDate: row.sale_date || row.return_date || String(row.created_at || '').split('T')[0],
+        status: row.receipt_status || row.status || 'Confirm',
+        totalAmount: Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0)
+      }));
+
+      await exportToExcel({
+        fileName: `Sales_Audit_Report_${rType}_${new Date().toISOString().split('T')[0]}.xlsx`,
+        sheetName: `${rType.toUpperCase()} Audit`,
+        companyName: businessName || 'ZOHAIB ALI & COMPANY',
+        reportTitle: `Commercial ${rType === 'return' ? 'Sales Return' : 'Sales'} Audit Statement Ledger`,
+        filterSummary: filterMeta,
+        columns,
+        data: exportData,
+        theme: 'navy'
+      });
+
+      toast.success('Excel workbook exported successfully!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
   return (
     <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:absolute print:top-0 print:left-0 print:w-screen print:h-screen print:p-0 print:m-0 print:bg-white print:text-black">
@@ -123,7 +182,17 @@ const SaleReportPrint = () => {
       <div className="print-root-container w-full bg-white p-4 space-y-6">
         <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
           <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report`)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
-          <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={handleExportExcel}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+            >
+              <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+            </button>
+            <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+          </div>
         </div>
 
         <div className="text-center space-y-1 py-4 border-b border-double border-black">

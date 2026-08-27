@@ -51,6 +51,7 @@ export const ROLE_PRESETS: Record<string, RolePreset> = {
       '/Reports/Purchase-Report',
       '/Reports/Stock-Report',
       '/Reports/Account-Report',
+      '/Reports/Holding-Report',
       '/Reports/Balance-Sheet',
     ],
   },
@@ -74,6 +75,7 @@ export const ROLE_PRESETS: Record<string, RolePreset> = {
       '/Delivery-Challan/List',
       '/Reports/Reports-Dashboard',
       '/Reports/Stock-Report',
+      '/Reports/Holding-Report',
     ],
   },
   'Accountant': {
@@ -94,6 +96,7 @@ export const ROLE_PRESETS: Record<string, RolePreset> = {
       '/Purchase/Purchase-Return-Receipt/List',
       '/Reports/Reports-Dashboard',
       '/Reports/Account-Report',
+      '/Reports/Holding-Report',
       '/Reports/Balance-Sheet',
     ],
   },
@@ -137,6 +140,7 @@ export const ROLE_PRESETS: Record<string, RolePreset> = {
       '/Delivery-Challan/List',
       '/Reports/Reports-Dashboard',
       '/Reports/Sales-Report',
+      '/Reports/Holding-Report',
     ],
   },
   'Purchase Manager': {

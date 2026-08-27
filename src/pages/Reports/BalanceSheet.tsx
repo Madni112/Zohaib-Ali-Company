@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { fetchFinancialMetrics, FinancialSummary } from '../../service/financialCalculations';
 import Spinner from '../../ui/Spinner';
-import { MdAccountBalance, MdAccountBalanceWallet, MdMonetizationOn, MdInventory, MdTrendingUp, MdAssignmentReturn, MdPrint } from 'react-icons/md';
+import { MdAccountBalance, MdAccountBalanceWallet, MdMonetizationOn, MdInventory, MdTrendingUp, MdAssignmentReturn, MdPrint, MdFileDownload } from 'react-icons/md';
 import { useAuth } from '../../Context/Auth';
+import { exportToExcel, ExcelColumn } from '../../utils/excelExport';
+import { toast } from 'react-hot-toast';
 
 const BalanceSheet: React.FC = () => {
   const { businessName } = useAuth();
@@ -33,6 +35,53 @@ const BalanceSheet: React.FC = () => {
       </div>
     );
   }
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (!metrics) return;
+    try {
+      setExporting(true);
+      const columns: ExcelColumn[] = [
+        { header: 'Account Classification Code', key: 'code', width: 22 },
+        { header: 'Account Description / Group', key: 'title', width: 36 },
+        { header: 'Category Type', key: 'category', width: 18 },
+        { header: 'Debit Matrix (Rs.)', key: 'debit', width: 20, type: 'currency' },
+        { header: 'Credit Matrix (Rs.)', key: 'credit', width: 20, type: 'currency' }
+      ];
+
+      const exportData = [
+        { code: '1010', title: 'Cash Box & Liquid App Drawer', category: 'ASSET', debit: metrics.cashBalance, credit: 0 },
+        { code: '1020', title: 'Corporate Bank Ledger Accounts', category: 'ASSET', debit: metrics.totalBankBalance, credit: 0 },
+        { code: '1030', title: 'Accounts Receivable (Customers)', category: 'ASSET', debit: metrics.accountsReceivable, credit: 0 },
+        { code: '1040', title: 'Merchandise Inventory Stock Assets', category: 'ASSET', debit: metrics.inventoryValuation, credit: 0 },
+        { code: 'TOTAL ASSETS', title: 'TOTAL COMMERCIAL ASSETS', category: 'ASSETS TOTAL', debit: metrics.totalAssets, credit: 0 },
+        { code: '2010', title: 'Accounts Payable (Vendors / Suppliers)', category: 'LIABILITY', debit: 0, credit: metrics.accountsPayable },
+        { code: 'TOTAL LIAB', title: 'TOTAL LIABILITIES', category: 'LIABILITIES TOTAL', debit: 0, credit: metrics.totalLiabilities },
+        { code: '3010', title: 'Owner Equity & Retained Earnings', category: 'EQUITY', debit: 0, credit: metrics.totalEquity },
+        { code: 'TOTAL LIAB+EQ', title: 'TOTAL LIABILITIES & EQUITY', category: 'BALANCE TOTAL', debit: 0, credit: metrics.totalLiabilities + metrics.totalEquity }
+      ];
+
+      await exportToExcel({
+        fileName: `Corporate_Balance_Sheet_${asOfDate}.xlsx`,
+        sheetName: 'Balance Sheet',
+        companyName: businessName || 'ZOHAIB ALI & COMPANY',
+        reportTitle: `Corporate Balance Sheet Statement (As of ${asOfDate})`,
+        filterSummary: { 'As Of Date': asOfDate, 'Standard': 'GAAP Standard (Assets = Liabilities + Equity)' },
+        columns,
+        data: exportData,
+        summaryRow: false,
+        theme: 'navy'
+      });
+
+      toast.success('Balance Sheet exported to Excel successfully!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Export failed: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const isBalanced = Math.abs(metrics.totalAssets - (metrics.totalLiabilities + metrics.totalEquity)) < 1;
 
@@ -78,6 +127,14 @@ const BalanceSheet: React.FC = () => {
             onChange={(e) => setAsOfDate(e.target.value)}
             className="rounded border border-stroke py-1.5 px-3 bg-white dark:bg-boxdark outline-none font-semibold text-black dark:text-white"
           />
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={handleExportExcel}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+          >
+            <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+          </button>
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-4 rounded font-bold hover:bg-opacity-90 transition cursor-pointer shadow-sm"

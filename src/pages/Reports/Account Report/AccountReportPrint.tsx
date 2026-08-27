@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdPrint, MdArrowBack } from 'react-icons/md';
+import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
+import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
 const AccountReportPrint = () => {
     const location = useLocation();
@@ -619,6 +620,120 @@ const AccountReportPrint = () => {
         compileAccountAuditingDataset();
     }, [activeTab, filters]);
 
+    const [exporting, setExporting] = useState(false);
+
+    const handleExportExcel = async () => {
+        try {
+            setExporting(true);
+            const tabTitles: Record<number, string> = {
+                1: 'General Ledger Audit Statement',
+                2: 'Customer Account Balance Ledger',
+                3: 'Procurement Vendor Balance Ledger',
+                4: 'Enterprise Income Statement (P&L)',
+                5: 'Chart of Accounts Hierarchy',
+                6: 'Vendor Outstanding Balances',
+                7: 'Customer Recovery Collections',
+                8: 'Corporate Voucher Audit Log',
+                9: 'Daily Financial Activity Daybook',
+                10: 'Salesman Commission & Sales Sheet',
+                11: 'General Trial Balance Workbook',
+                12: 'Account Debit Aging Matrix'
+            };
+
+            const tabTitle = tabTitles[activeTab] || 'Account Report';
+            const filterMeta = {
+                'Report Tab': tabTitle,
+                'Customer': filters.customer || 'All',
+                'Vendor': filters.vendor || 'All',
+                'Salesman': filters.salesman || 'All',
+                'Voucher Type': filters.voucherType || 'All',
+                'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
+            };
+
+            let columns: ExcelColumn[] = [];
+            let exportData: any[] = [];
+
+            if (activeTab === 1) { // General Ledger
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Voucher / Doc #', key: 'voucher_no', width: 18 },
+                    { header: 'Timeline Date', key: 'raw_date', width: 14, type: 'date' },
+                    { header: 'Audit Transaction Description', key: 'description', width: 38 },
+                    { header: 'Debit Expense (Rs.)', key: 'debit', width: 18, type: 'currency' },
+                    { header: 'Credit Revenue (Rs.)', key: 'credit', width: 18, type: 'currency' },
+                    { header: 'Cumulative Balance (Rs.)', key: 'balance', width: 22, type: 'currency' }
+                ];
+                exportData = reportRows.map((r, i) => ({ idx: i + 1, ...r }));
+            } else if (activeTab === 11) { // Trial Balance
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Account Code', key: 'code', width: 14 },
+                    { header: 'Account Classification Title', key: 'title', width: 34 },
+                    { header: 'COA Category Group', key: 'category', width: 20 },
+                    { header: 'Debit Matrix (Rs.)', key: 'debit', width: 20, type: 'currency' },
+                    { header: 'Credit Matrix (Rs.)', key: 'credit', width: 20, type: 'currency' }
+                ];
+                exportData = reportRows.map((r, i) => ({ idx: i + 1, ...r }));
+            } else if (activeTab === 8) { // Vouchers
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Voucher No', key: 'voucher_no', width: 16 },
+                    { header: 'Type', key: 'voucher_type', width: 20 },
+                    { header: 'Date', key: 'date', width: 14, type: 'date' },
+                    { header: 'Account Title', key: 'account_title', width: 28 },
+                    { header: 'Remarks', key: 'remarks', width: 30 },
+                    { header: 'Amount (Rs.)', key: 'amount', width: 18, type: 'currency' }
+                ];
+                exportData = reportRows.map((r, i) => ({
+                    idx: i + 1,
+                    voucher_no: r.voucher_no || r.voucherNo || `VCH-${r.id}`,
+                    voucher_type: r.voucher_type || r.voucherType || 'General',
+                    date: r.voucher_date || r.voucherDate || String(r.created_at || '').split('T')[0],
+                    account_title: r.customer_name || r.customerName || r.vendor_name || 'General Account',
+                    remarks: r.remarks || '-',
+                    amount: Number(r.amount_received || r.amountReceived || r.total_amount || 0)
+                }));
+            } else {
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Reference / Account Title', key: 'title', width: 30 },
+                    { header: 'Date / Period', key: 'date', width: 16 },
+                    { header: 'Description / Notes', key: 'notes', width: 32 },
+                    { header: 'Debit Amount (Rs.)', key: 'debit', width: 18, type: 'currency' },
+                    { header: 'Credit Amount (Rs.)', key: 'credit', width: 18, type: 'currency' },
+                    { header: 'Net Balance (Rs.)', key: 'balance', width: 20, type: 'currency' }
+                ];
+                exportData = reportRows.map((r, i) => ({
+                    idx: i + 1,
+                    title: r.customer_name || r.supplier_name || r.account_title || r.title || r.name || 'Account',
+                    date: r.date || r.sale_date || r.purchase_date || r.raw_date || String(r.created_at || '').split('T')[0],
+                    notes: r.remarks || r.description || r.memo || '-',
+                    debit: Number(r.debit || r.total_debit || 0),
+                    credit: Number(r.credit || r.total_credit || r.total_amount || 0),
+                    balance: Number(r.balance || r.net_balance || r.outstanding_balance || 0)
+                }));
+            }
+
+            await exportToExcel({
+                fileName: `Financial_Report_Tab${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`,
+                sheetName: tabTitle.substring(0, 30),
+                companyName: businessName || 'ZOHAIB ALI & COMPANY',
+                reportTitle: `Corporate Financial Audit - ${tabTitle}`,
+                filterSummary: filterMeta,
+                columns,
+                data: exportData,
+                theme: 'navy'
+            });
+
+            toast.success('Excel workbook exported successfully!');
+        } catch (err: any) {
+            console.error(err);
+            toast.error('Export failed: ' + err.message);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
     return (
         <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:absolute print:top-0 print:left-0 print:w-screen print:h-screen print:p-0 print:m-0 print:bg-white print:text-black">
@@ -635,7 +750,17 @@ const AccountReportPrint = () => {
             <div className="print-root-container w-full bg-white p-4 space-y-6">
                 <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
                     <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report`)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
-                    <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            disabled={exporting}
+                            onClick={handleExportExcel}
+                            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+                        >
+                            <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+                        </button>
+                        <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+                    </div>
                 </div>
 
                 <div className="text-center space-y-1 py-4 border-b border-double border-black">

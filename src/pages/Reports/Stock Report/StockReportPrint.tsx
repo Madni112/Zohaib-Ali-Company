@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdPrint, MdArrowBack } from 'react-icons/md';
+import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { useAuth } from '../../../Context/Auth';
+import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
 const StockReportPrint = () => {
     const location = useLocation();
@@ -389,6 +390,115 @@ const StockReportPrint = () => {
         compileTrueDynamicStockDataset();
     }, [activeTab, filters]);
 
+    const [exporting, setExporting] = useState(false);
+
+    const handleExportExcel = async () => {
+        try {
+            setExporting(true);
+            const tabTitles: Record<number, string> = {
+                1: 'Stock Activity Report',
+                2: 'Stock Balance Report',
+                3: 'Stock Status Report',
+                4: 'Stock Transfer Statement',
+                5: 'Stock Detail With Price',
+                6: 'Product Catalog Specs',
+                7: 'Stock Status Detail',
+                8: 'Per Location Stock Ledger'
+            };
+
+            const tabTitle = tabTitles[activeTab] || 'Stock Report';
+            const filterMeta = {
+                'Report Tab': tabTitle,
+                'Brand': filters.brand || 'All',
+                'Category': filters.category || 'All',
+                'Product': filters.product || 'All',
+                'Location': filters.location || 'All',
+                'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
+            };
+
+            let columns: ExcelColumn[] = [];
+            let exportData: any[] = [];
+
+            if (activeTab === 1) {
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Product Item Name', key: 'product_name', width: 28 },
+                    { header: 'Brand', key: 'brand', width: 16 },
+                    { header: 'Category', key: 'category', width: 16 },
+                    { header: 'Opening Stock', key: 'computed_opening', width: 16, type: 'number' },
+                    { header: 'Stock In', key: 'period_stock_in', width: 14, type: 'number' },
+                    { header: 'Stock Out', key: 'period_stock_out', width: 14, type: 'number' },
+                    { header: 'Net Movement', key: 'net_activity', width: 16, type: 'number' },
+                    { header: 'Ending Stock', key: 'computed_true_stock', width: 16, type: 'number' },
+                    { header: 'Valuation (Rs.)', key: 'calculated_valuation', width: 20, type: 'currency' }
+                ];
+                exportData = reportRows.map((r, i) => ({ idx: i + 1, ...r }));
+            } else if (activeTab === 4) {
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Transfer Date', key: 'date', width: 16, type: 'date' },
+                    { header: 'Transfer ID', key: 'transfer_no', width: 16 },
+                    { header: 'Origin Warehouse', key: 'from_location', width: 20 },
+                    { header: 'Target Warehouse', key: 'to_location', width: 20 },
+                    { header: 'Handler Employee', key: 'employee', width: 18 },
+                    { header: 'Total Quantity', key: 'total_quantity', width: 16, type: 'number' }
+                ];
+                exportData = reportRows.map((r, i) => ({
+                    idx: i + 1,
+                    date: r.transfer_date || String(r.created_at || '').split('T')[0],
+                    transfer_no: r.transfer_no || `TR-${r.id}`,
+                    from_location: r.from_location,
+                    to_location: r.to_location,
+                    employee: r.employee || r.created_by || 'Officer',
+                    total_quantity: Number(r.total_quantity || 0)
+                }));
+            } else {
+                columns = [
+                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+                    { header: 'Product Item Name', key: 'product_name', width: 28 },
+                    { header: 'Brand', key: 'brand', width: 16 },
+                    { header: 'Category', key: 'category', width: 16 },
+                    { header: 'UOM', key: 'uom', width: 12 },
+                    { header: 'Current Stock', key: 'current_stock', width: 16, type: 'number' },
+                    { header: 'Unit Rate (Rs.)', key: 'price', width: 16, type: 'currency' },
+                    { header: 'Valuation (Rs.)', key: 'valuation', width: 20, type: 'currency' }
+                ];
+                exportData = reportRows.map((r, i) => {
+                    const stk = Number(r.computed_true_stock !== undefined ? r.computed_true_stock : r.current_stock || 0);
+                    const prc = Number(r.retail_price || r.sale_price || r.price || 0);
+                    return {
+                        idx: i + 1,
+                        product_name: r.product_name,
+                        brand: r.brand || '-',
+                        category: r.category || '-',
+                        uom: r.uom || 'Pcs',
+                        current_stock: stk,
+                        price: prc,
+                        valuation: stk * prc
+                    };
+                });
+            }
+
+            await exportToExcel({
+                fileName: `Stock_Report_Tab${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`,
+                sheetName: tabTitle.substring(0, 30),
+                companyName: businessName || 'ZOHAIB ALI & COMPANY',
+                reportTitle: `Master Dynamic Inventory - ${tabTitle}`,
+                filterSummary: filterMeta,
+                columns,
+                data: exportData,
+                theme: 'navy'
+            });
+
+            toast.success('Excel workbook exported successfully!');
+        } catch (err: any) {
+            console.error(err);
+            toast.error('Export failed: ' + err.message);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
 
     return (
@@ -406,7 +516,17 @@ const StockReportPrint = () => {
             <div className="print-root-container w-full bg-white p-4 space-y-6">
                 <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
                     <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report`)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
-                    <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            disabled={exporting}
+                            onClick={handleExportExcel}
+                            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+                        >
+                            <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+                        </button>
+                        <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+                    </div>
                 </div>
 
                 <div className="text-center space-y-1 py-4 border-b border-double border-black">

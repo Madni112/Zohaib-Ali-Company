@@ -6,8 +6,10 @@ import {
   MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview, 
   MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn, 
   MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet, 
-  MdBalance 
+  MdBalance, MdPauseCircleFilled 
 } from 'react-icons/md';
+import HoldingReport from '../pages/Reports/Holding Report/HoldingReport';
+import HoldingReportPrint from '../pages/Reports/Holding Report/HoldingReportPrint';
 import Brands from '../pages/Administration/Brands';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NewInvoice from '../pages/Sales/Invoice/NewInvoice';
@@ -291,6 +293,12 @@ export const adminRoutes = [
         path: '/Reports/Account-Report',
         component: <AccountReport />,
         icon: MdAccountBalanceWallet
+      },
+      {
+        label: 'Holding Item Report',
+        path: '/Reports/Holding-Report',
+        component: <HoldingReport />,
+        icon: MdPauseCircleFilled
       },
       {
         label: 'Balance Sheet',
@@ -601,6 +609,11 @@ export const adminRoutes = [
   {
     path: '/Reports/Account-Report/Print',
     component: <AccountReportPrint/>,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Reports/Holding-Report/Print',
+    component: <HoldingReportPrint />,
     hideFromSidebar: true
   },
   {
