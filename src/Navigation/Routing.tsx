@@ -13,6 +13,7 @@ import { useAuth } from '../Context/Auth';
  */
 const AppRouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
+  const { pathname } = useLocation();
 
   if (loading) {
     return <Loader />;
@@ -20,6 +21,14 @@ const AppRouteGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   if (!isAuthenticated) {
     return <Navigate to="/signin" replace />;
+  }
+
+  // Auto-correct any corrupt nested prefixes (e.g. /purchase/Reports/Reports-Dashboard -> /Reports/Reports-Dashboard)
+  const segments = pathname.split('/').filter(Boolean);
+  const reservedPrefixes = ['purchase', 'sales', 'reports', 'registration', 'administration', 'dashboard', 'sales-return'];
+  if (segments.length >= 2 && reservedPrefixes.includes(segments[0].toLowerCase()) && reservedPrefixes.includes(segments[1].toLowerCase())) {
+    const cleanPath = `/${segments.slice(1).join('/')}`;
+    return <Navigate to={cleanPath} replace />;
   }
 
   return <>{children}</>;

@@ -60,13 +60,27 @@ const ReportDashboard = () => {
     plotOptions: { bar: { columnWidth: '45%', borderRadius: 3 } },
     dataLabels: { enabled: false },
     xaxis: { categories: trend.map(m => m.month) },
-    yaxis: { labels: { formatter: (val: number) => `Rs. ${(val / 1000).toFixed(0)}k` } },
-    tooltip: { y: { formatter: (val: number) => `Rs. ${val.toLocaleString()}` } }
+    yaxis: {
+      labels: {
+        formatter: (val: number) => {
+          if (val === undefined || val === null || isNaN(val)) return 'Rs. 0k';
+          return `Rs. ${(val / 1000).toFixed(0)}k`;
+        }
+      }
+    },
+    tooltip: {
+      y: {
+        formatter: (val: number) => {
+          if (val === undefined || val === null || isNaN(val)) return 'Rs. 0';
+          return `Rs. ${Number(val).toLocaleString()}`;
+        }
+      }
+    }
   };
 
   const salesVsPurchasesSeries = [
-    { name: 'Gross Sales', data: trend.map(m => m.sales) },
-    { name: 'Procurement Expenses', data: trend.map(m => m.purchases) }
+    { name: 'Gross Sales', data: trend.map(m => Number(m.sales || 0)) },
+    { name: 'Procurement Expenses', data: trend.map(m => Number(m.purchases || 0)) }
   ];
 
   const [exporting, setExporting] = useState(false);
