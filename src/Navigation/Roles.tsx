@@ -1,4 +1,13 @@
-import { MdDashboard, MdReceipt, MdPeople, MdAdminPanelSettings, MdEmojiTransportation, MdEdit, MdInventory2, MdClass, MdAccountBox, MdCategory, MdStraighten, MdDomain, MdInventory, MdBadge, MdShoppingCart, MdLocationOn, MdLocalShipping, MdCompareArrows, MdFormatListBulleted, MdAccountTree, MdReceiptLong, MdAccountBalance, MdLaptop, MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview, MdSpaceDashboard, MdOutlineLaptop, MdTexture } from 'react-icons/md';
+import { 
+  MdDashboard, MdReceipt, MdPeople, MdAdminPanelSettings, MdEmojiTransportation, 
+  MdEdit, MdInventory2, MdClass, MdAccountBox, MdCategory, MdStraighten, MdDomain, 
+  MdInventory, MdBadge, MdShoppingCart, MdLocationOn, MdLocalShipping, MdCompareArrows, 
+  MdFormatListBulleted, MdAccountTree, MdReceiptLong, MdAccountBalance, MdLaptop, 
+  MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview, 
+  MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn, 
+  MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet, 
+  MdBalance 
+} from 'react-icons/md';
 import Brands from '../pages/Administration/Brands';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import NewInvoice from '../pages/Sales/Invoice/NewInvoice';
