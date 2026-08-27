@@ -173,6 +173,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const getRoleBasedRoutes = () => {
     let routes = RoleRoutes.adminRoutes;
 
+    // Super Admin / Owner always gets unrestricted full route access
+    if (role && role.toLowerCase().includes('admin')) {
+      return routes;
+    }
+
     // Determine current effective modules (from state or cached per tenant)
     let currentAllowed = allowedModules;
     if (!currentAllowed && typeof window !== 'undefined') {
@@ -187,6 +192,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (currentAllowed && Array.isArray(currentAllowed)) {
       const lowerAllowed = currentAllowed.map(m => String(m).toLowerCase().trim());
+
+      // Helper to check if a path matches either directly or via aliases
+      const matchesPath = (p: string) => {
+        if (!p) return false;
+        const lp = p.toLowerCase().trim();
+        if (lowerAllowed.includes(lp)) return true;
+
+        // Route aliases mapping
+        const aliases: Record<string, string[]> = {
+          '/sales/invoicereceipt/list': ['/registration/invoicereceipt/list'],
+          '/registration/invoicereceipt/list': ['/sales/invoicereceipt/list'],
+          '/sales/sales-return/list': ['/sales-return/debit-notes/list'],
+          '/sales-return/debit-notes/list': ['/sales/sales-return/list'],
+          '/sales/customers/list': ['/customers/list'],
+          '/customers/list': ['/sales/customers/list'],
+          '/sales/salesman/list': ['/salesman/list'],
+          '/salesman/list': ['/sales/salesman/list'],
+          '/sales/delivery-challan/list': ['/delivery-challan/list'],
+          '/delivery-challan/list': ['/sales/delivery-challan/list'],
+          '/sales/invoice/list': ['/sales/invoice/list']
+        };
+
+        const mapped = aliases[lp];
+        if (mapped && mapped.some(a => lowerAllowed.includes(a))) {
+          return true;
+        }
+
+        return lowerAllowed.some(m => m.endsWith(lp) || lp.endsWith(m));
+      };
 
       routes = routes
         .map((route: any) => {
@@ -213,9 +247,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               const childLabel = String(child.label || '').toLowerCase().trim();
 
               const isMatch =
-                lowerAllowed.includes(childPath) ||
+                matchesPath(childPath) ||
                 lowerAllowed.includes(childLabel) ||
-                lowerAllowed.some(m => m.endsWith(childPath) || childPath.endsWith(m) || m.includes(childLabel) || childLabel.includes(m));
+                lowerAllowed.some(m => m.includes(childLabel) || childLabel.includes(m));
 
               return isMatch;
             });
@@ -230,7 +264,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // Direct top-level action routes
           if (routePath) {
-            return lowerAllowed.includes(routePath) ? route : null;
+            return matchesPath(routePath) ? route : null;
           }
 
           return route;
