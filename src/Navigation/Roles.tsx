@@ -61,6 +61,7 @@ import AddPurchaseReturn from '../pages/Purchase/Purchase Return/AddPurchaseRetu
 import PrintPurchaseReturn from '../pages/Purchase/Purchase Return/PrintPurchaseReturn';
 import PurchaseReturnReceiptList from '../pages/Purchase/Purchase Return Receipt/PurchaseReturnReceiptList';
 import AddPurchaseReturnReceipt from '../pages/Purchase/Purchase Return Receipt/AddPurchaseReturnReceipt';
+import PrintPurchaseReturnReceipt from '../pages/Purchase/Purchase Return Receipt/PrintPurchaseReturnReceipt';
 import ReportDashboard from '../pages/Reports/ReportDashboard';
 import SalesReport from '../pages/Reports/Sales Report/SalesReport';
 import PurchaseReport from '../pages/Reports/Purchase Report/PurchaseReports';
@@ -536,6 +537,24 @@ export const adminRoutes = [
   {
     path: '/Purchase/Purchase-Return-Receipt/Add',
     component: <AddPurchaseReturnReceipt />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Purchase-Return-Receipt/Print/:id',
+    component: <PrintPurchaseReturnReceipt />,
+    label: 'Print Return Receipt',
+    hideFromSidebar: true
+  },
+  {
+    path: '/purchase/purchase-return-receipt/print/:id',
+    component: <PrintPurchaseReturnReceipt />,
+    label: 'Print Return Receipt',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase-Return-Receipt/Print/:id',
+    component: <PrintPurchaseReturnReceipt />,
+    label: 'Print Return Receipt',
     hideFromSidebar: true
   },
   {

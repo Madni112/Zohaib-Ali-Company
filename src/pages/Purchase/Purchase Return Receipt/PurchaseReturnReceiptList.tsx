@@ -4,9 +4,12 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
+import { useAuth } from '../../../Context/Auth';
+import { MdPerson, MdEvent, MdReceipt, MdAssignmentReturn } from 'react-icons/md';
 
-const PurchaseReturnReceiptList = () => {
+const PurchaseReturnReceiptList: React.FC = () => {
   const navigate = useNavigate();
+  const { tenantId } = useAuth();
   const [receipts, setReceipts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -14,32 +17,56 @@ const PurchaseReturnReceiptList = () => {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const formatMoney = (val: number | string | undefined | null): string => {
+    const num = Number(val) || 0;
+    if (Number.isInteger(num)) {
+      return num.toLocaleString('en-US');
+    }
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   const fetchReceiptLogs = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.from('purchase_return_receipts').select('*').order('id', { ascending: false });
+      const { data, error } = await supabase
+        .from('purchase_return_receipts')
+        .select('*')
+        .order('id', { ascending: false });
+
       if (error) throw error;
       setReceipts(data || []);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error('Data Fetching Failure: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchReceiptLogs(); }, []);
+  useEffect(() => { 
+    fetchReceiptLogs(); 
+  }, []);
 
   const handleDeleteReceipt = async (id: string | number) => {
-    if (!window.confirm('Delete this collection entry record note?')) return;
+    if (!window.confirm('Are you certain you want to permanently erase this refund collection record?')) return;
     try {
       const { error } = await supabase.from('purchase_return_receipts').delete().eq('id', id);
       if (error) throw error;
-      toast.success('Collection receipt deleted!');
+      toast.success('Collection receipt deleted successfully!');
       fetchReceiptLogs();
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) { 
+      toast.error(err.message); 
+    }
   };
 
-  const filteredReceipts = receipts.filter(r => (r.receipt_no || '').toLowerCase().includes(searchTerm.toLowerCase()) || (r.return_no || '').toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredReceipts = receipts.filter(r => 
+    (r.receipt_no || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (r.return_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const totalEntries = filteredReceipts.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
@@ -47,54 +74,136 @@ const PurchaseReturnReceiptList = () => {
   const paginatedReceipts = filteredReceipts.slice(startIndex, startIndex + pageSize);
 
   return (
-    <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs antialiased font-sans">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-black dark:text-white">Purchase Return Receipts Log Directory</h2>
-          <p className="text-xs text-gray-400">View subsequent vendor settlement funds payouts collected logs</p>
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-emerald-600/10 text-emerald-600 flex items-center justify-center font-black text-base">
+              <MdAssignmentReturn size={18} />
+            </span>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+              Purchase Return Receipts Registry
+            </h2>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Audit inward vendor settlement refunds, bank payouts, and debit note clearance vouchers
+          </p>
         </div>
-        <button type="button" onClick={() => navigate('/Purchase/Purchase-Return-Receipt/Add')} className="flex items-center justify-center rounded bg-primary py-2 px-4 text-sm font-medium text-white shadow-sm cursor-pointer">+ Add Return Receipt</button>
+
+        <button 
+          type="button" 
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Add`)} 
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 px-5 text-xs font-bold text-white shadow-md hover:bg-opacity-90 transition cursor-pointer"
+        >
+          + Add Return Receipt
+        </button>
       </div>
 
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
-        <div className="flex justify-between items-center mb-4 gap-4">
-          <div className="text-sm text-gray-500">Show <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded border py-0.5 px-1 bg-transparent font-bold"><option value="10">10</option><option value="25">25</option></select> entries</div>
-          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search receipt order code..." className="rounded border py-1 px-3 bg-transparent outline-none w-64 text-xs font-semibold" />
+      <div className="rounded-xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
+        
+        {/* Controls */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Show</span>
+            <select 
+              value={pageSize} 
+              onChange={(e) => setPageSize(Number(e.target.value))} 
+              className="rounded-lg border border-stroke py-1 px-2.5 bg-transparent dark:border-strokedark font-bold outline-none cursor-pointer"
+            >
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+            <span>entries</span>
+          </div>
+
+          <input 
+            type="text" 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            placeholder="Search by receipt #, return note, vendor..." 
+            className="rounded-lg border border-stroke py-1.5 px-3 bg-transparent outline-none w-full sm:w-72 text-xs font-semibold focus:border-primary dark:border-strokedark" 
+          />
         </div>
 
-        <table className="w-full table-auto border-collapse text-left">
-          <thead>
-            <tr className="bg-gray-2 text-xs font-bold uppercase dark:bg-meta-4 border-b border-stroke text-black dark:text-white">
-              <th className="py-3 px-4 w-16">S#</th>
-              <th className="py-3 px-4">Receipt No</th>
-              <th className="py-3 px-4">Return Ref Note</th>
-              <th className="py-3 px-4">Vendor Profile</th>
-              <th className="py-3 px-4 text-center">Gateway</th>
-              <th className="py-3 px-4 text-right pr-6">Amount Collected</th>
-              <th className="py-3 px-4 w-24 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? <tr><td colSpan={7} className="text-center py-10"><Spinner /></td></tr> : paginatedReceipts.length === 0 ? <tr><td colSpan={7} className="text-center py-8 italic text-gray-400">No return settlement layouts collected logs found.</td></tr> : paginatedReceipts.map((rcpt, idx) => (
-              <tr key={rcpt.id} className="border-b font-semibold text-xs border-stroke hover:bg-slate-50 text-black dark:text-white dark:border-strokedark">
-                <td className="py-3 px-4 text-gray-400">{startIndex + idx + 1}</td>
-                <td className="py-3 px-4 font-mono font-black text-primary">{rcpt.receipt_no}</td>
-                <td className="py-3 px-4 font-mono font-bold text-gray-500">{rcpt.return_no}</td>
-                <td className="py-3 px-4">{rcpt.vendor_name}</td>
-                <td className="py-3 px-4 text-center"><span className={`px-2 py-0.5 border text-[10px] rounded font-bold ${rcpt.payment_method === 'By Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60'}`}>{rcpt.payment_method}</span></td>
-                <td className="py-3 px-4 text-right font-mono font-black text-success pr-6">Rs. {Number(rcpt.amount_received || 0).toLocaleString()}</td>
-                <td className="py-3 px-4 text-center">
-                  <TableActions
-                    onEdit={() => navigate('/Purchase/Purchase-Return-Receipt/Add', { state: { receiptRecord: rcpt } })}
-                    onDelete={() => handleDeleteReceipt(rcpt.id)}
-                    editTitle="Edit Receipt"
-                    deleteTitle="Delete Receipt"
-                  />
-                </td>
+        {/* Table */}
+        <div className="max-w-full overflow-x-auto">
+          <table className="w-full table-auto border-collapse text-left">
+            <thead>
+              <tr className="bg-gray-2 text-xs font-bold uppercase dark:bg-meta-4 border-b border-stroke text-black dark:text-white tracking-wider">
+                <th className="py-3.5 px-4 w-16 text-center whitespace-nowrap">S#</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Receipt Code</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Linked Return Note</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Wholesale Vendor</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">Date</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">Collection Channel</th>
+                <th className="py-3.5 px-4 text-right pr-6 whitespace-nowrap">Refund Collected</th>
+                <th className="py-3.5 px-4 w-24 text-center whitespace-nowrap">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
+              ) : paginatedReceipts.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-10 italic text-gray-400">No vendor return refund records recorded yet.</td></tr>
+              ) : (
+                paginatedReceipts.map((rcpt, idx) => {
+                  const method = rcpt.payment_method || 'By Cash';
+                  const dateFormatted = rcpt.payment_date || rcpt.created_at?.split('T')[0] || 'N/A';
+
+                  return (
+                    <tr key={rcpt.id} className="border-b font-semibold text-xs border-stroke hover:bg-slate-50 dark:hover:bg-meta-4/10 text-black dark:text-white dark:border-strokedark transition duration-150">
+                      <td className="py-3.5 px-4 text-center text-gray-400 whitespace-nowrap">{startIndex + idx + 1}</td>
+                      <td className="py-3.5 px-4 font-mono font-black text-primary whitespace-nowrap">{rcpt.receipt_no}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">{rcpt.return_no}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap flex items-center gap-1.5"><MdPerson className="text-gray-400 shrink-0" size={16} />{rcpt.vendor_name}</td>
+                      <td className="py-3.5 px-4 text-center text-gray-500 whitespace-nowrap"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} className="shrink-0" />{dateFormatted}</span></td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className={`px-2.5 py-0.5 border text-[10px] rounded-full font-bold uppercase tracking-wide whitespace-nowrap ${
+                          method === 'By Cash' 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' 
+                            : method === 'Split'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60'
+                            : 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60'
+                        }`}>
+                          {method}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-black text-emerald-700 dark:text-emerald-400 pr-6 whitespace-nowrap">
+                        Rs. {formatMoney(rcpt.amount_received)}
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <TableActions
+                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Print/${rcpt.id}`)}
+                          onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Add`, { state: { receiptRecord: rcpt } })}
+                          onDelete={() => handleDeleteReceipt(rcpt.id)}
+                          printTitle="Print Refund Receipt"
+                          editTitle="Edit Receipt"
+                          deleteTitle="Delete Receipt"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
+          <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Previous</button>
+              {Array.from({ length: totalPages }, (_, i) => <button key={i + 1} onClick={() => setCurrentPage(i + 1)} className={`px-3 py-1.5 rounded text-xs border transition cursor-pointer ${currentPage === i + 1 ? 'bg-primary text-white border-primary' : 'border-stroke dark:border-strokedark text-gray-500 hover:bg-gray-50'}`}>{i + 1}</button>)}
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Next</button>
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );
