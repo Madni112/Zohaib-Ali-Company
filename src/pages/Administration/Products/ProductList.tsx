@@ -38,9 +38,8 @@ const ProductList = () => {
         const { data: openStocks } = await supabase.from('opening_stocks').select('*');
         const { data: purchases } = await supabase.from('supplier_purchases').select('items, payment_term');
         const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status, receipt_status');
-
-        // ✅ CORRECT TABLE LINK: Queries sales_returns exactly like StockReportPrint.tsx
         const { data: sReturns } = await supabase.from('sales_returns').select('*');
+        const { data: pReturns } = await supabase.from('purchase_returns').select('*');
 
         const unifiedProductPayload = baseProducts.map(product => {
           const name = String(product.product_name || '').trim().toLowerCase();
@@ -97,8 +96,22 @@ const ProductList = () => {
             }
           });
 
-          // ✅ THE MATHEMATHICALLY PERFECT FORMULA MATCHING YOUR REPORTS
-          const trueRemainingStock = (totalOpening + totalPurchased + totalSalesReturned) - totalSold;
+          // 5. Purchase returns calculation (Stock returned back to vendor)
+          let totalPurchaseReturned = 0;
+          (pReturns || []).forEach((pr: any) => {
+            if (String(pr.status || '').trim().toLowerCase() !== 'cancel' && String(pr.status || '').trim().toLowerCase() !== 'deleted') {
+              const itemsArray = Array.isArray(pr.items) ? pr.items : JSON.parse(pr.items || '[]');
+              itemsArray.forEach((item: any) => {
+                const prName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
+                if (prName === name || prName.includes(name)) {
+                  totalPurchaseReturned += (Number(item.qty || item.quantity || 0));
+                }
+              });
+            }
+          });
+
+          // ✅ THE MATHEMATICALLY ACCURATE FORMULA MATCHING YOUR REPORTS
+          const trueRemainingStock = (totalOpening + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned;
 
           return {
             ...product,

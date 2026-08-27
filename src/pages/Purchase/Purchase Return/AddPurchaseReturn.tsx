@@ -58,6 +58,9 @@ const AddPurchaseReturn = () => {
   const [activeProdNameIndex, setActiveProdNameIndex] = useState<number | null>(null);
   const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState(0);
 
+  const [activeRowWhIndex, setActiveRowWhIndex] = useState<number | null>(null);
+  const [highlightedRowWhIndex, setHighlightedRowWhIndex] = useState(0);
+
   const warehouseContainerRef = useRef<HTMLDivElement>(null);
   const vendorContainerRef = useRef<HTMLDivElement>(null);
   const poContainerRef = useRef<HTMLDivElement>(null);
@@ -95,6 +98,9 @@ const AddPurchaseReturn = () => {
       }
       if (!target.closest('.prod-name-container')) {
         setActiveProdNameIndex(null);
+      }
+      if (!target.closest('.row-wh-container')) {
+        setActiveRowWhIndex(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1111,21 +1117,96 @@ const AddPurchaseReturn = () => {
                                   </td>
 
                                   {/* 3. Destination Warehouse */}
-                                  <td className="p-3">
-                                    <select
-                                      value={item.warehouse || values.sourceWarehouse || ''}
-                                      onChange={(e) => setFieldValue(`items.${idx}.warehouse`, e.target.value)}
-                                      className="w-full text-xs font-semibold bg-transparent border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-black dark:text-white focus:border-primary"
-                                    >
-                                      <option value="" disabled className="dark:bg-boxdark">
-                                        -- Select Warehouse --
-                                      </option>
-                                      {locations.map((loc) => (
-                                        <option key={loc.id} value={loc.name} className="dark:bg-boxdark">
-                                          {loc.name}
-                                        </option>
-                                      ))}
-                                    </select>
+                                  <td className="p-3 relative row-wh-container min-w-[180px]">
+                                    {(() => {
+                                      const whQuery = (item.warehouse || '').toLowerCase().trim();
+                                      const filteredWarehouses = locations.filter(loc => {
+                                        if (!whQuery) return true;
+                                        return (loc.name || '').toLowerCase().includes(whQuery) || (loc.code || '').toLowerCase().includes(whQuery);
+                                      });
+                                      const isCurrentWhActive = activeRowWhIndex === idx;
+
+                                      return (
+                                        <div className="relative">
+                                          <input
+                                            type="text"
+                                            autoComplete="off"
+                                            name={`items.${idx}.warehouse`}
+                                            value={item.warehouse || ''}
+                                            onFocus={() => {
+                                              setActiveRowWhIndex(idx);
+                                              setActiveSkuIndex(null);
+                                              setActiveProdNameIndex(null);
+                                              setHighlightedRowWhIndex(0);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                setHighlightedRowWhIndex(prev => prev < filteredWarehouses.length - 1 ? prev + 1 : 0);
+                                              } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                setHighlightedRowWhIndex(prev => prev > 0 ? prev - 1 : filteredWarehouses.length - 1);
+                                              } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (filteredWarehouses[highlightedRowWhIndex]) {
+                                                  setFieldValue(`items.${idx}.warehouse`, filteredWarehouses[highlightedRowWhIndex].name);
+                                                  setActiveRowWhIndex(null);
+                                                }
+                                              } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                                setActiveRowWhIndex(null);
+                                              }
+                                            }}
+                                            onChange={(e) => {
+                                              setFieldValue(`items.${idx}.warehouse`, e.target.value);
+                                              setActiveRowWhIndex(idx);
+                                            }}
+                                            placeholder="Select Warehouse..."
+                                            className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
+                                          />
+
+                                          {/* Floating Warehouse Dropdown */}
+                                          {isCurrentWhActive && filteredWarehouses.length > 0 && (
+                                            <div className="absolute left-0 top-full mt-1.5 z-[99999] w-60 max-h-56 overflow-y-auto bg-white dark:bg-[#1A222C] border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                                              {filteredWarehouses.map((loc, wIdx) => {
+                                                const isHighlighted = wIdx === highlightedRowWhIndex;
+                                                const isSelected = item.warehouse === loc.name;
+                                                return (
+                                                  <div
+                                                    key={loc.id || wIdx}
+                                                    onMouseEnter={() => setHighlightedRowWhIndex(wIdx)}
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      setFieldValue(`items.${idx}.warehouse`, loc.name);
+                                                      setActiveRowWhIndex(null);
+                                                    }}
+                                                    onClick={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      setFieldValue(`items.${idx}.warehouse`, loc.name);
+                                                      setActiveRowWhIndex(null);
+                                                    }}
+                                                    className={`p-2.5 text-xs font-semibold cursor-pointer transition flex items-center justify-between ${
+                                                      isHighlighted || isSelected
+                                                        ? 'bg-primary/10 text-primary font-bold'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100'
+                                                    }`}
+                                                  >
+                                                    <div className="flex flex-col text-left">
+                                                      <span className="font-bold text-xs">{loc.name}</span>
+                                                      {loc.code && <span className="text-[10px] text-gray-400 font-mono">{loc.code}</span>}
+                                                    </div>
+                                                    {isSelected && (
+                                                      <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Selected</span>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
 
                                   {/* 4. Arrived Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles */}
