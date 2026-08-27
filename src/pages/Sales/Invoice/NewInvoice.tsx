@@ -1105,7 +1105,7 @@ const NewInvoice = () => {
 
                                               {/* ── BOTTOM TOTAL SQ.MTR CALCULATION ── */}
                                               <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
-                                                Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
+                                               Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
                                                 <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
                                               </div>
                                             </div>
@@ -1113,35 +1113,53 @@ const NewInvoice = () => {
                                         })()
                                       ) : (
                                         /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
-                                        <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
-                                          <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            onKeyDown={blockInvalidChar}
-                                            name={`items.${idx}.qty`}
-                                            value={item.qty === 0 ? '' : item.qty}
-                                            onChange={(e) => {
-                                              const val = e.target.value;
-                                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                setFieldValue(`items.${idx}.qty`, val);
-                                                const newQty = parseFloat(val) || 0;
-                                                const currentRp = Math.max(0, Number(item.rp) || 0);
-                                                const gross = newQty * currentRp;
-                                                const disPer = Math.max(0, Number(item.discountPer) || 0);
-                                                if (disPer > 0) {
-                                                  setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
-                                                }
-                                              }
-                                            }}
-                                            placeholder="1"
-                                            className="w-full bg-transparent text-center font-black text-sm text-primary outline-none"
-                                          />
-                                          {uomName && (
-                                            <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase whitespace-nowrap select-none">
-                                              {uomName}
-                                            </span>
-                                          )}
-                                        </div>
+                                        (() => {
+                                          const u = String(uomName || selectedProd?.uom || '').trim().toUpperCase();
+                                          const isDecimalUom = [
+                                            'KG', 'KILOGRAM', 'GM', 'GRAM', 'TON', 'METRIC TON', 'LBS',
+                                            'LTR', 'LITER', 'LITRE', 'ML', 'GAL',
+                                            'MTR', 'METER', 'FT', 'FEET', 'INCH', 'CM', 'MM', 'YD',
+                                            'SQM', 'SQ.M', 'SQ.MTR', 'SQ.FT', 'SQF', 'SQY', 'SQUARE METER'
+                                          ].includes(u);
+
+                                          return (
+                                            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
+                                              <input
+                                                type="text"
+                                                inputMode={isDecimalUom ? "decimal" : "numeric"}
+                                                onKeyDown={(e) => {
+                                                  blockInvalidChar(e);
+                                                  if (!isDecimalUom && (e.key === '.' || e.key === 'Decimal')) {
+                                                    e.preventDefault();
+                                                  }
+                                                }}
+                                                name={`items.${idx}.qty`}
+                                                value={item.qty === 0 ? '' : item.qty}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  const regex = isDecimalUom ? /^\d*\.?\d*$/ : /^\d*$/;
+                                                  if (val === '' || regex.test(val)) {
+                                                    setFieldValue(`items.${idx}.qty`, val);
+                                                    const newQty = parseFloat(val) || 0;
+                                                    const currentRp = Math.max(0, Number(item.rp) || 0);
+                                                    const gross = newQty * currentRp;
+                                                    const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                                    if (disPer > 0) {
+                                                      setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                                    }
+                                                  }
+                                                }}
+                                                placeholder="1"
+                                                className="w-full bg-transparent text-center font-black text-sm text-primary outline-none"
+                                              />
+                                              {uomName && (
+                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase whitespace-nowrap select-none">
+                                                  {uomName}
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()
                                       )}
                                     </td>
                                      <td className="p-2">

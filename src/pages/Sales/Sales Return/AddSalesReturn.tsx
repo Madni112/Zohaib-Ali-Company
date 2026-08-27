@@ -1508,29 +1508,46 @@ const AddSalesReturn = () => {
                                           </div>
                                         </div>
                                       ) : (
-                                        /* Standard single quantity input */
-                                        <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1.5 border border-slate-200 dark:border-slate-700 focus-within:border-emerald-600">
-                                          <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            name={`items.${idx}.qty`}
-                                            onKeyDown={blockInvalidChar}
-                                            onChange={(e) => {
-                                              const val = e.target.value;
-                                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                setFieldValue(`items.${idx}.qty`, val);
-                                              }
-                                            }}
-                                            value={item.qty ?? ''}
-                                            placeholder="1"
-                                            className="w-full bg-transparent font-mono font-black text-center text-xs outline-none text-emerald-800 dark:text-emerald-400"
-                                          />
-                                          {item.uom && (
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase select-none pr-1">
-                                              {item.uom}
-                                            </span>
-                                          )}
-                                        </div>
+                                        (() => {
+                                          const u = String(item.uom || matchedProduct?.uom || '').trim().toUpperCase();
+                                          const isDecimalUom = [
+                                            'KG', 'KILOGRAM', 'GM', 'GRAM', 'TON', 'METRIC TON', 'LBS',
+                                            'LTR', 'LITER', 'LITRE', 'ML', 'GAL',
+                                            'MTR', 'METER', 'FT', 'FEET', 'INCH', 'CM', 'MM', 'YD',
+                                            'SQM', 'SQ.M', 'SQ.MTR', 'SQ.FT', 'SQF', 'SQY', 'SQUARE METER'
+                                          ].includes(u);
+
+                                          return (
+                                            <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1.5 border border-slate-200 dark:border-slate-700 focus-within:border-emerald-600">
+                                              <input
+                                                type="text"
+                                                inputMode={isDecimalUom ? "decimal" : "numeric"}
+                                                name={`items.${idx}.qty`}
+                                                onKeyDown={(e) => {
+                                                  blockInvalidChar(e);
+                                                  if (!isDecimalUom && (e.key === '.' || e.key === 'Decimal')) {
+                                                    e.preventDefault();
+                                                  }
+                                                }}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  const regex = isDecimalUom ? /^\d*\.?\d*$/ : /^\d*$/;
+                                                  if (val === '' || regex.test(val)) {
+                                                    setFieldValue(`items.${idx}.qty`, val);
+                                                  }
+                                                }}
+                                                value={item.qty ?? ''}
+                                                placeholder="1"
+                                                className="w-full bg-transparent font-mono font-black text-center text-xs outline-none text-emerald-800 dark:text-emerald-400"
+                                              />
+                                              {item.uom && (
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase select-none pr-1">
+                                                  {item.uom}
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()
                                       )}
                                     </td>
 

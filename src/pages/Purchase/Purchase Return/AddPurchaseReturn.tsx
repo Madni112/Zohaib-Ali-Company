@@ -1257,26 +1257,44 @@ const AddPurchaseReturn = () => {
                                       })()
                                     ) : (
                                       /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
-                                      <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
-                                        <input
-                                          type="text"
-                                          inputMode="decimal"
-                                          onKeyDown={blockInvalidChar}
-                                          name={`items.${idx}.qty`}
-                                          value={item.qty === 0 ? '' : item.qty}
-                                          onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                              setFieldValue(`items.${idx}.qty`, val);
-                                            }
-                                          }}
-                                          placeholder="1"
-                                          className="w-full bg-transparent text-center font-bold text-xs text-black dark:text-white outline-none"
-                                        />
-                                        <span className="text-[10px] font-mono text-gray-400 uppercase select-none w-8 text-center">
-                                          {item.uom || uomString || 'NOS'}
-                                        </span>
-                                      </div>
+                                      (() => {
+                                        const u = String(item.uom || uomString || matchedProduct?.uom || '').trim().toUpperCase();
+                                        const isDecimalUom = [
+                                          'KG', 'KILOGRAM', 'GM', 'GRAM', 'TON', 'METRIC TON', 'LBS',
+                                          'LTR', 'LITER', 'LITRE', 'ML', 'GAL',
+                                          'MTR', 'METER', 'FT', 'FEET', 'INCH', 'CM', 'MM', 'YD',
+                                          'SQM', 'SQ.M', 'SQ.MTR', 'SQ.FT', 'SQF', 'SQY', 'SQUARE METER'
+                                        ].includes(u);
+
+                                        return (
+                                          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
+                                            <input
+                                              type="text"
+                                              inputMode={isDecimalUom ? "decimal" : "numeric"}
+                                              onKeyDown={(e) => {
+                                                blockInvalidChar(e);
+                                                if (!isDecimalUom && (e.key === '.' || e.key === 'Decimal')) {
+                                                  e.preventDefault();
+                                                }
+                                              }}
+                                              name={`items.${idx}.qty`}
+                                              value={item.qty === 0 ? '' : item.qty}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                const regex = isDecimalUom ? /^\d*\.?\d*$/ : /^\d*$/;
+                                                if (val === '' || regex.test(val)) {
+                                                  setFieldValue(`items.${idx}.qty`, val);
+                                                }
+                                              }}
+                                              placeholder="1"
+                                              className="w-full bg-transparent text-center font-bold text-xs text-black dark:text-white outline-none"
+                                            />
+                                            <span className="text-[10px] font-mono text-gray-400 uppercase select-none w-8 text-center">
+                                              {item.uom || uomString || 'NOS'}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()
                                     )}
                                   </td>
 
