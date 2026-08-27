@@ -1053,7 +1053,7 @@ const AddSalesReturn = () => {
                                 <th className="p-3 w-36">Return Warehouse</th>
                                 <th className="p-3 w-20 text-center">UOM</th>
                                 <th className="p-3 w-28 text-right">Sale Price (PKR)</th>
-                                <th className="p-3 w-24 text-center">Return Qty</th>
+                                <th className="p-3 min-w-[220px] text-center">Return Qty (Boxes / Pcs / Sq.M)</th>
                                 <th className="p-3 w-32 text-right">Amount (PKR)</th>
                                 <th className="p-3 w-12 text-center">Action</th>
                               </tr>
@@ -1062,6 +1062,38 @@ const AddSalesReturn = () => {
                               {values.items.map((item: any, idx: number) => {
                                 const rowAmount = (Number(item.qty) || 0) * (Number(item.rate) || 0);
                                 const isRowActive = activeSkuIndex === idx || activeProdNameIndex === idx;
+
+                                const matchedProduct = productList.find(p => 
+                                  (p.product_name || '').toLowerCase() === (item.itemName || '').toLowerCase() || 
+                                  (item.skuCode && ((p.item_sr_no || '').toLowerCase() === item.skuCode.toLowerCase() || `SKU-${p.id}`.toLowerCase() === item.skuCode.toLowerCase()))
+                                );
+
+                                const rawPcs = Number(matchedProduct?.pieces_per_box || matchedProduct?.pcs_per_box || matchedProduct?.pieces_per_packing || 0);
+                                const isTile = String(matchedProduct?.category || '').toLowerCase().includes('tile') || 
+                                               String(matchedProduct?.scenario_name || '').toLowerCase().includes('tile') ||
+                                               rawPcs > 1 ||
+                                               (Number(item.qty || 0) % 1 !== 0);
+
+                                const pcsPerBox = rawPcs > 1 ? rawPcs : (item.qty && Number(item.qty) % 1 !== 0 ? Math.round(1 / (Number(item.qty) - Math.floor(Number(item.qty)))) : 6) || 6;
+
+                                let tileWidthCm = 60;
+                                let tileHeightCm = 60;
+                                const desc = matchedProduct?.product_description || matchedProduct?.product_name || item.itemName || '';
+                                const sku = matchedProduct?.item_sr_no || item.skuCode || '';
+                                const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
+                                                  desc.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i) ||
+                                                  sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+                                if (sizeMatch) {
+                                  tileHeightCm = Number(sizeMatch[1]) || 60;
+                                  tileWidthCm = Number(sizeMatch[2]) || 60;
+                                }
+                                const perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
+                                const perBoxSqm = perPieceSqm * pcsPerBox;
+
+                                const currentQty = Number(item.qty || 0);
+                                const boxes = Math.floor(currentQty);
+                                const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
+                                const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
 
                                 return (
                                   <tr key={idx} className={`transition ${isRowActive ? 'relative z-[99999] bg-slate-50/90 dark:bg-slate-800/90 shadow-xs' : 'relative z-[1]'} hover:bg-slate-50/60 dark:hover:bg-slate-800/40`}>
@@ -1281,18 +1313,97 @@ const AddSalesReturn = () => {
                                       />
                                     </td>
 
-                                    {/* Return Qty */}
-                                    <td className="p-2.5">
-                                      <input
-                                        type="number"
-                                        name={`items.${idx}.qty`}
-                                        onKeyDown={blockInvalidChar}
-                                        onChange={handleChange}
-                                        value={item.qty}
-                                        min="0.01"
-                                        placeholder="1"
-                                        className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-black text-center bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600 text-emerald-800 dark:text-emerald-400"
-                                      />
+                                    {/* Return Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles */}
+                                    <td className="p-2.5 min-w-[220px]">
+                                      {isTile ? (
+                                        <div className="flex flex-col gap-1">
+                                          {/* Top Badges */}
+                                          <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono">
+                                            <span className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800/60 font-bold">
+                                              Box: {perBoxSqm.toFixed(2)} sq.m
+                                            </span>
+                                            <span className="text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
+                                              Pc: {perPieceSqm.toFixed(4)} sq.m
+                                            </span>
+                                          </div>
+
+                                          {/* Inputs Container: Boxes + Loose Pieces */}
+                                          <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-inner">
+                                            {/* BOXES INPUT */}
+                                            <div className="flex-1 flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus-within:border-emerald-600 shadow-xs">
+                                              <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                onKeyDown={blockInvalidChar}
+                                                value={(() => {
+                                                  const b = Math.floor(Number(item.qty || 0));
+                                                  return b === 0 ? '' : b;
+                                                })()}
+                                                placeholder="0"
+                                                onChange={(e) => {
+                                                  const val = e.target.value.trim();
+                                                  const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                  const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                  const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
+                                                  setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                }}
+                                                className="w-full bg-transparent text-center font-black text-xs text-emerald-700 dark:text-emerald-400 outline-none min-w-[32px]"
+                                              />
+                                              <span className="text-[10px] font-bold text-slate-400 pl-1 select-none">Box</span>
+                                            </div>
+
+                                            <span className="text-slate-400 font-black text-xs select-none">+</span>
+
+                                            {/* LOOSE PIECES INPUT */}
+                                            <div className="flex-1 flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus-within:border-emerald-600 shadow-xs">
+                                              <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                onKeyDown={blockInvalidChar}
+                                                value={(() => {
+                                                  const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                  return currentLoose === 0 ? '' : currentLoose;
+                                                })()}
+                                                placeholder={`${pcsPerBox}`}
+                                                onChange={(e) => {
+                                                  const val = e.target.value.trim();
+                                                  const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                  const currentBoxes = Math.floor(Number(item.qty || 0));
+
+                                                  const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
+                                                  const remLoose = enteredLoose % pcsPerBox;
+                                                  const finalBoxes = currentBoxes + extraBoxes;
+                                                  const combinedQty = remLoose > 0 
+                                                    ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3)) 
+                                                    : finalBoxes;
+
+                                                  setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                }}
+                                                className="w-full bg-transparent text-center font-black text-xs text-emerald-600 dark:text-emerald-400 outline-none min-w-[32px]"
+                                              />
+                                              <span className="text-[10px] font-bold text-slate-400 pl-1 select-none">Pcs</span>
+                                            </div>
+                                          </div>
+
+                                          {/* Bottom Total Summary */}
+                                          <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
+                                            Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
+                                            <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        /* Standard single quantity input */
+                                        <input
+                                          type="number"
+                                          name={`items.${idx}.qty`}
+                                          onKeyDown={blockInvalidChar}
+                                          onChange={handleChange}
+                                          value={item.qty}
+                                          min="0.01"
+                                          placeholder="1"
+                                          className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-black text-center bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600 text-emerald-800 dark:text-emerald-400"
+                                        />
+                                      )}
                                     </td>
 
                                     {/* Net Row Amount */}
