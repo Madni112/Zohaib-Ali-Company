@@ -537,11 +537,14 @@ const AddPurchases = () => {
                         {({ push, remove }) => (
                           <tbody className="divide-y divide-stroke dark:divide-strokedark">
                             {values.items.map((item: any, idx: number) => {
-                              const matchedProduct = productList.find(p => p.product_name === item.itemName || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
-                              const isTile = String(matchedProduct?.category || '').toLowerCase().includes('tile') || 
-                                             String(matchedProduct?.scenario_name || '').toLowerCase().includes('tile') ||
-                                             (Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box) > 1);
-                              const pcsPerBox = Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box ?? 1) || 1;
+                              const rawPcs = Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box ?? matchedProduct?.pieces_per_packing ?? 0);
+                              const isTile = Boolean(
+                                matchedProduct && (
+                                  String(matchedProduct.category || '').toLowerCase().includes('tile') || 
+                                  String(matchedProduct.scenario_name || '').toLowerCase().includes('tile')
+                                ) && (rawPcs > 1 || String(matchedProduct.scenario_name || '').toLowerCase().includes('tile'))
+                              );
+                              const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
                               const uomString = matchedProduct ? matchedProduct.uom : 'NOS';
                               const lineTotals = calculatePurchaseLineTotals(item, values.applyTax);
                               const isCurrentActive = activeSkuIndex === idx;
@@ -885,21 +888,20 @@ const AddPurchases = () => {
                                       /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
                                       <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
                                         <input
-                                          type="number"
-                                          min="0.001"
-                                          step="any"
+                                          type="text"
+                                          inputMode="decimal"
                                           onKeyDown={blockInvalidChar}
                                           name={`items.${idx}.qty`}
                                           value={item.qty === 0 ? '' : item.qty}
                                           onChange={(e) => {
                                             const val = e.target.value;
-                                            const num = val === '' ? 0 : Math.max(0, Number(val) || 0);
-                                            setFieldValue(`items.${idx}.qty`, val === '' ? '' : num);
-
-                                            // Auto recalculate discount and tax
-                                            const cost = num * (Number(item.rate) || 0);
-                                            if (Number(item.discountPer) > 0) {
-                                              setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                              setFieldValue(`items.${idx}.qty`, val);
+                                              const num = parseFloat(val) || 0;
+                                              const cost = num * (Number(item.rate) || 0);
+                                              if (Number(item.discountPer) > 0) {
+                                                setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                              }
                                             }
                                           }}
                                           placeholder="1"

@@ -689,12 +689,13 @@ const NewInvoice = () => {
                                 const isCurrentProdNameActive = activeProdNameIndex === idx;
 
                                 const selectedProd = productsList.find(p => p.product_name === item.itemName || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
+                                const rawPcs = Number(selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 0);
                                 const isTile = Boolean(
                                   selectedProd && (
-                                    String(selectedProd.category || '').toLowerCase().includes('tile')
-                                  )
+                                    String(selectedProd.category || '').toLowerCase().includes('tile') ||
+                                    String(selectedProd.scenario_name || '').toLowerCase().includes('tile')
+                                  ) && (rawPcs > 1 || String(selectedProd.scenario_name || '').toLowerCase().includes('tile'))
                                 );
-                                const rawPcs = Number(selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 0);
                                 const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
                                 const uomName = selectedProd?.uom ? selectedProd.uom : (isTile ? 'BOX' : 'PCS');
 
@@ -1120,14 +1121,16 @@ const NewInvoice = () => {
                                             name={`items.${idx}.qty`}
                                             value={item.qty === 0 ? '' : item.qty}
                                             onChange={(e) => {
-                                              const val = e.target.value.trim();
-                                              const newQty = val === '' ? 0 : Math.max(0, Number(val) || 0);
-                                              setFieldValue(`items.${idx}.qty`, val === '' ? '' : newQty);
-                                              const currentRp = Math.max(0, Number(item.rp) || 0);
-                                              const gross = newQty * currentRp;
-                                              const disPer = Math.max(0, Number(item.discountPer) || 0);
-                                              if (disPer > 0) {
-                                                setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                              const val = e.target.value;
+                                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                setFieldValue(`items.${idx}.qty`, val);
+                                                const newQty = parseFloat(val) || 0;
+                                                const currentRp = Math.max(0, Number(item.rp) || 0);
+                                                const gross = newQty * currentRp;
+                                                const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                                if (disPer > 0) {
+                                                  setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                                }
                                               }
                                             }}
                                             placeholder="1"

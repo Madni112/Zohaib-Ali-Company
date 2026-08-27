@@ -134,15 +134,13 @@ const PrintSalesReturn: React.FC = () => {
     const isTile = Boolean(
       prodMeta && (
         String(prodMeta.category || '').toLowerCase().includes('tile') ||
-        String(prodMeta.scenario_name || '').toLowerCase().includes('tile') ||
-        rawPcs > 1 ||
-        String(prodMeta.uom || '').toLowerCase().includes('box')
-      )
-    ) || rawPcs > 1 || (Number(item.qty || item.quantity || 0) % 1 !== 0);
+        String(prodMeta.scenario_name || '').toLowerCase().includes('tile')
+      ) && (rawPcs > 1 || String(prodMeta.scenario_name || '').toLowerCase().includes('tile'))
+    );
 
     if (isTile) hasTileItems = true;
 
-    const pcsPerBox = rawPcs > 1 ? rawPcs : 10;
+    const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
     const qty = Number(item.qty ?? item.returnedQty ?? item.quantity ?? item.returned_qty ?? 0);
     const rate = Number(item.rate ?? item.rp ?? item.sale_price ?? item.price ?? prodMeta?.retail_price ?? prodMeta?.sales_price ?? 0);

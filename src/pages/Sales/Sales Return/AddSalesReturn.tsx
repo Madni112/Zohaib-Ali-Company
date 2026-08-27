@@ -1107,12 +1107,14 @@ const AddSalesReturn = () => {
                                 );
 
                                 const rawPcs = Number(matchedProduct?.pieces_per_box || matchedProduct?.pcs_per_box || matchedProduct?.pieces_per_packing || 0);
-                                const isTile = String(matchedProduct?.category || '').toLowerCase().includes('tile') || 
-                                               String(matchedProduct?.scenario_name || '').toLowerCase().includes('tile') ||
-                                               rawPcs > 1 ||
-                                               (Number(item.qty || 0) % 1 !== 0);
+                                const isTile = Boolean(
+                                  matchedProduct && (
+                                    String(matchedProduct.category || '').toLowerCase().includes('tile') || 
+                                    String(matchedProduct.scenario_name || '').toLowerCase().includes('tile')
+                                  ) && (rawPcs > 1 || String(matchedProduct.scenario_name || '').toLowerCase().includes('tile'))
+                                );
 
-                                const pcsPerBox = rawPcs > 1 ? rawPcs : (item.qty && Number(item.qty) % 1 !== 0 ? Math.round(1 / (Number(item.qty) - Math.floor(Number(item.qty)))) : 6) || 6;
+                                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
                                 let tileWidthCm = 60;
                                 let tileHeightCm = 60;
@@ -1507,16 +1509,28 @@ const AddSalesReturn = () => {
                                         </div>
                                       ) : (
                                         /* Standard single quantity input */
-                                        <input
-                                          type="number"
-                                          name={`items.${idx}.qty`}
-                                          onKeyDown={blockInvalidChar}
-                                          onChange={handleChange}
-                                          value={item.qty}
-                                          min="0.01"
-                                          placeholder="1"
-                                          className="w-full border border-slate-200 dark:border-slate-700 rounded-lg p-2 font-mono font-black text-center bg-white dark:bg-slate-800 text-xs outline-none focus:border-emerald-600 text-emerald-800 dark:text-emerald-400"
-                                        />
+                                        <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1.5 border border-slate-200 dark:border-slate-700 focus-within:border-emerald-600">
+                                          <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            name={`items.${idx}.qty`}
+                                            onKeyDown={blockInvalidChar}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                setFieldValue(`items.${idx}.qty`, val);
+                                              }
+                                            }}
+                                            value={item.qty ?? ''}
+                                            placeholder="1"
+                                            className="w-full bg-transparent font-mono font-black text-center text-xs outline-none text-emerald-800 dark:text-emerald-400"
+                                          />
+                                          {item.uom && (
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase select-none pr-1">
+                                              {item.uom}
+                                            </span>
+                                          )}
+                                        </div>
                                       )}
                                     </td>
 

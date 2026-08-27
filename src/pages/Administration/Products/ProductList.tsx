@@ -271,10 +271,13 @@ const ProductList = () => {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         {(() => {
-                          const isTile = String(product.category || '').toLowerCase().includes('tile') || 
-                                         String(product.uom || '').toLowerCase().includes('box');
-
                           const rawPcs = Number(product.pieces_per_box || product.pcs_per_box || product.pieces_per_packing || 0);
+                          const isTile = Boolean(
+                            (String(product.category || '').toLowerCase().includes('tile') || 
+                             String(product.scenario_name || '').toLowerCase().includes('tile')) &&
+                            (rawPcs > 1 || String(product.scenario_name || '').toLowerCase().includes('tile'))
+                          );
+
                           const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
                           const totalStock = Number(product.current_stock || 0);
 

@@ -115,17 +115,15 @@ const PrintPurchase = () => {
       (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode))
     );
 
+    const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
     const isTile = Boolean(
       prodMeta && (
         String(prodMeta.category || '').toLowerCase().includes('tile') ||
-        String(prodMeta.scenario_name || '').toLowerCase().includes('tile') ||
-        Number(prodMeta.pieces_per_box || prodMeta.pcs_per_box || 0) > 1 ||
-        String(prodMeta.uom || '').toLowerCase().includes('box')
-      )
+        String(prodMeta.scenario_name || '').toLowerCase().includes('tile')
+      ) && (rawPcs > 1 || String(prodMeta.scenario_name || '').toLowerCase().includes('tile'))
     );
     if (isTile) hasTileItems = true;
-    const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
-    const pcsPerBox = rawPcs > 1 ? rawPcs : 4;
+    const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
     const qty = Number(item.qty ?? item.quantity ?? 0);
     const rate = Number(item.rate ?? item.cost_price ?? 0);
@@ -175,8 +173,8 @@ const PrintPurchase = () => {
       } else {
         qtyDisplay = `0 Box`;
       }
-    } else if (prodMeta?.uom) {
-      qtyDisplay = `${qty} ${prodMeta.uom}`;
+    } else {
+      qtyDisplay = `${qty} ${item.uom || prodMeta?.uom || 'NOS'}`;
     }
 
     computedTotalGross += grossAmount;

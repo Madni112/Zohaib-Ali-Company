@@ -116,14 +116,14 @@ const PrintInvoice = () => {
     const pName = item.itemName ?? item.product_name ?? 'N/A';
     const prodMeta = productsCatalog.find(p => p.product_name === pName);
 
+    const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
     const isTile = Boolean(
       prodMeta && (
         String(prodMeta.category || '').toLowerCase().includes('tile') ||
-        String(prodMeta.uom || '').toLowerCase().includes('box')
-      )
+        String(prodMeta.scenario_name || '').toLowerCase().includes('tile')
+      ) && (rawPcs > 1 || String(prodMeta.scenario_name || '').toLowerCase().includes('tile'))
     );
-    const rawPcs = Number(prodMeta?.pieces_per_box || prodMeta?.pcs_per_box || prodMeta?.pieces_per_packing || 0);
-    const pcsPerBox = rawPcs > 1 ? rawPcs : 6;
+    const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
     const qty = Number(item.qty ?? item.quantity ?? 0);
     const rate = Number(item.rp ?? item.mrp ?? item.rate ?? item.price ?? 0);
@@ -172,8 +172,8 @@ const PrintInvoice = () => {
       } else {
         qtyDisplay = `0 Box`;
       }
-    } else if (prodMeta?.uom) {
-      qtyDisplay = `${qty} ${prodMeta.uom}`;
+    } else {
+      qtyDisplay = `${qty} ${item.uom || prodMeta?.uom || 'Nos'}`;
     }
 
     computedTotalGross += grossAmount;
