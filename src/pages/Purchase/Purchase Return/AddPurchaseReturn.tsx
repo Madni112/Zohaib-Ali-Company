@@ -1405,7 +1405,7 @@ const AddPurchaseReturn = () => {
                       </button>
                       <button
                         type="submit"
-                        disabled={loading || !values.vendorName || !values.sourceWarehouse}
+                        disabled={loading}
                         className="rounded bg-primary py-2.5 px-8 font-bold text-white hover:bg-opacity-90 transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                       >
                         {loading ? <Spinner color="border-white" size="w-4 h-4" /> : <span>{isEditMode ? 'Update Return' : 'Save & Post Return'}</span>}
