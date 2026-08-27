@@ -58,6 +58,7 @@ import AddPurchaseReceipt from '../pages/Purchase/Purchase Receipt/AddPurchaseRe
 import PrintPurchaseReceipt from '../pages/Purchase/Purchase Receipt/PrintPurchaseReceipt';
 import PurchaseReturnList from '../pages/Purchase/Purchase Return/PurchaseReturnList';
 import AddPurchaseReturn from '../pages/Purchase/Purchase Return/AddPurchaseReturn';
+import PrintPurchaseReturn from '../pages/Purchase/Purchase Return/PrintPurchaseReturn';
 import PurchaseReturnReceiptList from '../pages/Purchase/Purchase Return Receipt/PurchaseReturnReceiptList';
 import AddPurchaseReturnReceipt from '../pages/Purchase/Purchase Return Receipt/AddPurchaseReturnReceipt';
 import ReportDashboard from '../pages/Reports/ReportDashboard';
@@ -512,6 +513,24 @@ export const adminRoutes = [
   {
     path: '/Purchase/Purchase-Return/Add',
     component: <AddPurchaseReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase/Purchase-Return/Print/:id',
+    component: <PrintPurchaseReturn />,
+    label: 'Print Debit Note',
+    hideFromSidebar: true
+  },
+  {
+    path: '/purchase/purchase-return/print/:id',
+    component: <PrintPurchaseReturn />,
+    label: 'Print Debit Note',
+    hideFromSidebar: true
+  },
+  {
+    path: '/Purchase-Return/Debit-Notes/Print/:id',
+    component: <PrintPurchaseReturn />,
+    label: 'Print Debit Note',
     hideFromSidebar: true
   },
   {

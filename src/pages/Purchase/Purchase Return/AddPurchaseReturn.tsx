@@ -17,8 +17,10 @@ import {
   MdClear, 
   MdArrowBack, 
   MdAccountBalance, 
-  MdKeyboardArrowDown
+  MdKeyboardArrowDown,
+  MdPrint
 } from 'react-icons/md';
+import { FiPrinter } from 'react-icons/fi';
 
 const AddPurchaseReturn = () => {
   const { tenantId } = useAuth();
@@ -68,6 +70,7 @@ const AddPurchaseReturn = () => {
   const editData = location.state?.returnRecord || location.state?.record;
   const isEditMode = !!editData;
   const [defaultReturnNo] = useState(() => isEditMode && editData?.return_no ? editData.return_no : `RTN-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [shouldPrintAfterSave, setShouldPrintAfterSave] = useState(false);
 
   const formatMoney = (val: number | string | undefined | null): string => {
     const num = Number(val) || 0;
@@ -552,6 +555,7 @@ const AddPurchaseReturn = () => {
               };
 
               // 2. Process Stock Adjustments
+              let savedRecordId = editData?.id;
               if (isEditMode) {
                 // Roll back old return stock (+)
                 const { data: oldRtn } = await supabase
@@ -606,10 +610,13 @@ const AddPurchaseReturn = () => {
 
               } else {
                 // Insert new return record
-                const { error: insertErr } = await supabase
+                const { data: insertedRecord, error: insertErr } = await supabase
                   .from('purchase_returns')
-                  .insert([databasePayload]);
+                  .insert([databasePayload])
+                  .select('id')
+                  .single();
                 if (insertErr) throw insertErr;
+                savedRecordId = insertedRecord?.id;
 
                 // Deduct stock (-)
                 for (const item of values.items) {
@@ -630,7 +637,11 @@ const AddPurchaseReturn = () => {
               }
 
               toast.success(isEditMode ? 'Purchase Return updated successfully!' : 'Purchase Return (Debit Note) logged successfully!');
-              navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`);
+              if (shouldPrintAfterSave && savedRecordId) {
+                navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Print/${savedRecordId}`);
+              } else {
+                navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/List`);
+              }
 
             } catch (err: any) {
               toast.error('Submission Error: ' + err.message);
@@ -1564,7 +1575,20 @@ const AddPurchaseReturn = () => {
                         Cancel
                       </button>
                       <button
+                        type="button"
+                        onClick={() => {
+                          setShouldPrintAfterSave(true);
+                          handleSubmit();
+                        }}
+                        disabled={loading}
+                        className="rounded bg-rose-600 hover:bg-rose-700 py-2.5 px-6 font-bold text-white transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        <FiPrinter size={14} />
+                        <span>Save & Print</span>
+                      </button>
+                      <button
                         type="submit"
+                        onClick={() => setShouldPrintAfterSave(false)}
                         disabled={loading}
                         className="rounded bg-primary py-2.5 px-8 font-bold text-white hover:bg-opacity-90 transition disabled:opacity-50 shadow-md text-xs cursor-pointer flex items-center gap-2"
                       >

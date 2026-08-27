@@ -228,8 +228,10 @@ const PurchaseReturnList = () => {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <TableActions
+                          onPrint={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Print/${rtn.id}`)}
                           onEdit={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return/Add`, { state: { returnRecord: rtn } })}
                           onDelete={() => handleDeleteReturnRecord(rtn.id)}
+                          printTitle="Print Debit Note"
                           editTitle="Edit Return Note"
                           deleteTitle="Delete Return Note"
                         />
