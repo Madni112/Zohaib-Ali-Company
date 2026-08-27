@@ -828,6 +828,13 @@ const AddPurchaseReturn = () => {
                               // All candidate products: prioritize vendor products, and include general catalog
                               const candidateProducts = boughtProducts.length > 0 ? boughtProducts : productList;
 
+                              const matchedProduct = productList.find(p => p.product_name === item.itemName || (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)));
+                              const isTile = String(matchedProduct?.category || '').toLowerCase().includes('tile') || 
+                                             String(matchedProduct?.scenario_name || '').toLowerCase().includes('tile') ||
+                                             (Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box) > 1);
+                              const pcsPerBox = Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box ?? 1) || 1;
+                              const uomString = matchedProduct ? matchedProduct.uom : (item.uom || 'NOS');
+
                               return (
                                 <tr 
                                   key={idx} 
@@ -1051,23 +1058,127 @@ const AddPurchaseReturn = () => {
                                     </select>
                                   </td>
 
-                                  {/* 4. Arrived Qty */}
-                                  <td className="p-3">
-                                    <div className="flex items-center gap-1.5">
-                                      <input
-                                        type="number"
-                                        min="0.01"
-                                        step="any"
-                                        name={`items.${idx}.qty`}
-                                        onKeyDown={blockInvalidChar}
-                                        onChange={handleChange}
-                                        value={item.qty}
-                                        className="w-full rounded border border-stroke dark:border-strokedark p-1.5 text-center font-bold font-mono text-xs outline-none focus:border-primary text-black dark:text-white"
-                                      />
-                                      <span className="text-[10px] font-mono text-gray-400 uppercase select-none w-8">
-                                        {item.uom || 'NOS'}
-                                      </span>
-                                    </div>
+                                  {/* 4. Arrived Qty with Dedicated Boxes & Loose Pieces & Sq.Mtr for Tiles */}
+                                  <td className="p-3 min-w-[260px]">
+                                    {isTile ? (
+                                      (() => {
+                                        let tileWidthCm = 60;
+                                        let tileHeightCm = 60;
+                                        const desc = matchedProduct?.product_description || '';
+                                        const sku = matchedProduct?.item_sr_no || '';
+                                        const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
+                                                          sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+                                        if (sizeMatch) {
+                                          tileHeightCm = Number(sizeMatch[1]) || 60;
+                                          tileWidthCm = Number(sizeMatch[2]) || 60;
+                                        }
+                                        const perPieceSqm = (tileHeightCm * tileWidthCm) / 10000;
+                                        const perBoxSqm = perPieceSqm * pcsPerBox;
+
+                                        const currentQty = Number(item.qty || 0);
+                                        const boxes = Math.floor(currentQty);
+                                        const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
+                                        const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
+
+                                        return (
+                                          <div className="flex flex-col gap-1">
+                                            {/* Top Badges */}
+                                            <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono">
+                                              <span className="text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-200 dark:border-teal-800/60 font-bold">
+                                                Box: {perBoxSqm.toFixed(2)} sq.m
+                                              </span>
+                                              <span className="text-emerald-700 dark:emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800/60 font-bold">
+                                                Pc: {perPieceSqm.toFixed(4)} sq.m
+                                              </span>
+                                            </div>
+
+                                            {/* Inputs Container: Boxes + Loose Pieces */}
+                                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
+                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
+                                                <input
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  onKeyDown={blockInvalidChar}
+                                                  value={(() => {
+                                                    const b = Math.floor(Number(item.qty || 0));
+                                                    return b === 0 ? '' : b;
+                                                  })()}
+                                                  placeholder="0"
+                                                  onChange={(e) => {
+                                                    const val = e.target.value.trim();
+                                                    const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                    const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                    const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
+                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                  }}
+                                                  className="w-full bg-transparent text-center font-black text-sm text-primary outline-none min-w-[36px]"
+                                                />
+                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Box</span>
+                                              </div>
+
+                                              <span className="text-gray-400 font-black text-sm select-none">+</span>
+
+                                              <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-emerald-500 shadow-sm">
+                                                <input
+                                                  type="text"
+                                                  inputMode="numeric"
+                                                  onKeyDown={blockInvalidChar}
+                                                  value={(() => {
+                                                    const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                                    return currentLoose === 0 ? '' : currentLoose;
+                                                  })()}
+                                                  placeholder={`${pcsPerBox}`}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value.trim();
+                                                    const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                                    const currentBoxes = Math.floor(Number(item.qty || 0));
+
+                                                    const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
+                                                    const remLoose = enteredLoose % pcsPerBox;
+                                                    const finalBoxes = currentBoxes + extraBoxes;
+                                                    const combinedQty = remLoose > 0 
+                                                      ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3)) 
+                                                      : finalBoxes;
+
+                                                    setFieldValue(`items.${idx}.qty`, combinedQty);
+                                                  }}
+                                                  className="w-full bg-transparent text-center font-black text-sm text-emerald-600 dark:text-emerald-400 outline-none min-w-[36px]"
+                                                />
+                                                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 pl-1 select-none">Pcs</span>
+                                              </div>
+                                            </div>
+
+                                            {/* Bottom Total Sq.Mtr */}
+                                            <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
+                                              Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
+                                              <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()
+                                    ) : (
+                                      /* STANDARD SINGLE QTY INPUT FOR NON-TILE ITEMS */
+                                      <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
+                                        <input
+                                          type="number"
+                                          min="0.001"
+                                          step="any"
+                                          onKeyDown={blockInvalidChar}
+                                          name={`items.${idx}.qty`}
+                                          value={item.qty === 0 ? '' : item.qty}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            const num = val === '' ? 0 : Math.max(0, Number(val) || 0);
+                                            setFieldValue(`items.${idx}.qty`, val === '' ? '' : num);
+                                          }}
+                                          placeholder="1"
+                                          className="w-full bg-transparent text-center font-bold text-xs text-black dark:text-white outline-none"
+                                        />
+                                        <span className="text-[10px] font-mono text-gray-400 uppercase select-none w-8 text-center">
+                                          {item.uom || uomString || 'NOS'}
+                                        </span>
+                                      </div>
+                                    )}
                                   </td>
 
                                   {/* 5. Cost Price (PKR) */}
