@@ -43,7 +43,14 @@ function InvoiceReceiptList() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReceipts(data || []);
+      const salesReceiptsOnly = (data || []).filter((r: any) => {
+        const source = r.metadata?.moduleSource || '';
+        if (source === 'purchase_return_receipt' || source === 'purchase_receipt' || source === 'sales_return_receipt') {
+          return false;
+        }
+        return !!r.customer_name || !!r.customerName || !r.party_name;
+      });
+      setReceipts(salesReceiptsOnly);
     } catch (err: any) {
       toast.error('Failed to load receipts data: ' + err.message);
     } finally {
