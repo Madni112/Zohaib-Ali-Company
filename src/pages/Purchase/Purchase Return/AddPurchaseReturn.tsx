@@ -572,18 +572,13 @@ const AddPurchaseReturn = () => {
             const handleProductSelection = (p: any, rowIndex: number) => {
               const displaySku = p.item_sr_no || p.sku || `SKU-${p.id || ''}`;
               const price = Number(p.purchase_price ?? p.cost_price ?? p.rate ?? 0);
-              const updatedItems = [...values.items];
-              const cur = updatedItems[rowIndex] || {};
+              const uom = p.uom || 'Nos';
 
-              updatedItems[rowIndex] = {
-                ...cur,
-                skuCode: displaySku,
-                itemName: p.product_name,
-                rate: price,
-                uom: p.uom || 'Nos'
-              };
+              setFieldValue(`items.${rowIndex}.skuCode`, displaySku);
+              setFieldValue(`items.${rowIndex}.itemName`, p.product_name);
+              setFieldValue(`items.${rowIndex}.rate`, price);
+              setFieldValue(`items.${rowIndex}.uom`, uom);
 
-              setFieldValue('items', updatedItems);
               setActiveProdNameIndex(null);
               setActiveSkuIndex(null);
             };
@@ -846,6 +841,7 @@ const AddPurchaseReturn = () => {
                                           <input
                                             type="text"
                                             autoComplete="off"
+                                            name={`items.${idx}.skuCode`}
                                             value={item.skuCode || ''}
                                             onFocus={() => {
                                               setActiveSkuIndex(idx);
@@ -890,6 +886,11 @@ const AddPurchaseReturn = () => {
                                                       e.stopPropagation();
                                                       handleProductSelection(prod, idx);
                                                     }}
+                                                    onClick={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      handleProductSelection(prod, idx);
+                                                    }}
                                                     className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${
                                                       highlightedSkuIndex === pIdx 
                                                         ? 'bg-primary/10 text-primary font-bold' 
@@ -929,6 +930,7 @@ const AddPurchaseReturn = () => {
                                           <input
                                             type="text"
                                             autoComplete="off"
+                                            name={`items.${idx}.itemName`}
                                             value={item.itemName || ''}
                                             onFocus={() => {
                                               setActiveProdNameIndex(idx);
@@ -979,6 +981,11 @@ const AddPurchaseReturn = () => {
                                                     key={p.id || pIdx}
                                                     onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
                                                     onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      handleProductSelection(p, idx);
+                                                    }}
+                                                    onClick={(e) => {
                                                       e.preventDefault();
                                                       e.stopPropagation();
                                                       handleProductSelection(p, idx);
