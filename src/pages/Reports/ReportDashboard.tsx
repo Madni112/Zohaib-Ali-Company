@@ -99,10 +99,10 @@ const ReportDashboard = () => {
         { indicator: 'Gross Monthly Sales Revenue', value: metrics.thisMonthSales || 0 },
         { indicator: 'App Liquid Cash in Hand', value: metrics.cashBalance || 0 },
         { indicator: 'Total Bank Ledger Balances', value: metrics.totalBankBalance || 0 },
-        { indicator: 'Accounts Receivable (Customers)', value: metrics.totalReceivables || metrics.accountsReceivable || 0 },
+        { indicator: 'Accounts Receivable (Customers)', value: metrics.totalReceivables || 0 },
         { indicator: 'Merchandise Inventory Stock Valuation', value: metrics.inventoryAssetValue || 0 },
         { indicator: 'Total Balance Sheet Assets', value: metrics.totalAssets || 0 },
-        { indicator: 'Total Accounts Payable (Suppliers)', value: metrics.totalPayables || metrics.accountsPayable || 0 },
+        { indicator: 'Total Accounts Payable (Suppliers)', value: metrics.totalPayables || 0 },
         { indicator: 'Total Owner Equity & Retained Earnings', value: metrics.totalEquity || 0 }
       ];
 

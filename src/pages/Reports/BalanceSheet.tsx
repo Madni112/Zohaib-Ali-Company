@@ -53,10 +53,10 @@ const BalanceSheet: React.FC = () => {
       const exportData = [
         { code: '1010', title: 'Cash Box & Liquid App Drawer', category: 'ASSET', debit: metrics.cashBalance || 0, credit: 0 },
         { code: '1020', title: 'Corporate Bank Ledger Accounts', category: 'ASSET', debit: metrics.totalBankBalance || 0, credit: 0 },
-        { code: '1030', title: 'Accounts Receivable (Customers)', category: 'ASSET', debit: metrics.totalReceivables || metrics.accountsReceivable || 0, credit: 0 },
+        { code: '1030', title: 'Accounts Receivable (Customers)', category: 'ASSET', debit: metrics.totalReceivables || 0, credit: 0 },
         { code: '1040', title: 'Merchandise Inventory Stock Assets', category: 'ASSET', debit: metrics.inventoryAssetValue || 0, credit: 0 },
         { code: 'TOTAL ASSETS', title: 'TOTAL COMMERCIAL ASSETS', category: 'ASSETS TOTAL', debit: metrics.totalAssets || 0, credit: 0 },
-        { code: '2010', title: 'Accounts Payable (Vendors / Suppliers)', category: 'LIABILITY', debit: 0, credit: metrics.totalPayables || metrics.accountsPayable || 0 },
+        { code: '2010', title: 'Accounts Payable (Vendors / Suppliers)', category: 'LIABILITY', debit: 0, credit: metrics.totalPayables || 0 },
         { code: 'TOTAL LIAB', title: 'TOTAL LIABILITIES', category: 'LIABILITIES TOTAL', debit: 0, credit: metrics.totalLiabilities || 0 },
         { code: '3010', title: 'Owner Equity & Retained Earnings', category: 'EQUITY', debit: 0, credit: metrics.totalEquity || 0 },
         { code: 'TOTAL LIAB+EQ', title: 'TOTAL LIABILITIES & EQUITY', category: 'BALANCE TOTAL', debit: 0, credit: (metrics.totalLiabilities || 0) + (metrics.totalEquity || 0) }
