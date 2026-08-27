@@ -290,7 +290,6 @@ const PrintSalesReturn: React.FC = () => {
           }
           table {
             width: 100% !important;
-            table-layout: fixed !important;
             border-collapse: collapse !important;
           }
           .print-table-header {
@@ -408,13 +407,12 @@ const PrintSalesReturn: React.FC = () => {
           <thead>
             <tr className="print-table-header bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider text-center">
               <th className="p-2 border border-slate-700 w-10 text-center">S#</th>
-              <th className="p-2 border border-slate-700 w-28 text-left">SKU Code</th>
-              <th className="p-2 border border-slate-700 text-left">Product Description</th>
+              <th className="p-2 border border-slate-700 w-24 text-left">SKU Code</th>
+              <th className="p-2 border border-slate-700 text-left min-w-[180px]">Product Description</th>
               <th className="p-2 border border-slate-700 w-28 text-left">Warehouse</th>
-              <th className="p-2 border border-slate-700 w-16 text-center">UOM</th>
               <th className="p-2 border border-slate-700 w-24 text-right">Sale Price</th>
-              <th className="p-2 border border-slate-700 w-36 text-center">Returned Qty</th>
-              <th className="p-2 border border-slate-700 w-28 text-right">Net Amount</th>
+              <th className="p-2 border border-slate-700 w-28 text-center">Returned Qty</th>
+              <th className="p-2 border border-slate-700 w-28 text-right pr-3">Net Amount</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -423,31 +421,28 @@ const PrintSalesReturn: React.FC = () => {
                 <td className="p-2 border border-slate-300 text-center font-mono font-bold text-slate-500">
                   {idx + 1}
                 </td>
-                <td className="p-2 border border-slate-300 font-mono font-bold text-emerald-700">
+                <td className="p-2 border border-slate-300 font-mono font-bold text-emerald-700 whitespace-nowrap">
                   {item.sku}
                 </td>
                 <td className="p-2 border border-slate-300 font-bold text-slate-900">
-                  {item.pName}
+                  <div className="font-bold">{item.pName}</div>
                   {item.isTile && item.totalLineSqm > 0 && (
-                    <span className="block text-[10px] font-mono text-teal-700 font-normal">
+                    <div className="text-[10px] font-mono text-teal-700 font-normal">
                       Area: {item.totalLineSqm.toFixed(2)} sq.m
-                    </span>
+                    </div>
                   )}
                 </td>
                 <td className="p-2 border border-slate-300 text-slate-600">
                   {item.warehouse}
                 </td>
-                <td className="p-2 border border-slate-300 text-center font-bold font-mono text-slate-600">
-                  {item.uom}
+                <td className="p-2 border border-slate-300 text-right font-mono font-bold text-slate-700 whitespace-nowrap">
+                  Rs. {formatMoney(item.rate)}
                 </td>
-                <td className="p-2 border border-slate-300 text-right font-mono font-bold text-slate-700">
-                  {formatMoney(item.rate)}
-                </td>
-                <td className="p-2 border border-slate-300 text-center font-mono font-black text-rose-600 bg-rose-50/40">
+                <td className="p-2 border border-slate-300 text-center font-mono font-black text-rose-600 bg-rose-50/40 whitespace-nowrap">
                   {item.qtyDisplay}
                 </td>
-                <td className="p-2 border border-slate-300 text-right font-mono font-black text-slate-900">
-                  {formatMoney(item.lineTotal)}
+                <td className="p-2 border border-slate-300 text-right font-mono font-black text-slate-900 pr-3 whitespace-nowrap">
+                  Rs. {formatMoney(item.lineTotal)}
                 </td>
               </tr>
             ))}
