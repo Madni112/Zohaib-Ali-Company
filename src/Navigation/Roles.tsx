@@ -414,7 +414,17 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/sales-return/debit-notes/add',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Sales-Return/Debit-Notes/Edit/:id',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales-return/debit-notes/edit/:id',
     component: <AddSalesReturn />,
     hideFromSidebar: true
   },
@@ -424,13 +434,68 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+    path: '/sales/sales-return/add',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
     path: '/Sales/Sales-Return/Edit/:id',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales/sales-return/edit/:id',
     component: <AddSalesReturn />,
     hideFromSidebar: true
   },
   {
     path: '/Sales-Return/Debit-Notes/List',
     component: <SalesReturnList />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales-return/debit-notes/list',
+    component: <SalesReturnList />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales-Return/List',
+    component: <SalesReturnList />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales-return/list',
+    component: <SalesReturnList />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales-Return/Add',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales-return/add',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales-Return/Edit/:id',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales-return/edit/:id',
+    component: <AddSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Sales-Return/Print/:id',
+    component: <PrintSalesReturn />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/sales-return/print/:id',
+    component: <PrintSalesReturn />,
     hideFromSidebar: true
   },
   {
