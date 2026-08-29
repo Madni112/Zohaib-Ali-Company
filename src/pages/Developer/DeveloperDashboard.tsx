@@ -136,7 +136,7 @@ export interface EmployeeAccount {
 }
 
 // Master Super Admin / Developer Credentials
-const DEV_EMAIL = 'admin@zohaibalicompany.com';
+const DEV_EMAIL = 'admin@zoaibalicompany.com';
 const DEV_PASSWORD = 'admin123';
 const BACKUP_DEV_EMAIL = 'developer@noorhorizontechnologies.com';
 const BACKUP_DEV_PASSWORD = 'NoorHorizon@5923';
@@ -416,9 +416,9 @@ const DeveloperDashboard: React.FC = () => {
         formattedEmployees = [
           {
             id: '1',
-            name: 'Zohaib Ali (Super Admin)',
-            slug: 'zohaib-admin',
-            email: 'admin@zohaibalicompany.com',
+            name: 'Zoaib Ali (Super Admin)',
+            slug: 'zoaib-admin',
+            email: 'admin@zoaibalicompany.com',
             role: 'Super Admin',
             allowed_modules: ROLE_PRESETS['Super Admin'].modules,
             created_at: new Date().toISOString(),
@@ -427,7 +427,7 @@ const DeveloperDashboard: React.FC = () => {
             id: '2',
             name: 'Warehouse Manager',
             slug: 'warehouse-mgr',
-            email: 'warehouse@zohaibalicompany.com',
+            email: 'warehouse@zoaibalicompany.com',
             role: 'Warehouse Manager',
             allowed_modules: ROLE_PRESETS['Warehouse Manager'].modules,
             created_at: new Date().toISOString(),
@@ -436,7 +436,7 @@ const DeveloperDashboard: React.FC = () => {
             id: '3',
             name: 'Finance & Accounts',
             slug: 'accountant',
-            email: 'accountant@zohaibalicompany.com',
+            email: 'accountant@zoaibalicompany.com',
             role: 'Accountant',
             allowed_modules: ROLE_PRESETS['Accountant'].modules,
             created_at: new Date().toISOString(),
@@ -445,7 +445,7 @@ const DeveloperDashboard: React.FC = () => {
             id: '4',
             name: 'Cashier Operator',
             slug: 'cashier',
-            email: 'cashier@zohaibalicompany.com',
+            email: 'cashier@zoaibalicompany.com',
             role: 'Cashier',
             allowed_modules: ROLE_PRESETS['Cashier'].modules,
             created_at: new Date().toISOString(),
@@ -505,7 +505,7 @@ const DeveloperDashboard: React.FC = () => {
             full_name: newEmployee.name.trim(),
             role: newEmployee.role,
             tenant_id: cleanSlug,
-            business_name: 'Zohaib Ali & Company',
+            business_name: 'Zoaib Ali & Company',
             allowed_modules: newEmployee.modules,
           },
         },
@@ -521,7 +521,7 @@ const DeveloperDashboard: React.FC = () => {
             slug: cleanSlug,
             email: newEmployee.email.trim(),
             business_activity: newEmployee.role,
-            seller_address: 'Zohaib Ali & Company Headquarters',
+            seller_address: 'Zoaib Ali & Company Headquarters',
             allowed_modules: newEmployee.modules,
           },
         ], { onConflict: 'slug' });
@@ -563,7 +563,7 @@ const DeveloperDashboard: React.FC = () => {
 
     const isSuperAdminAccount =
       editingEmployee.role === 'Super Admin' ||
-      editingEmployee.slug === 'zohaib-admin' ||
+      editingEmployee.slug === 'zoaib-admin' ||
       editingEmployee.name?.toLowerCase().includes('super admin');
 
     if (isSuperAdminAccount) {
@@ -630,7 +630,7 @@ const DeveloperDashboard: React.FC = () => {
               <MdSecurity />
             </div>
             <h2 className="text-2xl font-black tracking-tight text-black dark:text-white">Master Role & Dev Console</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for Zohaib Ali & Company</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Employee Access & Roles Control for Zoaib Ali & Company</p>
           </div>
 
           {authError && (
@@ -693,7 +693,7 @@ const DeveloperDashboard: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">Zohaib Ali & Company</h1>
+              <h1 className="text-xl font-black text-black dark:text-white tracking-tight">Zoaib Ali & Company</h1>
               <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                 Employee Role & Access Control
               </span>
@@ -908,7 +908,7 @@ const DeveloperDashboard: React.FC = () => {
                   </p>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-semibold flex items-center gap-1.5">
-                  <MdSecurity /> Zohaib Ali & Company RBAC
+                  <MdSecurity /> Zoaib Ali & Company RBAC
                 </span>
               </div>
 
@@ -957,7 +957,7 @@ const DeveloperDashboard: React.FC = () => {
                       <input
                         type="email"
                         required
-                        placeholder="e.g. warehouse@zohaibalicompany.com"
+                        placeholder="e.g. warehouse@zoaibalicompany.com"
                         value={newEmployee.email}
                         onChange={e => setNewEmployee({ ...newEmployee, email: e.target.value })}
                         className="w-full bg-white dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"
@@ -1060,7 +1060,7 @@ const DeveloperDashboard: React.FC = () => {
             </div>
 
             {/* QUICK PRESET TEMPLATES */}
-            {editingEmployee.role === 'Super Admin' || editingEmployee.slug === 'zohaib-admin' ? (
+            {editingEmployee.role === 'Super Admin' || editingEmployee.slug === 'zoaib-admin' ? (
               <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 rounded-2xl text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-3">
                 <span className="text-2xl">👑</span>
                 <div>

@@ -1,6 +1,6 @@
 /**
  * Commercial Invoicing & Billing Utilities
- * Zohaib Ali & Company
+ * Zoaib Ali & Company
  */
 
 export interface InvoiceItemPayload {

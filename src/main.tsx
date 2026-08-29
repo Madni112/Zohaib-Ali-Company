@@ -49,54 +49,78 @@ class RootErrorBoundary extends React.Component<
             style={{
               backgroundColor: '#ffffff',
               padding: '32px',
-              borderRadius: '12px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-              maxWidth: '480px',
+              borderRadius: '16px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.08)',
+              maxWidth: '500px',
               width: '100%',
+              border: '1px solid #E2E8F0',
             }}
           >
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>
+              🛡️
+            </div>
             <h2
               style={{
-                color: '#059669',
-                fontSize: '22px',
-                fontWeight: 'bold',
+                color: '#0F172A',
+                fontSize: '20px',
+                fontWeight: '800',
                 marginBottom: '8px',
+                letterSpacing: '-0.02em',
               }}
             >
-              Zohaib Ali & Company ERP
+              Zoaib Ali & Company ERP
             </h2>
             <p
               style={{
                 color: '#64748B',
                 fontSize: '13px',
                 lineHeight: '1.6',
-                marginBottom: '20px',
+                marginBottom: '24px',
               }}
             >
-              A cached session error was encountered. Click the button below to
-              reset your session and open the login portal.
+              A view rendering error was caught safely. Click below to return to the Executive Dashboard.
             </p>
-            <button
-              onClick={() => {
-                try {
-                  localStorage.clear();
-                  sessionStorage.clear();
-                } catch (_) {}
-                window.location.href = '/signin';
-              }}
-              style={{
-                backgroundColor: '#059669',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 24px',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Reset Session & Sign In
-            </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.href = '/';
+                }}
+                style={{
+                  backgroundColor: '#059669',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Return to Dashboard
+              </button>
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                  } catch (_) {}
+                  window.location.href = '/signin';
+                }}
+                style={{
+                  backgroundColor: '#F1F5F9',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Reset Session
+              </button>
+            </div>
           </div>
         </div>
       );

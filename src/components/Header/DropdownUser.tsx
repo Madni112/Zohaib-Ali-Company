@@ -25,9 +25,9 @@ const DropdownUser = () => {
     logout();
   };
 
-  const displayEmail = userEmail || profile?.email || 'admin@zohaibalicompany.com';
+  const displayEmail = userEmail || profile?.email || 'admin@zoaibalicompany.com';
   const displayRole = role || profile?.role || 'Super Admin';
-  const displayCompanyName = 'Zohaib Ali & Company';
+  const displayCompanyName = 'Zoaib Ali & Company';
   const displayName = profile?.user_metadata?.full_name || profile?.user_metadata?.name || displayCompanyName;
 
   return (

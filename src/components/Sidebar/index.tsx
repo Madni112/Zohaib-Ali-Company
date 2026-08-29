@@ -330,7 +330,7 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
                 </div>
                 <div className="text-left">
                   <div className="flex items-center gap-1 leading-tight">
-                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">ZOHAIB</span>
+                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">ZOAIB</span>
                     <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">ALI</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">

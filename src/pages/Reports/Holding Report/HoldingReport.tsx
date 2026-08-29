@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
@@ -17,7 +17,13 @@ import {
   MdSearch,
   MdFilterAlt,
   MdRefresh,
-  MdAttachMoney
+  MdAttachMoney,
+  MdTune,
+  MdKeyboardArrowDown,
+  MdKeyboardArrowRight,
+  MdCheckCircle,
+  MdClear,
+  MdPerson
 } from 'react-icons/md';
 
 type ViewPerspective = 'detailed' | 'salesman' | 'gatepass' | 'invoice' | 'customer';
@@ -37,18 +43,48 @@ interface HoldingItemRow {
   holdQty: number;
   rate: number;
   totalOrderAmount: number;
-  heldAmount: number;
   date: string;
   status: string;
+  uom: string;
 }
+
+import { QtyBadge, formatQtyToBoxPc } from '../../../utils/QtyBadge';
+
+const renderQtyBadge = (qty: number, uom: string) => {
+  return <QtyBadge qty={qty} uom={uom} />;
+};
+
+const getQtyOptionBParts = (qty: number) => {
+  const { box, pc } = formatQtyToBoxPc(qty);
+  let main = '';
+  let unit = '';
+  if (box > 0 && pc > 0) {
+    main = `${box} Boxes`;
+    unit = `+ ${pc} Pc${pc > 1 ? 's' : ''}`;
+  } else if (box > 0) {
+    main = `${box}`;
+    unit = 'Boxes';
+  } else if (pc > 0) {
+    main = `${pc}`;
+    unit = `Pc${pc > 1 ? 's' : ''}`;
+  } else {
+    main = '0';
+    unit = 'Pcs';
+  }
+  return { main, unit };
+};
+
+import SearchableDropdown from '../../../components/SearchableDropdown';
 
 const HoldingReport: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { tenantId, businessName } = useAuth();
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const [activePerspective, setActivePerspective] = useState<ViewPerspective>('detailed');
+  const initialPerspective = (location.state?.activePerspective || location.state?.perspective || location.state?.tab || 'detailed') as ViewPerspective;
+  const [activePerspective, setActivePerspective] = useState<ViewPerspective>(initialPerspective);
 
   // Raw fetched data
   const [holdingRows, setHoldingRows] = useState<HoldingItemRow[]>([]);
@@ -58,14 +94,20 @@ const HoldingReport: React.FC = () => {
   const [invoicesList, setInvoicesList] = useState<string[]>([]);
 
   // Search & Filter Criteria
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSalesman, setSelectedSalesman] = useState('All');
-  const [selectedCustomer, setSelectedCustomer] = useState('All');
-  const [selectedGatepass, setSelectedGatepass] = useState('All');
-  const [selectedInvoice, setSelectedInvoice] = useState('All');
+  const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || '');
+  const [selectedSalesman, setSelectedSalesman] = useState(location.state?.selectedSalesman || location.state?.salesman || 'All');
+  const [selectedCustomer, setSelectedCustomer] = useState(location.state?.selectedCustomer || location.state?.customer || 'All');
+  const [selectedGatepass, setSelectedGatepass] = useState(location.state?.selectedGatepass || location.state?.gatepass || 'All');
+  const [selectedInvoice, setSelectedInvoice] = useState(location.state?.selectedInvoice || location.state?.invoice || 'All');
   const [holdingStatusFilter, setHoldingStatusFilter] = useState<'holding_only' | 'all' | 'zero_holding'>('holding_only');
   const [minAmount, setMinAmount] = useState<number | string>('');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'qty_desc'>('amount_desc');
+
+  // Collapsible Advanced Filters Drawer State
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // Accordion Expand State for Grouped Tabs
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Record<string, boolean>>({});
 
   // Date Filters
   const [dateFrom, setDateFrom] = useState('');
@@ -74,6 +116,10 @@ const HoldingReport: React.FC = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
+
+  const toggleGroupExpand = (key: string) => {
+    setExpandedGroupKeys(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Quick Date Preset Handler
   const setQuickDateRange = (preset: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'all_time') => {
@@ -196,7 +242,8 @@ const HoldingReport: React.FC = () => {
             totalOrderAmount: totalOrderAmt,
             heldAmount: heldAmt,
             date: docDate,
-            status: dc.status || (holdQty > 0 ? 'Holding' : 'Completed')
+            status: dc.status || (holdQty > 0 ? 'Holding' : 'Completed'),
+            uom: item.uom || item.unit || ''
           });
         });
       });
@@ -217,6 +264,31 @@ const HoldingReport: React.FC = () => {
   useEffect(() => {
     loadHoldingData();
   }, []);
+
+  // Active Advanced Filters Count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedGatepass !== 'All') count++;
+    if (selectedInvoice !== 'All') count++;
+    if (holdingStatusFilter !== 'holding_only') count++;
+    if (minAmount !== '') count++;
+    if (dateFrom || dateTo) count++;
+    if (sortBy !== 'amount_desc') count++;
+    return count;
+  }, [selectedGatepass, selectedInvoice, holdingStatusFilter, minAmount, dateFrom, dateTo, sortBy]);
+
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setSelectedSalesman('All');
+    setSelectedCustomer('All');
+    setSelectedGatepass('All');
+    setSelectedInvoice('All');
+    setHoldingStatusFilter('holding_only');
+    setMinAmount('');
+    setSortBy('amount_desc');
+    setDateFrom('');
+    setDateTo('');
+  };
 
   // Filtered Rows
   const filteredHoldingRows = useMemo(() => {
@@ -320,55 +392,80 @@ const HoldingReport: React.FC = () => {
 
   // Grouped Summaries for alternative tabs
   const salesmanSummary = useMemo(() => {
-    const map: Record<string, { salesman: string; itemsCount: number; totalHeldQty: number; totalHeldValue: number; customerCount: Set<string>; invoices: Set<string> }> = {};
+    const map: Record<string, { salesman: string; itemsCount: number; totalHeldQty: number; totalHeldValue: number; custSet: Set<string>; invSet: Set<string>; items: HoldingItemRow[] }> = {};
     filteredHoldingRows.forEach(row => {
-      if (!map[row.salesman]) {
-        map[row.salesman] = {
-          salesman: row.salesman,
+      const smKey = row.salesman || 'Unassigned';
+      if (!map[smKey]) {
+        map[smKey] = {
+          salesman: smKey,
           itemsCount: 0,
           totalHeldQty: 0,
           totalHeldValue: 0,
-          customerCount: new Set(),
-          invoices: new Set()
+          custSet: new Set(),
+          invSet: new Set(),
+          items: []
         };
       }
-      map[row.salesman].itemsCount += 1;
-      map[row.salesman].totalHeldQty += row.holdQty;
-      map[row.salesman].totalHeldValue += row.heldAmount;
-      map[row.salesman].customerCount.add(row.customerName);
-      map[row.salesman].invoices.add(row.invoiceNo);
+      map[smKey].itemsCount += 1;
+      map[smKey].totalHeldQty += Number(row.holdQty || 0);
+      map[smKey].totalHeldValue += Number(row.heldAmount || 0);
+      if (row.customerName) map[smKey].custSet.add(row.customerName);
+      if (row.invoiceNo) map[smKey].invSet.add(row.invoiceNo);
+      map[smKey].items.push(row);
     });
-    return Object.values(map).sort((a, b) => b.totalHeldValue - a.totalHeldValue);
+
+    return Object.values(map).map(s => ({
+      salesman: s.salesman,
+      itemsCount: s.itemsCount,
+      totalHeldQty: s.totalHeldQty,
+      totalHeldValue: s.totalHeldValue,
+      custCount: s.custSet.size,
+      invCount: s.invSet.size,
+      items: s.items
+    })).sort((a, b) => b.totalHeldValue - a.totalHeldValue);
   }, [filteredHoldingRows]);
 
   const customerSummary = useMemo(() => {
-    const map: Record<string, { customer: string; itemsCount: number; totalHeldQty: number; totalHeldValue: number; gatepasses: Set<string>; invoices: Set<string> }> = {};
+    const map: Record<string, { customer: string; itemsCount: number; totalHeldQty: number; totalHeldValue: number; gpSet: Set<string>; invSet: Set<string>; items: HoldingItemRow[] }> = {};
     filteredHoldingRows.forEach(row => {
-      if (!map[row.customerName]) {
-        map[row.customerName] = {
-          customer: row.customerName,
+      const cKey = row.customerName || 'Counter Buyer';
+      if (!map[cKey]) {
+        map[cKey] = {
+          customer: cKey,
           itemsCount: 0,
           totalHeldQty: 0,
           totalHeldValue: 0,
-          gatepasses: new Set(),
-          invoices: new Set()
+          gpSet: new Set(),
+          invSet: new Set(),
+          items: []
         };
       }
-      map[row.customerName].itemsCount += 1;
-      map[row.customerName].totalHeldQty += row.holdQty;
-      map[row.customerName].totalHeldValue += row.heldAmount;
-      map[row.customerName].gatepasses.add(row.gatepassNo);
-      map[row.customerName].invoices.add(row.invoiceNo);
+      map[cKey].itemsCount += 1;
+      map[cKey].totalHeldQty += Number(row.holdQty || 0);
+      map[cKey].totalHeldValue += Number(row.heldAmount || 0);
+      if (row.gatepassNo) map[cKey].gpSet.add(row.gatepassNo);
+      if (row.invoiceNo) map[cKey].invSet.add(row.invoiceNo);
+      map[cKey].items.push(row);
     });
-    return Object.values(map).sort((a, b) => b.totalHeldValue - a.totalHeldValue);
+
+    return Object.values(map).map(c => ({
+      customer: c.customer,
+      itemsCount: c.itemsCount,
+      totalHeldQty: c.totalHeldQty,
+      totalHeldValue: c.totalHeldValue,
+      gpCount: c.gpSet.size,
+      invCount: c.invSet.size,
+      items: c.items
+    })).sort((a, b) => b.totalHeldValue - a.totalHeldValue);
   }, [filteredHoldingRows]);
 
   const gatepassSummary = useMemo(() => {
-    const map: Record<string, { gatepassNo: string; customer: string; salesman: string; date: string; itemsCount: number; totalOrderQty: number; totalDispatchedQty: number; totalHeldQty: number; totalHeldValue: number; status: string }> = {};
+    const map: Record<string, { gatepassNo: string; customer: string; salesman: string; date: string; itemsCount: number; totalOrderQty: number; totalDispatchedQty: number; totalHeldQty: number; totalHeldValue: number; status: string; items: HoldingItemRow[] }> = {};
     filteredHoldingRows.forEach(row => {
-      if (!map[row.gatepassNo]) {
-        map[row.gatepassNo] = {
-          gatepassNo: row.gatepassNo,
+      const gpKey = row.gatepassNo || 'Direct';
+      if (!map[gpKey]) {
+        map[gpKey] = {
+          gatepassNo: gpKey,
           customer: row.customerName,
           salesman: row.salesman,
           date: row.date,
@@ -377,37 +474,42 @@ const HoldingReport: React.FC = () => {
           totalDispatchedQty: 0,
           totalHeldQty: 0,
           totalHeldValue: 0,
-          status: row.status
+          status: row.status,
+          items: []
         };
       }
-      map[row.gatepassNo].itemsCount += 1;
-      map[row.gatepassNo].totalOrderQty += row.orderQty;
-      map[row.gatepassNo].totalDispatchedQty += row.dispatchedQty;
-      map[row.gatepassNo].totalHeldQty += row.holdQty;
-      map[row.gatepassNo].totalHeldValue += row.heldAmount;
+      map[gpKey].itemsCount += 1;
+      map[gpKey].totalOrderQty += Number(row.orderQty || 0);
+      map[gpKey].totalDispatchedQty += Number(row.dispatchedQty || 0);
+      map[gpKey].totalHeldQty += Number(row.holdQty || 0);
+      map[gpKey].totalHeldValue += Number(row.heldAmount || 0);
+      map[gpKey].items.push(row);
     });
     return Object.values(map).sort((a, b) => b.totalHeldValue - a.totalHeldValue);
   }, [filteredHoldingRows]);
 
   const invoiceSummary = useMemo(() => {
-    const map: Record<string, { invoiceNo: string; customer: string; salesman: string; date: string; itemsCount: number; totalHeldQty: number; totalHeldValue: number; totalOrderAmount: number }> = {};
+    const map: Record<string, { invoiceNo: string; customer: string; salesman: string; date: string; itemsCount: number; totalHeldQty: number; totalHeldValue: number; totalOrderAmount: number; items: HoldingItemRow[] }> = {};
     filteredHoldingRows.forEach(row => {
-      if (!map[row.invoiceNo]) {
-        map[row.invoiceNo] = {
-          invoiceNo: row.invoiceNo,
+      const invKey = row.invoiceNo || 'Direct';
+      if (!map[invKey]) {
+        map[invKey] = {
+          invoiceNo: invKey,
           customer: row.customerName,
           salesman: row.salesman,
           date: row.date,
           itemsCount: 0,
           totalHeldQty: 0,
           totalHeldValue: 0,
-          totalOrderAmount: 0
+          totalOrderAmount: 0,
+          items: []
         };
       }
-      map[row.invoiceNo].itemsCount += 1;
-      map[row.invoiceNo].totalHeldQty += row.holdQty;
-      map[row.invoiceNo].totalHeldValue += row.heldAmount;
-      map[row.invoiceNo].totalOrderAmount += row.totalOrderAmount;
+      map[invKey].itemsCount += 1;
+      map[invKey].totalHeldQty += Number(row.holdQty || 0);
+      map[invKey].totalHeldValue += Number(row.heldAmount || 0);
+      map[invKey].totalOrderAmount += Number(row.totalOrderAmount || 0);
+      map[invKey].items.push(row);
     });
     return Object.values(map).sort((a, b) => b.totalHeldValue - a.totalHeldValue);
   }, [filteredHoldingRows]);
@@ -453,7 +555,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Detailed_Report_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Holding Items Audit',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Holding Items & Pending Dispatch Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -474,8 +576,8 @@ const HoldingReport: React.FC = () => {
         const exportData = salesmanSummary.map((s, i) => ({
           idx: i + 1,
           salesman: s.salesman,
-          custCount: s.customerCount.size,
-          invCount: s.invoices.size,
+          custCount: s.custCount,
+          invCount: s.invCount,
           itemsCount: s.itemsCount,
           totalHeldQty: s.totalHeldQty,
           totalHeldValue: s.totalHeldValue
@@ -484,7 +586,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Salesman_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Salesman Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Salesman-Wise Holding Inventory Portfolio Statement',
           filterSummary: filterMeta,
           columns,
@@ -505,8 +607,8 @@ const HoldingReport: React.FC = () => {
         const exportData = customerSummary.map((c, i) => ({
           idx: i + 1,
           customer: c.customer,
-          gpCount: c.gatepasses.size,
-          invCount: c.invoices.size,
+          gpCount: c.gpCount,
+          invCount: c.invCount,
           itemsCount: c.itemsCount,
           totalHeldQty: c.totalHeldQty,
           totalHeldValue: c.totalHeldValue
@@ -515,7 +617,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Customer_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Customer Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Customer-Wise Holding Stock Allocation Report',
           filterSummary: filterMeta,
           columns,
@@ -544,7 +646,7 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Gatepass_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Gatepass Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Gatepass / Delivery Challan Holding Stock Audit',
           filterSummary: filterMeta,
           columns,
@@ -554,14 +656,13 @@ const HoldingReport: React.FC = () => {
       } else if (activePerspective === 'invoice') {
         const columns: ExcelColumn[] = [
           { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-          { header: 'Invoice #', key: 'invoiceNo', width: 16 },
+          { header: 'Invoice #', key: 'invoiceNo', width: 18 },
           { header: 'Date', key: 'date', width: 14, type: 'date' },
           { header: 'Customer Name', key: 'customer', width: 26 },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Held Items Count', key: 'itemsCount', width: 16, type: 'number' },
-          { header: 'Total Held Qty', key: 'totalHeldQty', width: 16, type: 'number' },
-          { header: 'Total Order Amount (Rs.)', key: 'totalOrderAmount', width: 22, type: 'currency' },
-          { header: 'Pending Held Value (Rs.)', key: 'totalHeldValue', width: 22, type: 'currency' }
+          { header: 'Total Held Quantity', key: 'totalHeldQty', width: 18, type: 'number' },
+          { header: 'Held Valuation (Rs.)', key: 'totalHeldValue', width: 22, type: 'currency' }
         ];
 
         const exportData = invoiceSummary.map((inv, i) => ({
@@ -572,8 +673,8 @@ const HoldingReport: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Invoice_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Invoice Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
-          reportTitle: 'Invoice-Wise Holding Inventory Valuation Statement',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
+          reportTitle: 'Invoice-Wise Holding Inventory Statement',
           filterSummary: filterMeta,
           columns,
           data: exportData,
@@ -630,728 +731,847 @@ const HoldingReport: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex h-96 items-center justify-center">
         <Spinner />
       </div>
     );
   }
 
+  const kpiQtyParts = getQtyOptionBParts(kpis.totalHeldQty);
+
   return (
-    <div className="mx-auto max-w-7xl flex flex-col gap-6 text-black dark:text-bodydark text-xs antialiased font-sans relative">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2 uppercase tracking-wider">
-            <MdPauseCircleFilled className="text-amber-500" size={26} />
-            Holding Item & Dispatch Audit Center
-          </h2>
-          <p className="text-xs text-gray-400">
-            Track held stock quantities, pending delivery orders, salesman allocations, and gatepass status
+    <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs antialiased font-sans pb-12">
+      
+      {/* ── TOP HEADER WITH FLOATING ACTION BUTTONS ── */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-emerald-900 to-emerald-800 dark:from-emerald-950 dark:to-emerald-900 p-6 rounded-2xl shadow-lg relative overflow-hidden">
+        <div className="absolute -right-10 -top-10 w-48 h-48 bg-emerald-600/20 blur-3xl rounded-full pointer-events-none" />
+        <div className="absolute left-1/4 -bottom-10 w-48 h-48 bg-emerald-400/10 blur-3xl rounded-full pointer-events-none" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-white/10 text-emerald-100 font-bold backdrop-blur-sm border border-white/10 shadow-sm">
+              <MdPauseCircleFilled size={24} />
+            </span>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              Holding Inventory & Commitment Center
+            </h1>
+          </div>
+          <p className="text-[13px] text-emerald-100/70 mt-2 max-w-xl leading-relaxed">
+            Real-time committed stock held at warehouses across Salesmen, Customers, Gatepasses & Invoices.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="relative z-10 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={loadHoldingData}
             title="Refresh dataset"
-            className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 py-2 px-3.5 rounded font-bold transition shadow-sm cursor-pointer"
+            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all shadow-sm hover:shadow-md cursor-pointer flex items-center gap-1.5 backdrop-blur-sm border border-white/10"
           >
-            <MdRefresh size={16} /> Refresh
+            <MdRefresh size={20} />
           </button>
 
           <button
             type="button"
-            disabled={exporting}
+            disabled={exporting || filteredHoldingRows.length === 0}
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+            className="px-5 py-3 bg-white text-emerald-900 hover:bg-emerald-50 rounded-xl font-black text-[13px] transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 flex items-center gap-2"
           >
-            <MdFileDownload size={18} />
-            {exporting ? 'Generating Excel...' : 'Export to Excel (.xlsx)'}
+            <MdFileDownload size={20} className="text-emerald-600" />
+            <span>{exporting ? 'Exporting...' : 'Export Excel (.xlsx)'}</span>
           </button>
 
           <button
             type="button"
             onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-primary hover:bg-opacity-90 text-white py-2 px-4 rounded font-bold transition shadow-sm cursor-pointer"
+            disabled={filteredHoldingRows.length === 0}
+            className="px-5 py-3 bg-slate-900 hover:bg-black dark:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl font-black text-[13px] transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 flex items-center gap-2 border border-slate-800"
           >
-            <MdPrint size={18} /> Print Voucher Report
+            <MdPrint size={20} />
+            <span>Print Report</span>
           </button>
         </div>
       </div>
 
-      {/* Top 4 KPI Metric Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+      {/* ── TOP 4 EXECUTIVE KPI SUMMARY CARDS ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Total Held Quantity</span>
-            <b className="text-amber-600 dark:text-amber-400 text-xl font-black font-mono">
-              {kpis.totalHeldQty.toLocaleString()} Pcs
-            </b>
-            <span className="text-[10px] text-gray-400 block mt-0.5">Across {kpis.totalItems} distinct items</span>
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Total Held Quantity</span>
+            <div className="flex items-baseline gap-1.5 mt-0.5 block">
+              <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight">
+                {kpiQtyParts.main}
+              </b>
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 font-sans tracking-tight">
+                {kpiQtyParts.unit}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded-md">Across</span>
+              <span className="text-[11px] text-slate-400">{kpis.totalItems} distinct items</span>
+            </div>
           </div>
-          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded text-amber-600">
-            <MdInventory size={24} />
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-500/10 rounded-2xl text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdInventory size={28} />
           </div>
         </div>
 
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Financial Holding Value</span>
-            <b className="text-emerald-600 dark:text-emerald-400 text-xl font-black font-mono">
-              Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Financial Holding Value</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block mt-0.5">
+              Rs. {Number(kpis.totalHeldValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </b>
-            <span className="text-[10px] text-gray-400 block mt-0.5">Committed inventory cost</span>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded-md">Committed</span>
+              <span className="text-[11px] text-slate-400">inventory cost</span>
+            </div>
           </div>
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded text-emerald-600">
-            <MdAttachMoney size={24} />
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdAttachMoney size={28} />
           </div>
         </div>
 
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Affected Gatepasses / Invoices</span>
-            <b className="text-primary text-xl font-black font-mono">
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Affected DCs / Invoices</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block mt-0.5">
               {kpis.uniqueGatepasses} GPs / {kpis.uniqueInvoices} Invs
             </b>
-            <span className="text-[10px] text-gray-400 block mt-0.5">Pending dispatch orders</span>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-teal-600 bg-teal-50 dark:bg-teal-500/10 px-1.5 py-0.5 rounded-md">Pending</span>
+              <span className="text-[11px] text-slate-400">dispatch orders</span>
+            </div>
           </div>
-          <div className="p-3 bg-primary/10 rounded text-primary">
-            <MdLocalShipping size={24} />
+          <div className="p-3.5 bg-teal-50 dark:bg-teal-500/10 rounded-2xl text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdLocalShipping size={28} />
           </div>
         </div>
 
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Sales Officers & Clients</span>
-            <b className="text-purple-600 dark:text-purple-400 text-xl font-black font-mono">
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Sales Officers & Clients</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block mt-0.5">
               {kpis.uniqueSalesmen} Reps / {kpis.uniqueCustomers} Cust
             </b>
-            <span className="text-[10px] text-gray-400 block mt-0.5">Assigned holding portfolios</span>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-500/10 px-1.5 py-0.5 rounded-md">Assigned</span>
+              <span className="text-[11px] text-slate-400">holding portfolios</span>
+            </div>
           </div>
-          <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded text-purple-600">
-            <MdPeople size={24} />
+          <div className="p-3.5 bg-purple-50 dark:bg-purple-500/10 rounded-2xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdPeople size={28} />
           </div>
         </div>
       </div>
 
-      {/* View Perspective Selection Tabs */}
-      <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[11px] uppercase text-gray-500 rounded-t-sm p-1">
+      {/* ── 5 PERSPECTIVE TAB HEADERS ── */}
+      <div className="flex flex-wrap border-b border-slate-200 dark:border-slate-800 gap-1 bg-white dark:bg-[#111827] p-1.5 rounded-2xl shadow-sm font-bold text-xs">
         <button
           type="button"
           onClick={() => { setActivePerspective('detailed'); setCurrentPage(1); }}
-          className={`py-2.5 px-5 transition rounded-sm border-b-2 cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activePerspective === 'detailed'
-              ? 'border-primary text-primary font-black bg-primary/10 shadow-sm'
-              : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'
+              ? 'bg-emerald-600 text-white font-bold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          📋 Itemized Detailed View ({filteredHoldingRows.length})
+          <MdInventory size={16} />
+          <span>Itemized Detailed View ({filteredHoldingRows.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => { setActivePerspective('salesman'); setCurrentPage(1); }}
-          className={`py-2.5 px-5 transition rounded-sm border-b-2 cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activePerspective === 'salesman'
-              ? 'border-primary text-primary font-black bg-primary/10 shadow-sm'
-              : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'
+              ? 'bg-emerald-600 text-white font-bold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          👔 Salesman-Wise Holding ({salesmanSummary.length})
+          <MdPeople size={16} />
+          <span>Salesman-Wise Holding ({salesmanSummary.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => { setActivePerspective('customer'); setCurrentPage(1); }}
-          className={`py-2.5 px-5 transition rounded-sm border-b-2 cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activePerspective === 'customer'
-              ? 'border-primary text-primary font-black bg-primary/10 shadow-sm'
-              : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'
+              ? 'bg-emerald-600 text-white font-bold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          🏢 Customer-Wise Allocation ({customerSummary.length})
+          <MdPeople size={16} />
+          <span>Customer-Wise Allocation ({customerSummary.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => { setActivePerspective('gatepass'); setCurrentPage(1); }}
-          className={`py-2.5 px-5 transition rounded-sm border-b-2 cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activePerspective === 'gatepass'
-              ? 'border-primary text-primary font-black bg-primary/10 shadow-sm'
-              : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'
+              ? 'bg-emerald-600 text-white font-bold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          🚚 Gatepass / Challan-Wise ({gatepassSummary.length})
+          <MdLocalShipping size={16} />
+          <span>Gatepass / Challan-Wise ({gatepassSummary.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => { setActivePerspective('invoice'); setCurrentPage(1); }}
-          className={`py-2.5 px-5 transition rounded-sm border-b-2 cursor-pointer ${
+          className={`py-2.5 px-4 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
             activePerspective === 'invoice'
-              ? 'border-primary text-primary font-black bg-primary/10 shadow-sm'
-              : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'
+              ? 'bg-emerald-600 text-white font-bold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          🧾 Invoice-Wise Valuation ({invoiceSummary.length})
+          <MdReceipt size={16} />
+          <span>Invoice-Wise Valuation ({invoiceSummary.length})</span>
         </button>
       </div>
 
-      {/* Multi-Dimensional Filter Box */}
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-5 space-y-4">
-        <div className="flex justify-between items-center border-b border-stroke dark:border-strokedark pb-3">
-          <h3 className="font-bold text-sm text-black dark:text-white flex items-center gap-1.5 uppercase tracking-wider text-primary">
-            <MdFilterAlt size={18} /> Multi-Dimensional Audit Filters
-          </h3>
-
-          {/* Quick Date Presets */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Quick Dates:</span>
-            <button type="button" onClick={() => setQuickDateRange('today')} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Today</button>
-            <button type="button" onClick={() => setQuickDateRange('yesterday')} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Yesterday</button>
-            <button type="button" onClick={() => setQuickDateRange('this_week')} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">This Week</button>
-            <button type="button" onClick={() => setQuickDateRange('this_month')} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">This Month</button>
-            <button type="button" onClick={() => setQuickDateRange('last_month')} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Last Month</button>
-            <button type="button" onClick={() => setQuickDateRange('all_time')} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">All Time</button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Salesman Filter */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Salesman Wise:</label>
-            <select
-              value={selectedSalesman}
-              onChange={(e) => { setSelectedSalesman(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            >
-              <option value="All">All Salesmen ({salesmenList.length})</option>
-              {salesmenList.map((s, i) => <option key={i} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          {/* Customer Filter */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Customer Wise:</label>
-            <select
-              value={selectedCustomer}
-              onChange={(e) => { setSelectedCustomer(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            >
-              <option value="All">All Customers ({customersList.length})</option>
-              {customersList.map((c, i) => <option key={i} value={c}>{c}</option>)}
-            </select>
-          </div>
-
-          {/* Gatepass Filter */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Gatepass / DC Wise:</label>
-            <select
-              value={selectedGatepass}
-              onChange={(e) => { setSelectedGatepass(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            >
-              <option value="All">All Gatepasses ({gatepassesList.length})</option>
-              {gatepassesList.map((gp, i) => <option key={i} value={gp}>{gp}</option>)}
-            </select>
-          </div>
-
-          {/* Invoice Filter */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Invoice No. Wise:</label>
-            <select
-              value={selectedInvoice}
-              onChange={(e) => { setSelectedInvoice(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            >
-              <option value="All">All Invoices ({invoicesList.length})</option>
-              {invoicesList.map((inv, i) => <option key={i} value={inv}>{inv}</option>)}
-            </select>
-          </div>
-
-          {/* Date From */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Date From:</label>
+      {/* ── SMART COMPACT FILTER SYSTEM WITH SEARCHABLE TYPE-AHEAD DROPDOWNS ── */}
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-sm p-4 space-y-3">
+        {/* ROW 1: PROMINENT SEARCH + PRIMARY SEARCHABLE DROPDOWNS + ADVANCED TOGGLE */}
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Main Search Input */}
+          <div className="relative flex-1 w-full">
+            <MdSearch size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by product item, SKU, customer name, salesman, GP #, or Invoice #..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 font-medium text-xs outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-slate-800 transition"
             />
-          </div>
-
-          {/* Date To */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Date To:</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Holding Status:</label>
-            <select
-              value={holdingStatusFilter}
-              onChange={(e) => { setHoldingStatusFilter(e.target.value as any); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            >
-              <option value="holding_only">Holding Only (Hold Qty &gt; 0)</option>
-              <option value="all">All Items (Including Dispatched)</option>
-              <option value="zero_holding">Fully Dispatched (0 Hold)</option>
-            </select>
-          </div>
-
-          {/* Min Amount Threshold */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Min Held Amount (Rs.):</label>
-            <input
-              type="number"
-              placeholder="e.g. 5000"
-              value={minAmount}
-              onChange={(e) => { setMinAmount(e.target.value); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            />
-          </div>
-
-          {/* Sort By */}
-          <div>
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Sort By Metric:</label>
-            <select
-              value={sortBy}
-              onChange={(e) => { setSortBy(e.target.value as any); setCurrentPage(1); }}
-              className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
-            >
-              <option value="amount_desc">Highest Holding Value (Rs.)</option>
-              <option value="amount_asc">Lowest Holding Value (Rs.)</option>
-              <option value="qty_desc">Highest Held Quantity</option>
-              <option value="date_desc">Newest Date First</option>
-              <option value="date_asc">Oldest Date First</option>
-            </select>
-          </div>
-
-          {/* Keyword Search Field (spanning 3 cols) */}
-          <div className="lg:col-span-3">
-            <label className="block font-bold text-gray-500 mb-1 text-[11px]">Search Keywords:</label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Type item description, SKU, customer, salesman, GP or INV code..."
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                className="w-full border border-stroke dark:border-strokedark rounded p-2 pl-8 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none focus:border-primary"
-              />
-              <MdSearch className="absolute left-2.5 top-2.5 text-gray-400" size={16} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Datatable */}
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark overflow-hidden">
-        {/* Table Header Controls */}
-        <div className="p-4 border-b border-stroke dark:border-strokedark flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50/50 dark:bg-meta-4/20">
-          <div className="font-bold text-xs text-gray-600 dark:text-gray-300">
-            Showing <span className="text-primary font-black">
-              {activePerspective === 'detailed' ? filteredHoldingRows.length :
-               activePerspective === 'salesman' ? salesmanSummary.length :
-               activePerspective === 'customer' ? customerSummary.length :
-               activePerspective === 'gatepass' ? gatepassSummary.length :
-               invoiceSummary.length}
-            </span> records matching isolated criteria
-          </div>
-
-          {activePerspective === 'detailed' && (
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 font-bold text-[11px]">Rows per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                className="border border-stroke dark:border-strokedark rounded px-2 py-1 bg-white dark:bg-boxdark font-bold text-xs"
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-            </div>
+                <MdClear size={16} />
+              </button>
+            )}
+          </div>
+
+          {/* Searchable Salesman Filter */}
+          <SearchableDropdown
+            className="w-full sm:w-48"
+            placeholder="Salesman"
+            options={salesmenList}
+            value={selectedSalesman}
+            onChange={setSelectedSalesman}
+          />
+
+          {/* Searchable Customer Filter */}
+          <SearchableDropdown
+            className="w-full sm:w-48"
+            placeholder="Customer"
+            options={customersList}
+            value={selectedCustomer}
+            onChange={setSelectedCustomer}
+          />
+
+          {/* Advanced Filters Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className={`px-4 py-2.5 rounded-xl border font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              showAdvancedFilters || activeFilterCount > 0
+                ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
+                : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
+            }`}
+          >
+            <MdTune size={16} />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-mono text-[10px] flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Reset Filters Link */}
+          {(activeFilterCount > 0 || searchQuery) && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="text-rose-500 hover:underline font-bold text-xs cursor-pointer shrink-0"
+            >
+              Reset
+            </button>
           )}
         </div>
 
-        {/* 1. Itemized Detailed View */}
+        {/* EXPANDABLE ADVANCED FILTERS DRAWER */}
+        {showAdvancedFilters && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50/60 dark:bg-slate-800/30 p-3.5 rounded-xl">
+            {/* Searchable Gatepass Filter */}
+            <SearchableDropdown
+              label="Gatepass / DC #:"
+              placeholder="Gatepass"
+              options={gatepassesList}
+              value={selectedGatepass}
+              onChange={setSelectedGatepass}
+            />
+
+            {/* Searchable Invoice Filter */}
+            <SearchableDropdown
+              label="Invoice No. Wise:"
+              placeholder="Invoice"
+              options={invoicesList}
+              value={selectedInvoice}
+              onChange={setSelectedInvoice}
+            />
+
+            {/* Holding Status Filter */}
+            <div>
+              <label className="block font-bold text-slate-500 dark:text-slate-400 text-[11px] mb-1">Holding Status Filter:</label>
+              <select
+                value={holdingStatusFilter}
+                onChange={(e: any) => setHoldingStatusFilter(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 font-bold text-xs text-amber-600 dark:text-amber-400 outline-none"
+              >
+                <option value="holding_only">Holding Only (Hold Qty &gt; 0)</option>
+                <option value="all">All Rows (Including Dispatched)</option>
+                <option value="zero_holding">Fully Dispatched (Zero Hold)</option>
+              </select>
+            </div>
+
+            {/* Min Held Amount */}
+            <div>
+              <label className="block font-bold text-slate-500 dark:text-slate-400 text-[11px] mb-1">Min Held Amount (Rs.):</label>
+              <input
+                type="number"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="e.g. 5000"
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 font-mono text-xs text-slate-700 dark:text-slate-200 outline-none"
+              />
+            </div>
+
+            {/* Date From */}
+            <div>
+              <label className="block font-bold text-slate-500 dark:text-slate-400 text-[11px] mb-1">Date Bracket From:</label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={dateFrom}
+                onChange={(e) => {
+                  const today = new Date().toISOString().split('T')[0];
+                  if (e.target.value > today) setDateFrom(today);
+                  else setDateFrom(e.target.value);
+                }}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 font-mono text-xs text-slate-700 dark:text-slate-200 outline-none"
+              />
+            </div>
+
+            {/* Date To */}
+            <div>
+              <label className="block font-bold text-slate-500 dark:text-slate-400 text-[11px] mb-1">Date Bracket To:</label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={dateTo}
+                onChange={(e) => {
+                  const today = new Date().toISOString().split('T')[0];
+                  if (e.target.value > today) setDateTo(today);
+                  else setDateTo(e.target.value);
+                }}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 font-mono text-xs text-slate-700 dark:text-slate-200 outline-none"
+              />
+            </div>
+
+            {/* Sort By */}
+            <div>
+              <label className="block font-bold text-slate-500 dark:text-slate-400 text-[11px] mb-1">Sort By Metric:</label>
+              <select
+                value={sortBy}
+                onChange={(e: any) => setSortBy(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 font-medium text-xs text-slate-700 dark:text-slate-200 outline-none"
+              >
+                <option value="amount_desc">Highest Holding Value (Rs.)</option>
+                <option value="amount_asc">Lowest Holding Value (Rs.)</option>
+                <option value="qty_desc">Highest Held Quantity</option>
+                <option value="date_desc">Latest Date First</option>
+                <option value="date_asc">Oldest Date First</option>
+              </select>
+            </div>
+
+            {/* Quick Date Presets */}
+            <div className="flex flex-col justify-end">
+              <label className="block font-bold text-slate-500 dark:text-slate-400 text-[11px] mb-1">Quick Date Presets:</label>
+              <div className="flex flex-wrap gap-1">
+                <button type="button" onClick={() => setQuickDateRange('today')} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-600 hover:border-emerald-500">Today</button>
+                <button type="button" onClick={() => setQuickDateRange('yesterday')} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-600 hover:border-emerald-500">Yesterday</button>
+                <button type="button" onClick={() => setQuickDateRange('this_week')} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-600 hover:border-emerald-500">This Week</button>
+                <button type="button" onClick={() => setQuickDateRange('this_month')} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-600 hover:border-emerald-500">This Month</button>
+                <button type="button" onClick={() => setQuickDateRange('all_time')} className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold text-slate-600 hover:border-emerald-500">All Time</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── MAIN AUDIT DATATABLE / GROUPED VIEWS CONTAINER ── */}
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] shadow-sm p-5 space-y-4">
+        
+        {/* Results summary bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800 text-xs">
+          <span className="font-bold text-slate-700 dark:text-slate-200">
+            Showing <strong className="text-emerald-600 font-mono">{filteredHoldingRows.length}</strong> holding records matching search criteria
+          </span>
+
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 text-[11px]">Rows per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 font-bold text-xs outline-none"
+            >
+              <option value={15}>15</option>
+              <option value={30}>30</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 1. DETAILED ITMES VIEW */}
         {activePerspective === 'detailed' && (
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto border-collapse text-left text-xs">
+          <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full table-auto border-collapse font-sans text-xs">
               <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-black uppercase text-black dark:text-white border-b border-stroke dark:border-strokedark text-[10px] tracking-wider">
-                  <th className="p-3 w-12 text-center">S#</th>
-                  <th className="p-3">Gatepass / DC</th>
-                  <th className="p-3">Invoice #</th>
-                  <th className="p-3 text-center">Date</th>
-                  <th className="p-3">Customer Name</th>
-                  <th className="p-3">Salesman</th>
-                  <th className="p-3">Product Description</th>
-                  <th className="p-3 text-center">Warehouse</th>
-                  <th className="p-3 text-right">Order Qty</th>
-                  <th className="p-3 text-right">Dispatched</th>
-                  <th className="p-3 text-right bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300">Held Qty</th>
-                  <th className="p-3 text-right">Rate</th>
-                  <th className="p-3 text-right pr-4 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300">Held Amount</th>
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-left text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-3.5 text-center w-12">S#</th>
+                  <th className="py-3 px-3.5">Gatepass / DC</th>
+                  <th className="py-3 px-3.5">Invoice #</th>
+                  <th className="py-3 px-3.5">Date</th>
+                  <th className="py-3 px-3.5">Customer Name</th>
+                  <th className="py-3 px-3.5">Salesman</th>
+                  <th className="py-3 px-3.5">Product Description</th>
+                  <th className="py-3 px-3.5">Warehouse</th>
+                  <th className="py-3 px-3.5 text-center">Order Qty</th>
+                  <th className="py-3 px-3.5 text-center">Dispatched</th>
+                  <th className="py-3 px-3.5 text-center bg-amber-50/70 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400">Held Qty</th>
+                  <th className="py-3 px-3.5 text-right">Rate</th>
+                  <th className="py-3 px-3.5 text-right font-black bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">Held Amount</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                {paginatedRows.length === 0 ? (
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {paginatedRows.length > 0 ? (
+                  paginatedRows.map((row, idx) => {
+                    const globalIdx = (currentPage - 1) * pageSize + idx + 1;
+                    return (
+                      <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                        <td className="py-3 px-3.5 text-center text-slate-400 font-mono">{globalIdx}</td>
+                        <td className="py-3 px-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">{row.gatepassNo}</td>
+                        <td className="py-3 px-3.5 font-mono font-bold text-slate-700 dark:text-slate-300">{row.invoiceNo}</td>
+                        <td className="py-3 px-3.5 text-slate-500 font-mono text-[11px]">{row.date}</td>
+                        <td className="py-3 px-3.5 font-bold text-slate-900 dark:text-white max-w-[150px] truncate" title={row.customerName}>
+                          {row.customerName}
+                        </td>
+                        <td className="py-3 px-3.5 text-slate-600 dark:text-slate-300">{row.salesman}</td>
+                        <td className="py-3 px-3.5 font-medium text-slate-800 dark:text-slate-100 max-w-[180px] truncate" title={row.productName}>
+                          {row.productName}
+                          {row.skuCode && <div className="text-[10px] font-mono text-slate-400">{row.skuCode}</div>}
+                        </td>
+                        <td className="py-3 px-3.5 text-slate-500">{row.warehouse}</td>
+                        <td className="py-3 px-3.5 text-center font-mono font-semibold">{renderQtyBadge(row.orderQty, row.uom)}</td>
+                        <td className="py-3 px-3.5 text-center font-mono text-slate-400">{renderQtyBadge(row.dispatchedQty, row.uom)}</td>
+                        <td className="py-3 px-3.5 text-center font-mono font-black bg-amber-50/50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400">
+                          {renderQtyBadge(row.holdQty, row.uom)}
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono text-slate-500">
+                          Rs. {Number(row.rate || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-3.5 text-right font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20">
+                          Rs. {Number(row.heldAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
                   <tr>
-                    <td colSpan={13} className="text-center py-12 text-gray-400 font-bold italic">
-                      No holding records found matching your active filter criteria.
+                    <td colSpan={13} className="py-12 text-center text-slate-400 italic">
+                      No holding records match the selected filters.
                     </td>
                   </tr>
-                ) : (
-                  paginatedRows.map((row, idx) => (
-                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 font-mono">
-                      <td className="p-3 text-center text-gray-400 font-sans">
-                        {(currentPage - 1) * pageSize + idx + 1}
-                      </td>
-                      <td className="p-3 font-bold text-primary">{row.gatepassNo}</td>
-                      <td className="p-3 font-bold text-purple-600 dark:text-purple-400">{row.invoiceNo}</td>
-                      <td className="p-3 text-center text-gray-500 text-[11px] font-sans">{row.date}</td>
-                      <td className="p-3 font-sans font-bold text-black dark:text-white">{row.customerName}</td>
-                      <td className="p-3 font-sans text-gray-600 dark:text-gray-300">{row.salesman}</td>
-                      <td className="p-3 font-sans">
-                        <div className="font-bold text-black dark:text-white">{row.productName}</div>
-                        {row.skuCode && <div className="text-[10px] text-gray-400 font-mono">{row.skuCode}</div>}
-                      </td>
-                      <td className="p-3 text-center font-sans text-gray-500">{row.warehouse}</td>
-                      <td className="p-3 text-right font-bold text-slate-700 dark:text-slate-300">{row.orderQty.toLocaleString()}</td>
-                      <td className="p-3 text-right font-bold text-emerald-600">{row.dispatchedQty.toLocaleString()}</td>
-                      <td className="p-3 text-right bg-amber-50/50 dark:bg-amber-950/20 font-black text-amber-700 dark:text-amber-400">
-                        {row.holdQty > 0 ? (
-                          <span className="inline-flex px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300">
-                            {row.holdQty.toLocaleString()}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">0</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right text-gray-600">Rs. {row.rate.toLocaleString()}</td>
-                      <td className="p-3 text-right pr-4 bg-emerald-50/50 dark:bg-emerald-950/20 font-black text-emerald-600">
-                        Rs. {row.heldAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))
                 )}
               </tbody>
-              {filteredHoldingRows.length > 0 && (
-                <tfoot>
-                  <tr className="bg-gray-100 dark:bg-meta-4 font-black text-black dark:text-white border-t-2 border-black dark:border-white text-xs font-mono">
-                    <td colSpan={8} className="p-3 text-right uppercase tracking-wider font-sans">Summary Totals:</td>
-                    <td className="p-3 text-right">{kpis.totalOrderQty.toLocaleString()}</td>
-                    <td className="p-3 text-right text-emerald-600">{(kpis.totalOrderQty - kpis.totalHeldQty).toLocaleString()}</td>
-                    <td className="p-3 text-right text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/50">
-                      {kpis.totalHeldQty.toLocaleString()} Pcs
-                    </td>
-                    <td className="p-3 text-right">-</td>
-                    <td className="p-3 text-right pr-4 text-emerald-600 font-mono text-sm bg-emerald-100 dark:bg-emerald-950/50">
-                      Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
         )}
 
-        {/* 2. Salesman-Wise View */}
+        {/* 2. SALESMAN-WISE ACCORDION SUMMARY VIEW */}
         {activePerspective === 'salesman' && (
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto border-collapse text-left text-xs">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-black uppercase text-black dark:text-white border-b border-stroke dark:border-strokedark text-[10px] tracking-wider">
-                  <th className="p-3 w-12 text-center">S#</th>
-                  <th className="p-3">Salesman / Officer Title</th>
-                  <th className="p-3 text-center">Assigned Clients</th>
-                  <th className="p-3 text-center">Invoices Handled</th>
-                  <th className="p-3 text-center">Held Items Lines</th>
-                  <th className="p-3 text-right">Total Held Quantity</th>
-                  <th className="p-3 text-right pr-6 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300">Total Holding Valuation</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                {salesmanSummary.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-400 font-bold italic">
-                      No salesman holding data available.
-                    </td>
-                  </tr>
-                ) : (
-                  salesmanSummary.map((s, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-3 text-center text-gray-400">{idx + 1}</td>
-                      <td className="p-3 font-bold text-black dark:text-white font-sans">{s.salesman}</td>
-                      <td className="p-3 text-center font-bold font-mono text-primary">{s.customerCount.size} Clients</td>
-                      <td className="p-3 text-center font-bold font-mono text-purple-600">{s.invoices.size} Invoices</td>
-                      <td className="p-3 text-center font-bold font-mono">{s.itemsCount}</td>
-                      <td className="p-3 text-right font-black font-mono text-amber-600">{s.totalHeldQty.toLocaleString()} Pcs</td>
-                      <td className="p-3 text-right pr-6 font-black font-mono text-emerald-600 text-sm bg-emerald-50/40 dark:bg-emerald-950/20">
-                        Rs. {s.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {salesmanSummary.length > 0 && (
-                <tfoot>
-                  <tr className="bg-gray-100 dark:bg-meta-4 font-black text-black dark:text-white border-t-2 border-black dark:border-white text-xs font-mono">
-                    <td colSpan={5} className="p-3 text-right uppercase tracking-wider font-sans">Total Salesman Portfolio:</td>
-                    <td className="p-3 text-right text-amber-700">{kpis.totalHeldQty.toLocaleString()} Pcs</td>
-                    <td className="p-3 text-right pr-6 text-emerald-600 font-mono text-sm bg-emerald-100 dark:bg-emerald-950/50">
-                      Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        )}
-
-        {/* 3. Customer-Wise View */}
-        {activePerspective === 'customer' && (
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto border-collapse text-left text-xs">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-black uppercase text-black dark:text-white border-b border-stroke dark:border-strokedark text-[10px] tracking-wider">
-                  <th className="p-3 w-12 text-center">S#</th>
-                  <th className="p-3">Customer / Client Account</th>
-                  <th className="p-3 text-center">Gatepasses Link</th>
-                  <th className="p-3 text-center">Invoices Involved</th>
-                  <th className="p-3 text-center">Held Items Count</th>
-                  <th className="p-3 text-right">Committed Held Qty</th>
-                  <th className="p-3 text-right pr-6 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300">Total Holding Value</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                {customerSummary.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-12 text-gray-400 font-bold italic">
-                      No customer holding records found.
-                    </td>
-                  </tr>
-                ) : (
-                  customerSummary.map((c, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-3 text-center text-gray-400">{idx + 1}</td>
-                      <td className="p-3 font-bold text-black dark:text-white font-sans">{c.customer}</td>
-                      <td className="p-3 text-center font-bold font-mono text-primary">{c.gatepasses.size} GPs</td>
-                      <td className="p-3 text-center font-bold font-mono text-purple-600">{c.invoices.size} Invs</td>
-                      <td className="p-3 text-center font-bold font-mono">{c.itemsCount}</td>
-                      <td className="p-3 text-right font-black font-mono text-amber-600">{c.totalHeldQty.toLocaleString()} Pcs</td>
-                      <td className="p-3 text-right pr-6 font-black font-mono text-emerald-600 text-sm bg-emerald-50/40 dark:bg-emerald-950/20">
-                        Rs. {c.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {customerSummary.length > 0 && (
-                <tfoot>
-                  <tr className="bg-gray-100 dark:bg-meta-4 font-black text-black dark:text-white border-t-2 border-black dark:border-white text-xs font-mono">
-                    <td colSpan={5} className="p-3 text-right uppercase tracking-wider font-sans">Total Client Commitments:</td>
-                    <td className="p-3 text-right text-amber-700">{kpis.totalHeldQty.toLocaleString()} Pcs</td>
-                    <td className="p-3 text-right pr-6 text-emerald-600 font-mono text-sm bg-emerald-100 dark:bg-emerald-950/50">
-                      Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        )}
-
-        {/* 4. Gatepass-Wise View */}
-        {activePerspective === 'gatepass' && (
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto border-collapse text-left text-xs">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-black uppercase text-black dark:text-white border-b border-stroke dark:border-strokedark text-[10px] tracking-wider">
-                  <th className="p-3 w-12 text-center">S#</th>
-                  <th className="p-3">Gatepass / DC #</th>
-                  <th className="p-3 text-center">Date</th>
-                  <th className="p-3">Customer Name</th>
-                  <th className="p-3">Salesman</th>
-                  <th className="p-3 text-right">Order Qty</th>
-                  <th className="p-3 text-right">Dispatched</th>
-                  <th className="p-3 text-right text-amber-700">Held Qty</th>
-                  <th className="p-3 text-right pr-6 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300">Pending Held Value</th>
-                  <th className="p-3 text-center">Dispatch Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                {gatepassSummary.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="text-center py-12 text-gray-400 font-bold italic">
-                      No gatepass holding records found.
-                    </td>
-                  </tr>
-                ) : (
-                  gatepassSummary.map((g, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-3 text-center text-gray-400 font-mono">{idx + 1}</td>
-                      <td className="p-3 font-bold font-mono text-primary">{g.gatepassNo}</td>
-                      <td className="p-3 text-center text-gray-500 font-mono text-[11px]">{g.date}</td>
-                      <td className="p-3 font-bold text-black dark:text-white font-sans">{g.customer}</td>
-                      <td className="p-3 text-gray-600 font-sans">{g.salesman}</td>
-                      <td className="p-3 text-right font-mono font-bold">{g.totalOrderQty.toLocaleString()}</td>
-                      <td className="p-3 text-right font-mono font-bold text-emerald-600">{g.totalDispatchedQty.toLocaleString()}</td>
-                      <td className="p-3 text-right font-mono font-black text-amber-600">{g.totalHeldQty.toLocaleString()}</td>
-                      <td className="p-3 text-right pr-6 font-mono font-black text-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20">
-                        Rs. {g.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-center">
-                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          g.totalHeldQty === 0
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                            : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                        }`}>
-                          {g.totalHeldQty === 0 ? 'Dispatched' : 'Holding'}
+          <div className="space-y-3">
+            {salesmanSummary.length > 0 ? (
+              salesmanSummary.map((s) => {
+                const groupKey = `sm-${s.salesman}`;
+                const isExpanded = Boolean(expandedGroupKeys[groupKey]);
+                const sQtyParts = getQtyOptionBParts(s.totalHeldQty);
+                return (
+                  <div key={s.salesman} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div
+                      onClick={() => toggleGroupExpand(groupKey)}
+                      className="p-4 bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 flex flex-wrap items-center justify-between gap-4 cursor-pointer transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400">
+                          {isExpanded ? <MdKeyboardArrowDown size={20} /> : <MdKeyboardArrowRight size={20} />}
                         </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {gatepassSummary.length > 0 && (
-                <tfoot>
-                  <tr className="bg-gray-100 dark:bg-meta-4 font-black text-black dark:text-white border-t-2 border-black dark:border-white text-xs font-mono">
-                    <td colSpan={5} className="p-3 text-right uppercase tracking-wider font-sans">Total Gatepass Ledger:</td>
-                    <td className="p-3 text-right">{kpis.totalOrderQty.toLocaleString()}</td>
-                    <td className="p-3 text-right text-emerald-600">{(kpis.totalOrderQty - kpis.totalHeldQty).toLocaleString()}</td>
-                    <td className="p-3 text-right text-amber-700">{kpis.totalHeldQty.toLocaleString()}</td>
-                    <td className="p-3 text-right pr-6 text-emerald-600 font-mono text-sm bg-emerald-100 dark:bg-emerald-950/50">
-                      Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-3 text-center">-</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+                        <div className="w-8 h-8 rounded-lg bg-emerald-600/10 text-emerald-600 font-bold flex items-center justify-center">
+                          <MdPerson size={18} />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">{s.salesman}</h4>
+                          <span className="text-[11px] text-slate-400">
+                            {s.custCount} Customers • {s.invCount} Invoices • {s.itemsCount} Held Line Items
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Total Held Qty</span>
+                          <div className="flex items-baseline gap-1 justify-end">
+                            <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">{sQtyParts.main}</span>
+                            <span className="text-[10px] font-sans font-bold text-amber-600/70 dark:text-amber-400/70">{sQtyParts.unit}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Total Holding Value</span>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            Rs. {Number(s.totalHeldValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-3 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 overflow-x-auto">
+                        <table className="w-full table-auto border-collapse font-sans text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-bold text-left text-[10px] uppercase border-b border-slate-100 dark:border-slate-800">
+                              <th className="py-2 px-3">Gatepass</th>
+                              <th className="py-2 px-3">Invoice #</th>
+                              <th className="py-2 px-3">Customer</th>
+                              <th className="py-2 px-3">Product</th>
+                              <th className="py-2 px-3 text-center">Held Qty</th>
+                              <th className="py-2 px-3 text-right">Held Value (Rs.)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            {s.items.map(item => (
+                              <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td className="py-2 px-3 font-mono font-bold text-emerald-600">{item.gatepassNo}</td>
+                                <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300">{item.invoiceNo}</td>
+                                <td className="py-2 px-3 font-bold text-slate-800 dark:text-white">{item.customerName}</td>
+                                <td className="py-2 px-3 text-slate-700 dark:text-slate-300">{item.productName}</td>
+                                <td className="py-2 px-3 text-center font-mono font-bold text-amber-600">{renderQtyBadge(item.holdQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600">
+                                  Rs. {Number(item.heldAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-12 text-center text-slate-400 italic">No salesman holding items found.</div>
+            )}
           </div>
         )}
 
-        {/* 5. Invoice-Wise View */}
+        {/* 3. CUSTOMER-WISE ACCORDION SUMMARY VIEW */}
+        {activePerspective === 'customer' && (
+          <div className="space-y-3">
+            {customerSummary.length > 0 ? (
+              customerSummary.map((c) => {
+                const groupKey = `cust-${c.customer}`;
+                const isExpanded = Boolean(expandedGroupKeys[groupKey]);
+                const cQtyParts = getQtyOptionBParts(c.totalHeldQty);
+                return (
+                  <div key={c.customer} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div
+                      onClick={() => toggleGroupExpand(groupKey)}
+                      className="p-4 bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 flex flex-wrap items-center justify-between gap-4 cursor-pointer transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400">
+                          {isExpanded ? <MdKeyboardArrowDown size={20} /> : <MdKeyboardArrowRight size={20} />}
+                        </span>
+                        <div className="w-8 h-8 rounded-lg bg-teal-600/10 text-teal-600 font-bold flex items-center justify-center">
+                          <MdPeople size={18} />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white text-sm">{c.customer}</h4>
+                          <span className="text-[11px] text-slate-400">
+                            {c.gpCount} Gatepasses • {c.invCount} Invoices • {c.itemsCount} Held Line Items
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Total Held Qty</span>
+                          <div className="flex items-baseline gap-1 justify-end">
+                            <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">{cQtyParts.main}</span>
+                            <span className="text-[10px] font-sans font-bold text-amber-600/70 dark:text-amber-400/70">{cQtyParts.unit}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Total Holding Value</span>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            Rs. {Number(c.totalHeldValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-3 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 overflow-x-auto">
+                        <table className="w-full table-auto border-collapse font-sans text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-bold text-left text-[10px] uppercase border-b border-slate-100 dark:border-slate-800">
+                              <th className="py-2 px-3">Gatepass</th>
+                              <th className="py-2 px-3">Invoice #</th>
+                              <th className="py-2 px-3">Salesman</th>
+                              <th className="py-2 px-3">Product Description</th>
+                              <th className="py-2 px-3 text-center">Held Qty</th>
+                              <th className="py-2 px-3 text-right">Held Value (Rs.)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            {c.items.map(item => (
+                              <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td className="py-2 px-3 font-mono font-bold text-emerald-600">{item.gatepassNo}</td>
+                                <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-300">{item.invoiceNo}</td>
+                                <td className="py-2 px-3 text-slate-700 dark:text-slate-300">{item.salesman}</td>
+                                <td className="py-2 px-3 font-bold text-slate-800 dark:text-white">{item.productName}</td>
+                                <td className="py-2 px-3 text-center font-mono font-bold text-amber-600">{renderQtyBadge(item.holdQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600">
+                                  Rs. {Number(item.heldAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-12 text-center text-slate-400 italic">No customer holding items found.</div>
+            )}
+          </div>
+        )}
+
+        {/* 4. GATEPASS-WISE ACCORDION SUMMARY VIEW */}
+        {activePerspective === 'gatepass' && (
+          <div className="space-y-3">
+            {gatepassSummary.length > 0 ? (
+              gatepassSummary.map((g) => {
+                const groupKey = `gp-${g.gatepassNo}`;
+                const isExpanded = Boolean(expandedGroupKeys[groupKey]);
+                const gQtyParts = getQtyOptionBParts(g.totalHeldQty);
+                return (
+                  <div key={g.gatepassNo} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div
+                      onClick={() => toggleGroupExpand(groupKey)}
+                      className="p-4 bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 flex flex-wrap items-center justify-between gap-4 cursor-pointer transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400">
+                          {isExpanded ? <MdKeyboardArrowDown size={20} /> : <MdKeyboardArrowRight size={20} />}
+                        </span>
+                        <div className="w-8 h-8 rounded-lg bg-blue-600/10 text-blue-600 font-bold flex items-center justify-center">
+                          <MdLocalShipping size={18} />
+                        </div>
+                        <div>
+                          <h4 className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm">{g.gatepassNo}</h4>
+                          <span className="text-[11px] text-slate-400">
+                            Customer: <strong className="text-slate-700 dark:text-slate-200">{g.customer}</strong> • Salesman: {g.salesman} • Date: {g.date}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Held Qty</span>
+                          <div className="flex items-baseline gap-1 justify-end">
+                            <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">{gQtyParts.main}</span>
+                            <span className="text-[10px] font-sans font-bold text-amber-600/70 dark:text-amber-400/70">{gQtyParts.unit}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Held Value</span>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            Rs. {Number(g.totalHeldValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-3 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 overflow-x-auto">
+                        <table className="w-full table-auto border-collapse font-sans text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-bold text-left text-[10px] uppercase border-b border-slate-100 dark:border-slate-800">
+                              <th className="py-2 px-3">Product Description</th>
+                              <th className="py-2 px-3">Warehouse</th>
+                              <th className="py-2 px-3 text-center">Order Qty</th>
+                              <th className="py-2 px-3 text-center">Dispatched Qty</th>
+                              <th className="py-2 px-3 text-center">Held Qty</th>
+                              <th className="py-2 px-3 text-right">Held Value (Rs.)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            {g.items.map(item => (
+                              <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td className="py-2 px-3 font-bold text-slate-800 dark:text-white">{item.productName}</td>
+                                <td className="py-2 px-3 text-slate-500">{item.warehouse}</td>
+                                <td className="py-2 px-3 text-center font-mono">{renderQtyBadge(item.orderQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-center font-mono text-slate-400">{renderQtyBadge(item.dispatchedQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-center font-mono font-bold text-amber-600">{renderQtyBadge(item.holdQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600">
+                                  Rs. {Number(item.heldAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-12 text-center text-slate-400 italic">No gatepass holding records found.</div>
+            )}
+          </div>
+        )}
+
+        {/* 5. INVOICE-WISE ACCORDION SUMMARY VIEW */}
         {activePerspective === 'invoice' && (
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto border-collapse text-left text-xs">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-black uppercase text-black dark:text-white border-b border-stroke dark:border-strokedark text-[10px] tracking-wider">
-                  <th className="p-3 w-12 text-center">S#</th>
-                  <th className="p-3">Sales Invoice #</th>
-                  <th className="p-3 text-center">Invoice Date</th>
-                  <th className="p-3">Customer Name</th>
-                  <th className="p-3">Salesman</th>
-                  <th className="p-3 text-center">Held Items Count</th>
-                  <th className="p-3 text-right">Total Held Qty</th>
-                  <th className="p-3 text-right">Total Order Value</th>
-                  <th className="p-3 text-right pr-6 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300">Pending Held Value</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stroke dark:divide-strokedark font-medium">
-                {invoiceSummary.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="text-center py-12 text-gray-400 font-bold italic">
-                      No invoice holding records found.
-                    </td>
-                  </tr>
-                ) : (
-                  invoiceSummary.map((inv, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-3 text-center text-gray-400 font-mono">{idx + 1}</td>
-                      <td className="p-3 font-bold font-mono text-purple-600 dark:text-purple-400">{inv.invoiceNo}</td>
-                      <td className="p-3 text-center text-gray-500 font-mono text-[11px]">{inv.date}</td>
-                      <td className="p-3 font-bold text-black dark:text-white font-sans">{inv.customer}</td>
-                      <td className="p-3 text-gray-600 font-sans">{inv.salesman}</td>
-                      <td className="p-3 text-center font-mono font-bold">{inv.itemsCount}</td>
-                      <td className="p-3 text-right font-mono font-black text-amber-600">{inv.totalHeldQty.toLocaleString()}</td>
-                      <td className="p-3 text-right font-mono text-gray-700 dark:text-gray-300">
-                        Rs. {inv.totalOrderAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3 text-right pr-6 font-mono font-black text-emerald-600 text-sm bg-emerald-50/40 dark:bg-emerald-950/20">
-                        Rs. {inv.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {invoiceSummary.length > 0 && (
-                <tfoot>
-                  <tr className="bg-gray-100 dark:bg-meta-4 font-black text-black dark:text-white border-t-2 border-black dark:border-white text-xs font-mono">
-                    <td colSpan={6} className="p-3 text-right uppercase tracking-wider font-sans">Total Invoices Valuation:</td>
-                    <td className="p-3 text-right text-amber-700">{kpis.totalHeldQty.toLocaleString()} Pcs</td>
-                    <td className="p-3 text-right text-gray-700">Rs. {kpis.totalOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="p-3 text-right pr-6 text-emerald-600 font-mono text-sm bg-emerald-100 dark:bg-emerald-950/50">
-                      Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+          <div className="space-y-3">
+            {invoiceSummary.length > 0 ? (
+              invoiceSummary.map((inv) => {
+                const groupKey = `inv-${inv.invoiceNo}`;
+                const isExpanded = Boolean(expandedGroupKeys[groupKey]);
+                const invQtyParts = getQtyOptionBParts(inv.totalHeldQty);
+                return (
+                  <div key={inv.invoiceNo} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                    <div
+                      onClick={() => toggleGroupExpand(groupKey)}
+                      className="p-4 bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 flex flex-wrap items-center justify-between gap-4 cursor-pointer transition"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400">
+                          {isExpanded ? <MdKeyboardArrowDown size={20} /> : <MdKeyboardArrowRight size={20} />}
+                        </span>
+                        <div className="w-8 h-8 rounded-lg bg-purple-600/10 text-purple-600 font-bold flex items-center justify-center">
+                          <MdReceipt size={18} />
+                        </div>
+                        <div>
+                          <h4 className="font-mono font-bold text-slate-900 dark:text-white text-sm">{inv.invoiceNo}</h4>
+                          <span className="text-[11px] text-slate-400">
+                            Customer: <strong className="text-slate-700 dark:text-slate-200">{inv.customer}</strong> • Salesman: {inv.salesman} • Date: {inv.date}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Held Qty</span>
+                          <div className="flex items-baseline gap-1 justify-end">
+                            <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">{invQtyParts.main}</span>
+                            <span className="text-[10px] font-sans font-bold text-amber-600/70 dark:text-amber-400/70">{invQtyParts.unit}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Held Valuation</span>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            Rs. {Number(inv.totalHeldValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-3 bg-white dark:bg-[#111827] border-t border-slate-200 dark:border-slate-800 overflow-x-auto">
+                        <table className="w-full table-auto border-collapse font-sans text-xs">
+                          <thead>
+                            <tr className="text-slate-400 font-bold text-left text-[10px] uppercase border-b border-slate-100 dark:border-slate-800">
+                              <th className="py-2 px-3">Product Description</th>
+                              <th className="py-2 px-3">Warehouse</th>
+                              <th className="py-2 px-3 text-center">Order Qty</th>
+                              <th className="py-2 px-3 text-center">Dispatched Qty</th>
+                              <th className="py-2 px-3 text-center">Held Qty</th>
+                              <th className="py-2 px-3 text-right">Held Value (Rs.)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                            {inv.items.map(item => (
+                              <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td className="py-2 px-3 font-bold text-slate-800 dark:text-white">{item.productName}</td>
+                                <td className="py-2 px-3 text-slate-500">{item.warehouse}</td>
+                                <td className="py-2 px-3 text-center font-mono">{renderQtyBadge(item.orderQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-center font-mono text-slate-400">{renderQtyBadge(item.dispatchedQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-center font-mono font-bold text-amber-600">{renderQtyBadge(item.holdQty, item.uom)}</td>
+                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600">
+                                  Rs. {Number(item.heldAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-12 text-center text-slate-400 italic">No invoice holding records found.</div>
+            )}
           </div>
         )}
 
-        {/* Pagination Footer */}
-        {activePerspective === 'detailed' && filteredHoldingRows.length > pageSize && (
-          <div className="p-4 border-t border-stroke dark:border-strokedark flex flex-col sm:flex-row justify-between items-center gap-3">
-            <span className="text-xs text-gray-500 font-bold">
-              Showing page <span className="text-primary">{currentPage}</span> of {totalPages} ({filteredHoldingRows.length} total rows)
+        {/* PAGINATION FOOTER */}
+        {activePerspective === 'detailed' && totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+            <span className="text-slate-400">
+              Page <strong className="text-slate-800 dark:text-slate-100">{currentPage}</strong> of <strong>{totalPages}</strong>
             </span>
-
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 font-bold">
               <button
                 type="button"
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                className="px-3 py-1.5 rounded border border-stroke dark:border-strokedark font-bold hover:bg-gray-100 dark:hover:bg-meta-4 disabled:opacity-40 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Previous
               </button>
-
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum = i + 1;
-                if (totalPages > 5 && currentPage > 3) {
-                  pageNum = currentPage - 2 + i;
-                  if (pageNum > totalPages) pageNum = totalPages - 4 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 rounded font-bold transition text-xs cursor-pointer ${
-                      currentPage === pageNum
-                        ? 'bg-primary text-white font-black'
-                        : 'border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-
               <button
                 type="button"
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                className="px-3 py-1.5 rounded border border-stroke dark:border-strokedark font-bold hover:bg-gray-100 dark:hover:bg-meta-4 disabled:opacity-40 cursor-pointer"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 Next
               </button>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

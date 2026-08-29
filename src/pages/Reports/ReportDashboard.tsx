@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ReactApexChart from 'react-apexcharts';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../Context/supabaseClient';
 import { fetchFinancialMetrics, FinancialSummary } from '../../service/financialCalculations';
 import Spinner from '../../ui/Spinner';
@@ -11,10 +12,18 @@ import {
   MdAccountBalance,
   MdAssessment,
   MdAssignment,
-  MdFileDownload
+  MdFileDownload,
+  MdSearch,
+  MdClear,
+  MdArrowForward,
+  MdPauseCircleFilled,
+  MdReceipt,
+  MdPeople,
+  MdStorefront
 } from 'react-icons/md';
 import { exportMultiSheetExcel, ExcelColumn } from '../../utils/excelExport';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../../Context/Auth';
 
 const defaultMetrics: FinancialSummary = {
   cashBalance: 0,
@@ -42,10 +51,20 @@ const defaultMetrics: FinancialSummary = {
 };
 
 const ReportDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'sales' | 'purchase' | 'stock' | 'accounts' | 'bank' | 'cash' | 'balancesheet'>('sales');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { tenantId } = useAuth();
+  const initialTab = (location.state?.activeTab || location.state?.tab || 'sales') as any;
+  const [activeTab, setActiveTab] = useState<'sales' | 'purchase' | 'stock' | 'accounts' | 'bank' | 'cash' | 'balancesheet'>(initialTab);
   const [loading, setLoading] = useState(true);
-  const [dateFrom, setDateFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
-  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const firstOfMonthStr = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo] = useState(todayStr);
+
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [salesData, setSalesData] = useState<any[]>([]);
   const [purchaseData, setPurchaseData] = useState<any[]>([]);
@@ -57,10 +76,10 @@ const ReportDashboard: React.FC = () => {
     try {
       setLoading(true);
       const [salesRes, purchasesRes, stockRes, vouchersRes, finMetricsRes] = await Promise.allSettled([
-        supabase.from('sales_invoices').select('*'),
-        supabase.from('supplier_purchases').select('*'),
+        supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
+        supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false }),
         supabase.from('warehouse_inventory').select('*'),
-        supabase.from('financial_vouchers').select('*'),
+        supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
         fetchFinancialMetrics()
       ]);
 
@@ -90,26 +109,41 @@ const ReportDashboard: React.FC = () => {
     fetchSystemReports();
   }, []);
 
-  // --- Chart Configurations ---
+  // --- Dynamic Formatted ApexChart Options ---
   const trend = (metrics && metrics.monthlySalesTrend && metrics.monthlySalesTrend.length > 0)
     ? metrics.monthlySalesTrend
     : [{ month: 'Jan', sales: 0, purchases: 0 }];
 
   const salesVsPurchasesOptions: any = {
-    chart: { type: 'bar', height: 260, toolbar: { show: false } },
-    colors: ['#10B981', '#E74C3C'],
-    plotOptions: { bar: { columnWidth: '45%', borderRadius: 3 } },
+    chart: { type: 'bar', height: 280, toolbar: { show: false } },
+    colors: ['#10B981', '#F43F5E'],
+    plotOptions: { bar: { columnWidth: '55%', borderRadius: 4 } },
     dataLabels: { enabled: false },
-    xaxis: { categories: trend.map(m => m.month || '') },
+    stroke: { show: true, width: 3, colors: ['transparent'] },
+    xaxis: {
+      categories: trend.map(m => m.month || ''),
+      labels: { style: { colors: '#94A3B8', fontSize: '11px', fontWeight: 600 } },
+      axisBorder: { show: false },
+      axisTicks: { show: false }
+    },
     yaxis: {
       labels: {
+        style: { colors: '#94A3B8', fontSize: '11px', fontWeight: 600 },
         formatter: (val: number) => {
-          if (val === undefined || val === null || isNaN(val)) return 'Rs. 0k';
-          return `Rs. ${(Number(val) / 1000).toFixed(0)}k`;
+          if (val === undefined || val === null || isNaN(val) || val === 0) return 'Rs. 0';
+          if (Math.abs(val) >= 1000000) return `Rs. ${(val / 1000000).toFixed(1)}M`;
+          if (Math.abs(val) >= 1000) return `Rs. ${(val / 1000).toFixed(0)}k`;
+          return `Rs. ${val}`;
         }
       }
     },
+    grid: {
+      borderColor: '#f1f5f9',
+      strokeDashArray: 4,
+      xaxis: { lines: { show: true } }
+    },
     tooltip: {
+      theme: 'dark',
       y: {
         formatter: (val: number) => {
           if (val === undefined || val === null || isNaN(val)) return 'Rs. 0';
@@ -130,9 +164,8 @@ const ReportDashboard: React.FC = () => {
     try {
       setExporting(true);
 
-      // Sheet 1: Executive KPIs
       const kpiCols: ExcelColumn[] = [
-        { header: 'Financial Indicator KPI', key: 'indicator', width: 34 },
+        { header: 'Financial Indicator KPI', key: 'indicator', width: 36 },
         { header: 'Current Balance / Valuation (Rs.)', key: 'value', width: 28, type: 'currency' }
       ];
       const kpiData = [
@@ -146,7 +179,6 @@ const ReportDashboard: React.FC = () => {
         { indicator: 'Total Owner Equity & Retained Earnings', value: metrics.totalEquity || 0 }
       ];
 
-      // Sheet 2: Recent Sales Invoices
       const salesCols: ExcelColumn[] = [
         { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
         { header: 'Invoice Code', key: 'invoiceNo', width: 16 },
@@ -166,7 +198,6 @@ const ReportDashboard: React.FC = () => {
         amount: Number(s.total_amount || 0)
       }));
 
-      // Sheet 3: Recent Purchases
       const purCols: ExcelColumn[] = [
         { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
         { header: 'Purchase Code', key: 'purchaseNo', width: 18 },
@@ -186,7 +217,7 @@ const ReportDashboard: React.FC = () => {
 
       await exportMultiSheetExcel({
         fileName: `Corporate_Executive_Financial_Pack_${new Date().toISOString().split('T')[0]}.xlsx`,
-        companyName: 'ZOHAIB ALI & COMPANY',
+        companyName: 'ZOAIB ALI & COMPANY',
         sheets: [
           {
             sheetName: 'Financial KPIs',
@@ -222,21 +253,37 @@ const ReportDashboard: React.FC = () => {
     }
   };
 
-  // Filter lists by date
-  const filterByDate = (list: any[], dateField: string) => {
-    if (!dateFrom && !dateTo) return list;
-    return list.filter(item => {
-      const rawDate = item[dateField] || String(item.created_at || '').split('T')[0];
-      if (!rawDate) return true;
+  // Filter lists by date range & search query
+  const filteredSales = useMemo(() => {
+    return salesData.filter(item => {
+      const rawDate = item.sale_date || String(item.created_at || '').split('T')[0];
       if (dateFrom && rawDate < dateFrom) return false;
       if (dateTo && rawDate > dateTo) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const code = String(item.invoice_no || `INV-${item.id}`).toLowerCase();
+        const cust = String(item.customer_name || '').toLowerCase();
+        const sm = String(item.salesman || '').toLowerCase();
+        if (!code.includes(q) && !cust.includes(q) && !sm.includes(q)) return false;
+      }
       return true;
     });
-  };
+  }, [salesData, dateFrom, dateTo, searchQuery]);
 
-  const filteredSales = filterByDate(salesData, 'sale_date');
-  const filteredPurchases = filterByDate(purchaseData, 'purchase_date');
-  const filteredVouchers = filterByDate(voucherData, 'voucher_date');
+  const filteredPurchases = useMemo(() => {
+    return purchaseData.filter(item => {
+      const rawDate = item.purchase_date || String(item.created_at || '').split('T')[0];
+      if (dateFrom && rawDate < dateFrom) return false;
+      if (dateTo && rawDate > dateTo) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const code = String(item.purchase_no || `PUR-${item.id}`).toLowerCase();
+        const supp = String(item.supplier_name || '').toLowerCase();
+        if (!code.includes(q) && !supp.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [purchaseData, dateFrom, dateTo, searchQuery]);
 
   if (loading && !salesData.length && !purchaseData.length && !stockData.length) {
     return (
@@ -247,307 +294,358 @@ const ReportDashboard: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-black dark:text-white">Corporate Analytics Reporting Center</h2>
-          <p className="text-xs text-gray-400">Generate, filter and inspect transactional audit sheets, bank balances, and balance sheets</p>
+    <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs antialiased font-sans pb-12">
+      
+      {/* ── TOP HEADER WITH EXCEL EXPORT ── */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-emerald-900 to-emerald-800 dark:from-emerald-950 dark:to-emerald-900 p-6 rounded-2xl shadow-lg relative overflow-hidden">
+        <div className="absolute -right-10 -top-10 w-48 h-48 bg-emerald-600/20 blur-3xl rounded-full pointer-events-none" />
+        <div className="absolute left-1/4 -bottom-10 w-48 h-48 bg-emerald-400/10 blur-3xl rounded-full pointer-events-none" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 rounded-xl bg-white/10 text-emerald-100 font-bold backdrop-blur-sm border border-white/10 shadow-sm">
+              <MdAssessment size={24} />
+            </span>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              Corporate Analytics & Reporting
+            </h1>
+          </div>
+          <p className="text-[13px] text-emerald-100/70 mt-2 max-w-xl leading-relaxed">
+            Real-time audit performance metrics across Sales, Purchases, Stock, Bank Ledgers & GAAP Balance Sheet.
+          </p>
         </div>
 
         <button
           type="button"
           disabled={exporting}
           onClick={handleExportConsolidatedPack}
-          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+          className="relative z-10 px-5 py-3 bg-white text-emerald-900 hover:bg-emerald-50 rounded-xl font-black text-[13px] transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50 disabled:hover:translate-y-0 flex items-center gap-2"
         >
-          <MdFileDownload size={18} />
-          {exporting ? 'Exporting Pack...' : 'Export Executive Excel Pack (.xlsx)'}
+          <MdFileDownload size={20} className="text-emerald-600" />
+          <span>{exporting ? 'Exporting Pack...' : 'Export Executive Excel Pack (.xlsx)'}</span>
         </button>
       </div>
 
-      {/* Top 4 KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+      {/* ── TOP 4 EXECUTIVE SCORECARDS ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Gross Monthly Sales</span>
-            <b className="text-success text-base font-black font-mono">Rs. {Number(metrics.thisMonthSales || 0).toLocaleString()}</b>
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Gross Monthly Sales</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block">
+              Rs. {Number(metrics.thisMonthSales || 0).toLocaleString()}
+            </b>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded-md">Confirmed</span>
+              <span className="text-[11px] text-slate-400">sales revenue</span>
+            </div>
           </div>
-          <div className="p-2.5 bg-success/10 rounded text-success"><MdTrendingUp size={22} /></div>
+          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdTrendingUp size={28} />
+          </div>
         </div>
 
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">App Cash Balance</span>
-            <b className="text-emerald-600 text-base font-black font-mono">Rs. {Number(metrics.cashBalance || 0).toLocaleString()}</b>
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">App Cash Balance</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block">
+              Rs. {Number(metrics.cashBalance || 0).toLocaleString()}
+            </b>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 rounded-md">Liquid</span>
+              <span className="text-[11px] text-slate-400">counter drawer</span>
+            </div>
           </div>
-          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/20 rounded text-emerald-600"><MdAccountBalanceWallet size={22} /></div>
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-500/10 rounded-2xl text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdAccountBalanceWallet size={28} />
+          </div>
         </div>
 
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Monthly Bank Balance</span>
-            <b className="text-primary text-base font-black font-mono">Rs. {Number(metrics.totalBankBalance || 0).toLocaleString()}</b>
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Monthly Bank Balance</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block">
+              Rs. {Number(metrics.totalBankBalance || 0).toLocaleString()}
+            </b>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-teal-600 bg-teal-50 dark:bg-teal-500/10 px-1.5 py-0.5 rounded-md">Logged</span>
+              <span className="text-[11px] text-slate-400">bank accounts</span>
+            </div>
           </div>
-          <div className="p-2.5 bg-primary/10 rounded text-primary"><MdAccountBalance size={22} /></div>
+          <div className="p-3.5 bg-teal-50 dark:bg-teal-500/10 rounded-2xl text-teal-600 dark:text-teal-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdAccountBalance size={28} />
+          </div>
         </div>
 
-        <div className="rounded-sm border border-stroke bg-white p-4 shadow-default dark:border-strokedark dark:bg-boxdark flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-[#111827] dark:to-slate-900 p-5 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between group">
           <div>
-            <span className="text-gray-400 font-bold block uppercase text-[10px]">Balance Sheet Assets</span>
-            <b className="text-purple-600 text-base font-black font-mono">Rs. {Number(metrics.totalAssets || 0).toLocaleString()}</b>
+            <span className="text-slate-400 font-bold block uppercase text-[10px] tracking-wider mb-1">Balance Sheet Assets</span>
+            <b className="text-slate-800 dark:text-slate-100 text-2xl font-black font-mono tracking-tight block">
+              Rs. {Number(metrics.totalAssets || 0).toLocaleString()}
+            </b>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="flex items-center text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-500/10 px-1.5 py-0.5 rounded-md">GAAP</span>
+              <span className="text-[11px] text-slate-400">capital value</span>
+            </div>
           </div>
-          <div className="p-2.5 bg-purple-100 dark:bg-purple-950/20 rounded text-purple-600"><MdAssignment size={22} /></div>
+          <div className="p-3.5 bg-purple-50 dark:bg-purple-500/10 rounded-2xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform shadow-sm">
+            <MdLayers size={28} />
+          </div>
         </div>
       </div>
 
-      {/* Embedded Executive Graph */}
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-5">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="font-bold text-sm text-black dark:text-white uppercase tracking-wider">Executive Sales vs. Purchases Performance Graph</h3>
-          <span className="text-xs text-gray-400 font-mono">Monthly Comparative</span>
+      {/* ── 6 REPORT LAUNCHER SHORTCUT CARDS ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report`)}
+          className="group p-4 bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-md cursor-pointer transition-all flex flex-col items-center text-center space-y-2 hover:-translate-y-1"
+        >
+          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform"><MdTrendingUp size={22} /></div>
+          <div>
+            <span className="font-black text-[13px] text-slate-800 dark:text-white block">Sales</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Audits & Invoices</span>
+          </div>
         </div>
-        {typeof window !== 'undefined' && (
-          <ReactApexChart options={salesVsPurchasesOptions} series={salesVsPurchasesSeries} type="bar" height={240} />
-        )}
+
+        <div
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Purchase-Report`)}
+          className="group p-4 bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm hover:border-rose-400 dark:hover:border-rose-600 hover:shadow-md cursor-pointer transition-all flex flex-col items-center text-center space-y-2 hover:-translate-y-1"
+        >
+          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 rounded-xl group-hover:scale-110 transition-transform"><MdStorefront size={22} /></div>
+          <div>
+            <span className="font-black text-[13px] text-slate-800 dark:text-white block">Purchase</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Procurement & Vendors</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report`)}
+          className="group p-4 bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm hover:border-purple-400 dark:hover:border-purple-600 hover:shadow-md cursor-pointer transition-all flex flex-col items-center text-center space-y-2 hover:-translate-y-1"
+        >
+          <div className="p-2.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-xl group-hover:scale-110 transition-transform"><MdLayers size={22} /></div>
+          <div>
+            <span className="font-black text-[13px] text-slate-800 dark:text-white block">Stock</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Inventory & Warehouses</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Holding-Report`)}
+          className="group p-4 bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-md cursor-pointer transition-all flex flex-col items-center text-center space-y-2 hover:-translate-y-1"
+        >
+          <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-xl group-hover:scale-110 transition-transform"><MdPauseCircleFilled size={22} /></div>
+          <div>
+            <span className="font-black text-[13px] text-slate-800 dark:text-white block">Holding</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Committed Stock</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report`)}
+          className="group p-4 bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-md cursor-pointer transition-all flex flex-col items-center text-center space-y-2 hover:-translate-y-1"
+        >
+          <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-xl group-hover:scale-110 transition-transform"><MdAccountBalance size={22} /></div>
+          <div>
+            <span className="font-black text-[13px] text-slate-800 dark:text-white block">Account</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Ledger & Aging</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Balance-Sheet`)}
+          className="group p-4 bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm hover:border-teal-400 dark:hover:border-teal-600 hover:shadow-md cursor-pointer transition-all flex flex-col items-center text-center space-y-2 hover:-translate-y-1"
+        >
+          <div className="p-2.5 bg-teal-50 dark:bg-teal-950/40 text-teal-600 rounded-xl group-hover:scale-110 transition-transform"><MdAssessment size={22} /></div>
+          <div>
+            <span className="font-black text-[13px] text-slate-800 dark:text-white block">Balance Sheet</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">GAAP Statements</span>
+          </div>
+        </div>
       </div>
 
-      {/* Tabs Container */}
-      <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 border-b border-stroke dark:border-strokedark pb-4">
-          <div className="flex flex-wrap border border-stroke dark:border-strokedark rounded p-1 bg-gray-50 dark:bg-meta-4/20 gap-1">
-            {(['sales', 'purchase', 'stock', 'accounts', 'bank', 'cash', 'balancesheet'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`py-1.5 px-3 rounded text-[11px] font-bold uppercase transition tracking-wide cursor-pointer ${
-                  activeTab === tab ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:text-black dark:hover:text-white'
-                }`}
-              >
-                {tab === 'bank' ? 'Bank Balances' : tab === 'cash' ? 'Cash Audit' : tab === 'balancesheet' ? 'Balance Sheet' : `${tab} Report`}
-              </button>
-            ))}
+      {/* ── SALES VS PURCHASES PERFORMANCE GRAPH ── */}
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 shadow-sm">
+        <div className="flex justify-between items-center pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
+          <div>
+            <h3 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+              Executive Sales vs. Purchases Performance Graph
+            </h3>
+            <p className="text-[11px] text-slate-400">Comparative revenue vs procurement outflow trends</p>
           </div>
-          <div className="flex items-center gap-2">
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border border-stroke dark:border-strokedark rounded p-1.5 bg-transparent font-bold outline-none text-black dark:text-white" />
-            <span className="text-gray-400 font-bold">to</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border border-stroke dark:border-strokedark rounded p-1.5 bg-transparent font-bold outline-none text-black dark:text-white" />
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Monthly Trend</span>
+        </div>
+
+        <div className="w-full min-h-[280px]">
+          <ReactApexChart
+            options={salesVsPurchasesOptions}
+            series={salesVsPurchasesSeries}
+            type="bar"
+            height={280}
+          />
+        </div>
+      </div>
+
+      {/* ── DATATABLE AUDIT SYSTEM WITH TABBED SWITCHING & LIVE SEARCH ── */}
+      <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#111827] p-5 shadow-sm space-y-4">
+        
+        {/* Tab Headers + Live Search + Restricted Date Filter */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          
+          <div className="flex flex-wrap gap-1 bg-slate-50 dark:bg-slate-800/60 p-1 rounded-xl font-bold text-xs">
+            <button
+              onClick={() => setActiveTab('sales')}
+              className={`py-2 px-3.5 rounded-lg transition cursor-pointer ${
+                activeTab === 'sales' ? 'bg-emerald-600 text-white font-bold shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              Sales Ledger ({filteredSales.length})
+            </button>
+
+            <button
+              onClick={() => setActiveTab('purchase')}
+              className={`py-2 px-3.5 rounded-lg transition cursor-pointer ${
+                activeTab === 'purchase' ? 'bg-emerald-600 text-white font-bold shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              Purchase Ledger ({filteredPurchases.length})
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            {/* Search Input */}
+            <div className="relative flex-1 md:w-56">
+              <MdSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search audit records..."
+                className="w-full pl-9 pr-7 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold outline-none focus:border-emerald-500"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <MdClear size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Date Pickers with Today Max Restriction */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg text-xs font-bold">
+              <input
+                type="date"
+                max={todayStr}
+                value={dateFrom}
+                onChange={(e) => { if (e.target.value > todayStr) setDateFrom(todayStr); else setDateFrom(e.target.value); }}
+                className="bg-transparent text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
+              />
+              <span className="text-slate-400">to</span>
+              <input
+                type="date"
+                max={todayStr}
+                value={dateTo}
+                onChange={(e) => { if (e.target.value > todayStr) setDateTo(todayStr); else setDateTo(e.target.value); }}
+                className="bg-transparent text-slate-700 dark:text-slate-200 outline-none cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="max-w-full overflow-x-auto">
-          {/* Sales Report Tab */}
-          {activeTab === 'sales' && (
-            <table className="w-full table-auto border-collapse text-left">
+        {/* 1. SALES INVOICES DATA TABLE */}
+        {activeTab === 'sales' && (
+          <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full table-auto border-collapse font-sans text-xs">
               <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white border-b border-stroke uppercase tracking-wider text-[10px]">
-                  <th className="p-3 w-16">S#</th>
-                  <th className="p-3">Invoice Code</th>
-                  <th className="p-3">Client Customer</th>
-                  <th className="p-3">Sale Mode</th>
-                  <th className="p-3 text-right pr-6">Gross Amount</th>
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-left text-[11px] uppercase tracking-wider">
+                  <th className="py-2.5 px-3.5 text-center w-12">S#</th>
+                  <th className="py-2.5 px-3.5">Invoice Code</th>
+                  <th className="py-2.5 px-3.5">Date</th>
+                  <th className="py-2.5 px-3.5">Client Customer</th>
+                  <th className="py-2.5 px-3.5">Sales Officer</th>
+                  <th className="py-2.5 px-3.5 text-center">Sale Mode</th>
+                  <th className="py-2.5 px-3.5 text-right font-black">Gross Amount</th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredSales.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-gray-400 italic">No sales invoices recorded for this period.</td></tr>
-                ) : (
-                  filteredSales.map((s, i) => (
-                    <tr key={s.id} className="border-b font-semibold border-stroke dark:border-strokedark text-black dark:text-white hover:bg-slate-50/50">
-                      <td className="p-3 text-gray-400">{i + 1}</td>
-                      <td className="p-3 font-mono font-black text-primary">{s.invoice_no || `INV-${s.id}`}</td>
-                      <td className="p-3">{s.customer_name || 'Walk-in Customer'}</td>
-                      <td className="p-3 uppercase">{s.settlement_mode || s.payment_term || 'Cash'}</td>
-                      <td className="p-3 text-right font-mono font-black text-success pr-6">Rs. {Number(s.total_amount || 0).toLocaleString()}</td>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredSales.length > 0 ? (
+                  filteredSales.slice(0, 15).map((row, idx) => (
+                    <tr key={row.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                      <td className="py-2.5 px-3.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                      <td className="py-2.5 px-3.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {row.invoice_no || `INV-${row.id}`}
+                      </td>
+                      <td className="py-2.5 px-3.5 text-slate-500 font-mono text-[11px]">
+                        {row.sale_date || String(row.created_at || '').split('T')[0]}
+                      </td>
+                      <td className="py-2.5 px-3.5 font-bold text-slate-900 dark:text-white">
+                        {row.customer_name || 'Counter Retail Buyer'}
+                      </td>
+                      <td className="py-2.5 px-3.5 text-slate-600 dark:text-slate-300">{row.salesman || 'Direct'}</td>
+                      <td className="py-2.5 px-3.5 text-center font-bold uppercase text-[10px]">
+                        <span className={`px-2 py-0.5 rounded-md ${
+                          String(row.settlement_mode || row.payment_term || '').toLowerCase() === 'credit'
+                            ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                            : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                        }`}>
+                          {row.settlement_mode || row.payment_term || 'Cash'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-black text-slate-900 dark:text-white">
+                        Rs. {Number(row.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
                     </tr>
                   ))
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {/* Purchase Report Tab */}
-          {activeTab === 'purchase' && (
-            <table className="w-full table-auto border-collapse text-left">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white border-b border-stroke uppercase tracking-wider text-[10px]">
-                  <th className="p-3 w-16">S#</th>
-                  <th className="p-3">Purchase Code</th>
-                  <th className="p-3">Supplier Merchant</th>
-                  <th className="p-3">Warehouse Bin</th>
-                  <th className="p-3 text-right pr-6">Bill Payables</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPurchases.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-gray-400 italic">No supplier purchases recorded for this period.</td></tr>
                 ) : (
-                  filteredPurchases.map((p, i) => (
-                    <tr key={p.id} className="border-b font-semibold border-stroke dark:border-strokedark text-black dark:text-white hover:bg-slate-50/50">
-                      <td className="p-3 text-gray-400">{i + 1}</td>
-                      <td className="p-3 font-mono font-black text-primary">{p.purchase_no || `PUR-${p.id}`}</td>
-                      <td className="p-3">{p.supplier_name || 'Vendor'}</td>
-                      <td className="p-3 text-gray-400 uppercase font-bold">{p.target_warehouse || 'Main Warehouse'}</td>
-                      <td className="p-3 text-right font-mono font-black text-success pr-6">Rs. {Number(p.total_amount || 0).toLocaleString()}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {/* Stock Report Tab */}
-          {activeTab === 'stock' && (
-            <table className="w-full table-auto border-collapse text-left">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white border-b border-stroke uppercase tracking-wider text-[10px]">
-                  <th className="p-3 w-16">S#</th>
-                  <th className="p-3">Product Name</th>
-                  <th className="p-3">Assigned Location</th>
-                  <th className="p-3 text-center">Available Stock Units</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stockData.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-gray-400 italic">No stock inventory recorded.</td></tr>
-                ) : (
-                  stockData.map((st, i) => (
-                    <tr key={st.id || i} className="border-b font-semibold border-stroke dark:border-strokedark text-black dark:text-white hover:bg-slate-50/50">
-                      <td className="p-3 text-gray-400">{i + 1}</td>
-                      <td className="p-3 font-bold text-black dark:text-white">{st.product_name || 'Item'}</td>
-                      <td className="p-3"><span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2 py-0.5 rounded text-[10px] font-bold uppercase">{st.warehouse_name || st.location || 'Warehouse'}</span></td>
-                      <td className="p-3 text-center font-mono font-black text-warning">{Number(st.quantity || st.current_stock || 0).toLocaleString()} Units</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {/* Financial Vouchers Tab */}
-          {activeTab === 'accounts' && (
-            <table className="w-full table-auto border-collapse text-left">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white border-b border-stroke uppercase tracking-wider text-[10px]">
-                  <th className="p-3 w-16">S#</th>
-                  <th className="p-3">Voucher Code</th>
-                  <th className="p-3">Description Narrative</th>
-                  <th className="p-3 text-center">Voucher Type</th>
-                  <th className="p-3 text-right pr-6">Fund Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVouchers.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-gray-400 italic">No financial vouchers recorded for this period.</td></tr>
-                ) : (
-                  filteredVouchers.map((v, i) => {
-                    const isDisbursement = String(v.voucher_type || '').includes('Payment');
-                    return (
-                      <tr key={v.id || i} className="border-b font-semibold border-stroke dark:border-strokedark text-black dark:text-white hover:bg-slate-50/50">
-                        <td className="p-3 text-gray-400">{i + 1}</td>
-                        <td className="p-3 font-mono font-black text-primary">{v.voucher_no || `VCH-${v.id}`}</td>
-                        <td className="p-3 text-gray-500 max-w-xs truncate">{v.narration || v.notes || v.remarks || '-'}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${isDisbursement ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                            {v.voucher_type || 'Voucher'}
-                          </span>
-                        </td>
-                        <td className={`p-3 text-right font-mono font-black pr-6 ${isDisbursement ? 'text-danger' : 'text-success'}`}>
-                          {isDisbursement ? '-' : '+'} Rs. {Number(v.total_amount || v.amount || 0).toLocaleString()}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {/* MONTHLY BANK BALANCES TAB (Calculated from App) */}
-          {activeTab === 'bank' && (
-            <div>
-              <div className="mb-4 bg-primary/5 p-3 rounded border border-primary/20 flex justify-between items-center">
-                <span className="font-bold text-black dark:text-white">Corporate Bank Accounts Ledgers Overview</span>
-                <b className="text-primary font-mono text-sm font-black">Total Bank Liquidity: Rs. {Number(metrics.totalBankBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-              </div>
-              <table className="w-full table-auto border-collapse text-left">
-                <thead>
-                  <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white border-b border-stroke uppercase tracking-wider text-[10px]">
-                    <th className="p-3">Bank Profile</th>
-                    <th className="p-3">Account Title</th>
-                    <th className="p-3 text-right">Opening Balance</th>
-                    <th className="p-3 text-right text-success">Total Inflows (+)</th>
-                    <th className="p-3 text-right text-danger">Total Outflows (-)</th>
-                    <th className="p-3 text-right pr-6">Calculated Ending Balance</th>
+                  <tr>
+                    <td colSpan={7} className="py-10 text-center text-slate-400 italic">No sales invoices found matching the current date & search filters.</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {(!metrics.bankAccounts || metrics.bankAccounts.length === 0) ? (
-                    <tr><td colSpan={6} className="text-center py-8 text-gray-400 italic">No bank profiles recorded.</td></tr>
-                  ) : (
-                    metrics.bankAccounts.map((b) => (
-                      <tr key={b.id} className="border-b font-mono font-semibold border-stroke dark:border-strokedark text-black dark:text-white hover:bg-slate-50/50">
-                        <td className="p-3 font-sans font-bold">{b.bankName}</td>
-                        <td className="p-3 font-sans">{b.accountTitle}</td>
-                        <td className="p-3 text-right text-gray-500">Rs. {Number(b.openingBalance || 0).toLocaleString()}</td>
-                        <td className="p-3 text-right text-success">+ Rs. {Number(b.totalInflow || 0).toLocaleString()}</td>
-                        <td className="p-3 text-right text-danger">- Rs. {Number(b.totalOutflow || 0).toLocaleString()}</td>
-                        <td className="p-3 text-right font-black text-primary pr-6">Rs. {Number(b.netBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {/* CASH BALANCE AUDIT TAB */}
-          {activeTab === 'cash' && (
-            <div>
-              <div className="mb-4 bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded border border-emerald-200 flex justify-between items-center">
-                <span className="font-bold text-black dark:text-white">App Cash Drawer & Counter Cash-Box Liquidity Audit</span>
-                <b className="text-emerald-600 font-mono text-sm font-black">Net Cash Balance: Rs. {Number(metrics.cashBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</b>
-              </div>
-              <p className="text-gray-400 text-xs mb-4">
-                Calculated automatically across all Cash Invoices, Customer Recoveries, Cash Vouchers, and Cash Procurement Payments.
-              </p>
-            </div>
-          )}
+        {/* 2. PURCHASES DATA TABLE */}
+        {activeTab === 'purchase' && (
+          <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full table-auto border-collapse font-sans text-xs">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-left text-[11px] uppercase tracking-wider">
+                  <th className="py-2.5 px-3.5 text-center w-12">S#</th>
+                  <th className="py-2.5 px-3.5">Purchase Code</th>
+                  <th className="py-2.5 px-3.5">Date</th>
+                  <th className="py-2.5 px-3.5">Supplier Vendor</th>
+                  <th className="py-2.5 px-3.5">Target Warehouse</th>
+                  <th className="py-2.5 px-3.5 text-right font-black">Bill Payable</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredPurchases.length > 0 ? (
+                  filteredPurchases.slice(0, 15).map((row, idx) => (
+                    <tr key={row.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+                      <td className="py-2.5 px-3.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                      <td className="py-2.5 px-3.5 font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {row.purchase_no || `PUR-${row.id}`}
+                      </td>
+                      <td className="py-2.5 px-3.5 text-slate-500 font-mono text-[11px]">
+                        {row.purchase_date || String(row.created_at || '').split('T')[0]}
+                      </td>
+                      <td className="py-2.5 px-3.5 font-bold text-slate-900 dark:text-white">
+                        {row.supplier_name || 'Vendor'}
+                      </td>
+                      <td className="py-2.5 px-3.5 text-slate-600 dark:text-slate-300">{row.target_warehouse || 'Main Warehouse'}</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-black text-slate-900 dark:text-white">
+                        Rs. {Number(row.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="py-10 text-center text-slate-400 italic">No purchase records found matching the current filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {/* BALANCE SHEET TAB */}
-          {activeTab === 'balancesheet' && (
-            <div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
-                {/* Assets */}
-                <div className="border border-stroke dark:border-strokedark p-4 rounded bg-gray-50/50 dark:bg-meta-4/10">
-                  <h4 className="font-bold text-sm text-black dark:text-white border-b pb-2 mb-3 uppercase font-sans flex justify-between">
-                    <span>Current Assets</span>
-                    <b className="text-success">Rs. {Number(metrics.totalAssets || 0).toLocaleString()}</b>
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between"><span>Cash in Hand:</span><b className="text-emerald-600 dark:text-emerald-400">Rs. {Number(metrics.cashBalance || 0).toLocaleString()}</b></div>
-                    <div className="flex justify-between"><span>Bank Accounts Total:</span><b className="text-teal-600 dark:text-teal-400">Rs. {Number(metrics.totalBankBalance || 0).toLocaleString()}</b></div>
-                    <div className="flex justify-between"><span>Accounts Receivable:</span><b className="text-amber-600 dark:text-amber-400">Rs. {Number(metrics.totalReceivables || 0).toLocaleString()}</b></div>
-                    <div className="flex justify-between"><span>Merchandise Inventory:</span><b className="text-emerald-700 dark:text-emerald-300">Rs. {Number(metrics.inventoryAssetValue || 0).toLocaleString()}</b></div>
-                  </div>
-                </div>
-
-                {/* Liabilities & Equity */}
-                <div className="border border-stroke dark:border-strokedark p-4 rounded bg-gray-50/50 dark:bg-meta-4/10">
-                  <h4 className="font-bold text-sm text-black dark:text-white border-b pb-2 mb-3 uppercase font-sans flex justify-between">
-                    <span>Liabilities & Equity</span>
-                    <b className="text-danger">Rs. {(Number(metrics.totalLiabilities || 0) + Number(metrics.totalEquity || 0)).toLocaleString()}</b>
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between"><span>Accounts Payable:</span><b className="text-danger">Rs. {Number(metrics.totalPayables || 0).toLocaleString()}</b></div>
-                    <div className="flex justify-between pt-2 border-t font-black text-primary"><span>Owner's Equity / Retained Earnings:</span><b>Rs. {Number(metrics.totalEquity || 0).toLocaleString()}</b></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

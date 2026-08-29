@@ -91,7 +91,7 @@ const createStyledWorksheet = (config: {
   theme?: 'navy' | 'emerald' | 'purple' | 'slate';
 }): XLSX.WorkSheet => {
   const {
-    companyName = 'ZOHAIB ALI & COMPANY',
+    companyName = 'ZOAIB ALI & COMPANY',
     reportTitle,
     filterSummary,
     columns,
@@ -334,7 +334,7 @@ const createStyledWorksheet = (config: {
       let numFmt: string | undefined = undefined;
 
       if (isFirstCol && !val) {
-        val = 'TOTAL STATEMENT SUMMARY';
+        val = 'SUMMARY';
       }
 
       if (col.type === 'currency' && typeof val === 'number') {

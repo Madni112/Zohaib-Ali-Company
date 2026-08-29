@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
+import { QtyBadge } from '../../../utils/QtyBadge';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
@@ -68,7 +69,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Items_Detailed_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Holding Items',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Holding Items & Pending Dispatch Audit Statement',
           filterSummary: filterMeta,
           columns,
@@ -99,7 +100,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Salesman_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Salesman Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Salesman-Wise Holding Inventory Audit',
           filterSummary: filterMeta,
           columns,
@@ -130,7 +131,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Customer_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Customer Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Customer-Wise Holding Stock Statement',
           filterSummary: filterMeta,
           columns,
@@ -158,7 +159,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Gatepass_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Gatepass Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Gatepass / Delivery Challan Holding Audit',
           filterSummary: filterMeta,
           columns,
@@ -186,7 +187,7 @@ const HoldingReportPrint: React.FC = () => {
         await exportToExcel({
           fileName: `Holding_Invoice_Wise_${new Date().toISOString().split('T')[0]}.xlsx`,
           sheetName: 'Invoice Holding',
-          companyName: businessName || 'ZOHAIB ALI & COMPANY',
+          companyName: businessName || 'ZOAIB ALI & COMPANY',
           reportTitle: 'Invoice-Wise Holding Inventory Valuation',
           filterSummary: filterMeta,
           columns,
@@ -250,7 +251,7 @@ const HoldingReportPrint: React.FC = () => {
         {/* Printable Letterhead */}
         <div className="text-center space-y-1 py-4 border-b border-double border-black">
           <h1 className="text-xl font-black uppercase tracking-widest font-serif">
-            {businessName || 'ZOHAIB ALI & COMPANY'}
+            {businessName || 'ZOAIB ALI & COMPANY'}
           </h1>
           <p className="text-[10px] font-bold tracking-wider text-gray-600 uppercase">
             COMMERCIAL HOLDING INVENTORY & PENDING DISPATCH AUDIT STATEMENT
@@ -301,9 +302,9 @@ const HoldingReportPrint: React.FC = () => {
                         <div className="font-bold">{r.productName}</div>
                         {r.skuCode && <div className="text-[9px] text-gray-500">{r.skuCode}</div>}
                       </td>
-                      <td className="p-1 border border-black text-right">{r.orderQty}</td>
-                      <td className="p-1 border border-black text-right text-emerald-700">{r.dispatchedQty}</td>
-                      <td className="p-1 border border-black text-right font-black bg-amber-50/50 text-amber-900">{r.holdQty}</td>
+                      <td className="p-1 border border-black text-center"><QtyBadge qty={r.orderQty} /></td>
+                      <td className="p-1 border border-black text-center text-emerald-700"><QtyBadge qty={r.dispatchedQty} /></td>
+                      <td className="p-1 border border-black text-center font-black bg-amber-50/50 text-amber-900"><QtyBadge qty={r.holdQty} /></td>
                       <td className="p-1 border border-black text-right">Rs. {Number(r.rate || 0).toLocaleString()}</td>
                       <td className="p-1 border border-black text-right pr-2 font-black bg-emerald-50/50 text-emerald-800">
                         Rs. {Number(r.heldAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -316,9 +317,9 @@ const HoldingReportPrint: React.FC = () => {
                 <tfoot>
                   <tr className="bg-gray-100 border-t-2 border-black font-black text-black text-xs font-mono">
                     <td colSpan={7} className="p-2 border border-black text-right uppercase font-sans">Summary Totals:</td>
-                    <td className="p-2 border border-black text-right">{kpis.totalOrderQty.toLocaleString()}</td>
-                    <td className="p-2 border border-black text-right text-emerald-700">{(kpis.totalOrderQty - kpis.totalHeldQty).toLocaleString()}</td>
-                    <td className="p-2 border border-black text-right bg-amber-100 text-amber-900">{kpis.totalHeldQty.toLocaleString()} Pcs</td>
+                    <td className="p-2 border border-black text-center"><QtyBadge qty={kpis.totalOrderQty} /></td>
+                    <td className="p-2 border border-black text-center text-emerald-700"><QtyBadge qty={kpis.totalOrderQty - kpis.totalHeldQty} /></td>
+                    <td className="p-2 border border-black text-center bg-amber-100 text-amber-900"><QtyBadge qty={kpis.totalHeldQty} /></td>
                     <td className="p-2 border border-black text-right">-</td>
                     <td className="p-2 border border-black text-right pr-2 bg-emerald-100 text-emerald-900 font-bold">
                       Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}

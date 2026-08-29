@@ -482,7 +482,7 @@ const StockReportPrint = () => {
             await exportToExcel({
                 fileName: `Stock_Report_Tab${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`,
                 sheetName: tabTitle.substring(0, 30),
-                companyName: businessName || 'ZOHAIB ALI & COMPANY',
+                companyName: businessName || 'ZOAIB ALI & COMPANY',
                 reportTitle: `Master Dynamic Inventory - ${tabTitle}`,
                 filterSummary: filterMeta,
                 columns,
@@ -514,23 +514,23 @@ const StockReportPrint = () => {
       `}} />
 
             <div className="print-root-container w-full bg-white p-4 space-y-6">
-                <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
-                    <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report`)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded border print-hidden-element print:hidden">
+                    <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report`)} className="flex items-center gap-2 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
                     <div className="flex items-center gap-3">
                         <button
                             type="button"
                             disabled={exporting}
                             onClick={handleExportExcel}
-                            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+                            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
                         >
                             <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
                         </button>
-                        <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+                        <button type="button" onClick={() => window.print()} className="flex items-center gap-2 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
                     </div>
                 </div>
 
-                <div className="text-center space-y-1 py-4 border-b border-double border-black">
-                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">ZOHAIB ALI & COMPANY</h1>
+                <div className="text-center space-y-1 py-4 border-b border-double border-slate-300">
+                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">ZOAIB ALI & COMPANY</h1>
                     <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">Master Dynamic Inventory Valuation & Real-Time Stock Balance Ledger</p>
 
                     <div className="text-[10px] pt-1 font-mono flex justify-between px-2 text-gray-600">
@@ -560,45 +560,45 @@ const StockReportPrint = () => {
                 <div className="w-full overflow-x-auto">
                     {/* --- 📊 RENDER CHANNEL 1: STOCK ACTIVITY REPORT (TAB 1) --- */}
                     {activeTab === 1 && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-10">Index</th>
-                                    <th className="p-1.5 border border-black">Product Stock Asset Identifier</th>
-                                    <th className="p-1.5 border border-black">Group (UOM)</th>
-                                    <th className="p-1.5 border border-black">Brand / Category</th>
-                                    <th className="p-1.5 border border-black text-right pr-2">Opening Stock</th>
-                                    <th className="p-1.5 border border-black text-right pr-2 text-emerald-700">Stock In</th>
-                                    <th className="p-1.5 border border-black text-right pr-2 text-rose-700">Stock Out</th>
-                                    <th className="p-1.5 border border-black text-right pr-2">Net Movement</th>
-                                    <th className="p-1.5 border border-black text-right pr-3 font-bold">Remaining Stock</th>
+                                    <th className="p-2 border border-slate-300 text-center w-10">Index</th>
+                                    <th className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
+                                    <th className="p-2 border border-slate-300">Group (UOM)</th>
+                                    <th className="p-2 border border-slate-300">Brand / Category</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-2">Opening Stock</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">Stock In</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-2 text-rose-700">Stock Out</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-2">Net Movement</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-3 font-bold">Remaining Stock</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {reportRows.map((row, idx) => (
-                                    <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                        <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                        <td className="p-1.5 border border-black uppercase">{row.uom || 'PC'}</td>
-                                        <td className="p-1.5 border border-black font-sans"><span className="text-teal-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
-                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-gray-700">{Number(row.computed_opening || 0).toLocaleString()}</td>
-                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-emerald-700 font-bold">+{Number(row.period_stock_in || 0).toLocaleString()}</td>
-                                        <td className="p-1.5 border border-black text-right pr-2 font-mono text-rose-700 font-bold">-{Number(row.period_stock_out || 0).toLocaleString()}</td>
-                                        <td className={`p-1.5 border border-black text-right pr-2 font-mono font-bold ${row.net_activity >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                                    <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                        <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                        <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
+                                        <td className="p-2 border border-slate-300 uppercase">{row.uom || 'PC'}</td>
+                                        <td className="p-2 border border-slate-300 font-sans"><span className="text-teal-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-gray-700">{Number(row.computed_opening || 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-emerald-700 font-bold">+{Number(row.period_stock_in || 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-rose-700 font-bold">-{Number(row.period_stock_out || 0).toLocaleString()}</td>
+                                        <td className={`p-2 border border-slate-300 text-right pr-2 font-mono font-bold ${row.net_activity >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                                             {row.net_activity > 0 ? `+${row.net_activity.toLocaleString()}` : row.net_activity.toLocaleString()}
                                         </td>
-                                        <td className="p-1.5 border border-black text-right pr-3 text-success font-black font-mono">{Number(row.computed_true_stock || 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black font-mono">{Number(row.computed_true_stock || 0).toLocaleString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-gray-700">Total Consolidated Summary:</td>
-                                    <td className="p-2 border border-black text-right pr-2 text-gray-700">{reportRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
-                                    <td className="p-2 border border-black text-right pr-2 text-emerald-700">+{reportRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
-                                    <td className="p-2 border border-black text-right pr-2 text-red-700">-{reportRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>
-                                    <td className="p-2 border border-black text-right pr-2 text-purple-700">{reportRows.reduce((s, r) => s + (r.net_activity || 0), 0).toLocaleString()}</td>
-                                    <td className="p-2 border border-black text-right pr-3 text-success font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Consolidated Summary:</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-2 text-gray-700">{reportRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">+{reportRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-2 text-red-700">-{reportRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-2 text-purple-700">{reportRows.reduce((s, r) => s + (r.net_activity || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -606,33 +606,33 @@ const StockReportPrint = () => {
 
                     {/* --- 📊 RENDER CHANNEL 2: STANDARD LEDGER BALANCES (TABS 2, 6) --- */}
                     {(activeTab === 2 || activeTab === 6) && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-12">Index</th>
-                                    <th className="p-1.5 border border-black">Product Stock Asset Identifier</th>
-                                    <th className="p-1.5 border border-black">Group (UOM)</th>
-                                    <th className="p-1.5 border border-black">Brand Link</th>
-                                    <th className="p-1.5 border border-black">Category</th>
-                                    <th className="p-1.5 border border-black text-right pr-3">Dynamic Remaining Quantity</th>
+                                    <th className="p-2 border border-slate-300 text-center w-12">Index</th>
+                                    <th className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
+                                    <th className="p-2 border border-slate-300">Group (UOM)</th>
+                                    <th className="p-2 border border-slate-300">Brand Link</th>
+                                    <th className="p-2 border border-slate-300">Category</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-3">Dynamic Remaining Quantity</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {reportRows.map((row, idx) => (
-                                    <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                        <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                        <td className="p-1.5 border border-black uppercase">{row.uom || 'PC'}</td>
-                                        <td className="p-1.5 border border-black text-purple-700 font-sans">{row.brand || 'Generic'}</td>
-                                        <td className="p-1.5 border border-black font-sans text-gray-500">{row.category || 'General'}</td>
-                                        <td className="p-1.5 border border-black text-right pr-3 text-success font-black">{Number(row.computed_true_stock || 0).toLocaleString()}</td>
+                                    <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                        <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                        <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
+                                        <td className="p-2 border border-slate-300 uppercase">{row.uom || 'PC'}</td>
+                                        <td className="p-2 border border-slate-300 text-purple-700 font-sans">{row.brand || 'Generic'}</td>
+                                        <td className="p-2 border border-slate-300 font-sans text-gray-500">{row.category || 'General'}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black">{Number(row.computed_true_stock || 0).toLocaleString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-gray-700">Total Consolidated Balance Sum:</td>
-                                    <td className="p-2 border border-black text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
+                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Consolidated Balance Sum:</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -640,15 +640,15 @@ const StockReportPrint = () => {
 
                     {/* --- 📊 RENDER CHANNEL 3: STOCK STATUS REPORT (TAB 3) --- */}
                     {activeTab === 3 && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-12">Index</th>
-                                    <th className="p-1.5 border border-black">Product Stock Asset Identifier</th>
-                                    <th className="p-1.5 border border-black">Warehouse Location</th>
-                                    <th className="p-1.5 border border-black">Brand / Category</th>
-                                    <th className="p-1.5 border border-black text-center">Stock Availability Status</th>
-                                    <th className="p-1.5 border border-black text-right pr-3">Dynamic Remaining Quantity</th>
+                                    <th className="p-2 border border-slate-300 text-center w-12">Index</th>
+                                    <th className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
+                                    <th className="p-2 border border-slate-300">Warehouse Location</th>
+                                    <th className="p-2 border border-slate-300">Brand / Category</th>
+                                    <th className="p-2 border border-slate-300 text-center">Stock Availability Status</th>
+                                    <th className="p-2 border border-slate-300 text-right pr-3">Dynamic Remaining Quantity</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -675,21 +675,21 @@ const StockReportPrint = () => {
                                     }
 
                                     return (
-                                        <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                            <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                            <td className="p-1.5 border border-black font-sans text-gray-700 font-bold">{loc}</td>
-                                            <td className="p-1.5 border border-black font-sans"><span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
-                                            <td className="p-1.5 border border-black text-center">{statusBadge}</td>
-                                            <td className="p-1.5 border border-black text-right pr-3 text-success font-black">{qty.toLocaleString()}</td>
+                                        <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
+                                            <td className="p-2 border border-slate-300 font-sans text-gray-700 font-bold">{loc}</td>
+                                            <td className="p-2 border border-slate-300 font-sans"><span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
+                                            <td className="p-2 border border-slate-300 text-center">{statusBadge}</td>
+                                            <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black">{qty.toLocaleString()}</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-gray-700">Total Available Inventory Units:</td>
-                                    <td className="p-2 border border-black text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
+                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Available Inventory Units:</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -697,16 +697,16 @@ const StockReportPrint = () => {
 
                     {/* --- 📊 RENDER CHANNEL 3: STOCK TRANSFER STATEMENT (TAB 4) --- */}
                     {activeTab === 4 && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-12">Index</th>
-                                    <th className="p-1.5 border border-black">Transfer Slip #</th>
-                                    <th className="p-1.5 border border-black">Transfer Date</th>
-                                    <th className="p-1.5 border border-black">From Location</th>
-                                    <th className="p-1.5 border border-black">To Location</th>
-                                    <th className="p-1.5 border border-black">Items Transferred</th>
-                                    <th className="p-1.5 border border-black text-center">Status</th>
+                                    <th className="p-2 border border-slate-300 text-center w-12">Index</th>
+                                    <th className="p-2 border border-slate-300">Transfer Slip #</th>
+                                    <th className="p-2 border border-slate-300">Transfer Date</th>
+                                    <th className="p-2 border border-slate-300">From Location</th>
+                                    <th className="p-2 border border-slate-300">To Location</th>
+                                    <th className="p-2 border border-slate-300">Items Transferred</th>
+                                    <th className="p-2 border border-slate-300 text-center">Status</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -715,14 +715,14 @@ const StockReportPrint = () => {
                                     const itemSummary = itemsArray.map((i: any) => `${i.itemName || i.product_name} (${i.qty || 1} ${i.uom || ''})`).join(', ');
 
                                     return (
-                                        <tr key={tr.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                            <td className="p-1.5 border border-black font-bold text-primary font-sans">{tr.transfer_no || `TRF-${tr.id}`}</td>
-                                            <td className="p-1.5 border border-black">{tr.transfer_date || tr.created_at?.split('T')[0]}</td>
-                                            <td className="p-1.5 border border-black font-sans text-red-700 font-bold">{tr.from_location}</td>
-                                            <td className="p-1.5 border border-black font-sans text-green-700 font-bold">{tr.to_location}</td>
-                                            <td className="p-1.5 border border-black font-sans text-gray-700">{itemSummary || 'N/A'}</td>
-                                            <td className="p-1.5 border border-black text-center font-bold text-purple-700 uppercase">{tr.status || 'Confirmed'}</td>
+                                        <tr key={tr.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 font-bold text-primary font-sans">{tr.transfer_no || `TRF-${tr.id}`}</td>
+                                            <td className="p-2 border border-slate-300">{tr.transfer_date || tr.created_at?.split('T')[0]}</td>
+                                            <td className="p-2 border border-slate-300 font-sans text-red-700 font-bold">{tr.from_location}</td>
+                                            <td className="p-2 border border-slate-300 font-sans text-green-700 font-bold">{tr.to_location}</td>
+                                            <td className="p-2 border border-slate-300 font-sans text-gray-700">{itemSummary || 'N/A'}</td>
+                                            <td className="p-2 border border-slate-300 text-center font-bold text-purple-700 uppercase">{tr.status || 'Confirmed'}</td>
                                         </tr>
                                     );
                                 })}
@@ -732,16 +732,16 @@ const StockReportPrint = () => {
 
                     {/* --- 📊 RENDER CHANNEL 4: REAL-TIME ADAPTIVE PRICING COLUMNS VISIBILITY SHEET (TAB 5) --- */}
                     {activeTab === 5 && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-12">Index</th>
-                                    <th className="p-1.5 border border-black">Product Stock Asset Name</th>
-                                    <th className="p-1.5 border border-black text-center w-16">Bal Qty</th>
-                                    {filters.showSalePrice && <th className="p-1.5 border border-black text-right w-28">Retail Sale (PKR)</th>}
-                                    {filters.showPurchasePrice && <th className="p-1.5 border border-black text-right w-28">Purchase Cost (PKR)</th>}
-                                    {filters.showFinalPrice && <th className="p-1.5 border border-black text-right w-32 pr-3">Net Asset Valuation</th>}
-                                    {filters.showSpecifications && <th className="p-1.5 border border-black font-sans text-gray-500">Technical Specifications Sheet Overview</th>}
+                                    <th className="p-2 border border-slate-300 text-center w-12">Index</th>
+                                    <th className="p-2 border border-slate-300">Product Stock Asset Name</th>
+                                    <th className="p-2 border border-slate-300 text-center w-16">Bal Qty</th>
+                                    {filters.showSalePrice && <th className="p-2 border border-slate-300 text-right w-28">Retail Sale (PKR)</th>}
+                                    {filters.showPurchasePrice && <th className="p-2 border border-slate-300 text-right w-28">Purchase Cost (PKR)</th>}
+                                    {filters.showFinalPrice && <th className="p-2 border border-slate-300 text-right w-32 pr-3">Net Asset Valuation</th>}
+                                    {filters.showSpecifications && <th className="p-2 border border-slate-300 font-sans text-gray-500">Technical Specifications Sheet Overview</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -752,15 +752,15 @@ const StockReportPrint = () => {
                                     const netValue = qty * sPrice;
 
                                     return (
-                                        <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                            <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                            <td className="p-1.5 border border-black text-center text-primary font-black">{qty.toLocaleString()}</td>
-                                            {filters.showSalePrice && <td className="p-1.5 border border-black text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
-                                            {filters.showPurchasePrice && <td className="p-1.5 border border-black text-right text-purple-700">Rs. {pPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
-                                            {filters.showFinalPrice && <td className="p-1.5 border border-black text-right text-success font-black pr-3">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
+                                        <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-primary font-black">{qty.toLocaleString()}</td>
+                                            {filters.showSalePrice && <td className="p-2 border border-slate-300 text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
+                                            {filters.showPurchasePrice && <td className="p-2 border border-slate-300 text-right text-purple-700">Rs. {pPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
+                                            {filters.showFinalPrice && <td className="p-2 border border-slate-300 text-right text-success font-black pr-3">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                                             {filters.showSpecifications && (
-                                                <td className="p-1.5 border border-black font-sans text-[10px] text-gray-500 whitespace-normal break-words leading-relaxed max-w-sm">
+                                                <td className="p-2 border border-slate-300 font-sans text-[10px] text-gray-500 whitespace-normal break-words leading-relaxed max-w-sm">
                                                     {row.product_description || row.specifications || row.description || (row.hs_code ? `HS: ${row.hs_code}` : 'N/A')}
                                                 </td>
                                             )}
@@ -769,13 +769,13 @@ const StockReportPrint = () => {
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={2} className="p-2 border border-black text-right uppercase tracking-wider text-gray-700">Total Consolidated Assets Valuation:</td>
-                                    <td className="p-2 border border-black text-center text-primary font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
-                                    {filters.showSalePrice && <td className="p-2 border border-black"></td>}
-                                    {filters.showPurchasePrice && <td className="p-2 border border-black"></td>}
+                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
+                                    <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Consolidated Assets Valuation:</td>
+                                    <td className="p-2 border border-slate-300 text-center text-primary font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                    {filters.showSalePrice && <td className="p-2 border border-slate-300"></td>}
+                                    {filters.showPurchasePrice && <td className="p-2 border border-slate-300"></td>}
                                     {filters.showFinalPrice && (
-                                        <td className="p-2 border border-black text-right pr-3 text-success font-black text-sm">
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">
                                             Rs. {reportRows.reduce((s, r) => {
                                                 const q = Number(r.computed_true_stock || 0);
                                                 const sp = Number(r.sale_price ?? r.retail_price ?? r.price ?? r.unit_price ?? r.mrp ?? r.rp ?? 0);
@@ -783,7 +783,7 @@ const StockReportPrint = () => {
                                             }, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </td>
                                     )}
-                                    {filters.showSpecifications && <td className="p-2 border border-black"></td>}
+                                    {filters.showSpecifications && <td className="p-2 border border-slate-300"></td>}
                                 </tr>
                             </tfoot>
                         </table>
@@ -791,15 +791,15 @@ const StockReportPrint = () => {
 
                     {/* --- 📊 RENDER CHANNEL 5: FINANCIAL REAL-TIME VALUE TIERS SUMMARY STATEMENT (TAB 7) --- */}
                     {activeTab === 7 && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-12">Index</th>
-                                    <th className="p-1.5 border border-black">Stock Asset Description</th>
-                                    <th className="p-1.5 border border-black">Brand Link</th>
-                                    <th className="p-1.5 border border-black text-center w-20">Units Count</th>
-                                    <th className="p-1.5 border border-black text-right w-24">Unit Rate</th>
-                                    <th className="p-1.5 border border-black text-right w-36 pr-4 bg-green-50/30 text-success">Aggregated StockValue</th>
+                                    <th className="p-2 border border-slate-300 text-center w-12">Index</th>
+                                    <th className="p-2 border border-slate-300">Stock Asset Description</th>
+                                    <th className="p-2 border border-slate-300">Brand Link</th>
+                                    <th className="p-2 border border-slate-300 text-center w-20">Units Count</th>
+                                    <th className="p-2 border border-slate-300 text-right w-24">Unit Rate</th>
+                                    <th className="p-2 border border-slate-300 text-right w-36 pr-4 bg-green-50/30 text-success">Aggregated StockValue</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -808,21 +808,21 @@ const StockReportPrint = () => {
                                     const rate = Number(row.retail_price || row.sale_price || 0);
 
                                     return (
-                                        <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                            <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                            <td className="p-1.5 border border-black uppercase text-purple-700">{row.brand || 'Generic'}</td>
-                                            <td className="p-1.5 border border-black text-center text-primary font-black">{qty.toLocaleString()}</td>
-                                            <td className="p-1.5 border border-black text-right">Rs. {rate.toLocaleString()}</td>
-                                            <td className="p-1.5 border border-black text-right pr-4 text-success font-black bg-success/5">Rs. {row.calculated_valuation.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                        <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
+                                            <td className="p-2 border border-slate-300 uppercase text-purple-700">{row.brand || 'Generic'}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-primary font-black">{qty.toLocaleString()}</td>
+                                            <td className="p-2 border border-slate-300 text-right">Rs. {rate.toLocaleString()}</td>
+                                            <td className="p-2 border border-slate-300 text-right pr-4 text-success font-black bg-success/5">Rs. {row.calculated_valuation.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-50 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-gray-500">Gross Consolidated StockValue Assets Allocation Sum (PKR):</td>
-                                    <td className="p-2 border border-black text-right pr-4 text-success underline decoration-double text-sm bg-success/10 font-black">
+                                <tr className="bg-gray-50 border-t border-slate-300 font-black font-mono text-xs">
+                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-500">Gross Consolidated StockValue Assets Allocation Sum (PKR):</td>
+                                    <td className="p-2 border border-slate-300 text-right pr-4 text-success underline decoration-double text-sm bg-success/10 font-black">
                                         Rs. {reportRows.reduce((sum, r) => sum + (r.calculated_valuation || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
@@ -832,17 +832,17 @@ const StockReportPrint = () => {
 
                     {/* --- 📊 RENDER CHANNEL 6: LOCATION WAREHOUSE STOCK AUDIT STATEMENT (TAB 8) --- */}
                     {activeTab === 8 && (
-                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left">
-                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                        <table className="w-full table-auto border border-collapse border-slate-300 text-[11px] font-sans text-left">
+                            <thead className="bg-slate-50 border-b border-slate-300 font-black uppercase text-black font-mono text-[10px]">
                                 <tr>
-                                    <th className="p-1.5 border border-black text-center w-12">Index</th>
-                                    <th className="p-1.5 border border-black">Warehouse Location</th>
-                                    <th className="p-1.5 border border-black">Product Stock Asset Name</th>
-                                    <th className="p-1.5 border border-black">Group (UOM) / Brand</th>
-                                    <th className="p-1.5 border border-black text-center w-28">Available Stock</th>
-                                    <th className="p-1.5 border border-black text-right w-28">Unit Sale Rate</th>
-                                    <th className="p-1.5 border border-black text-right w-36 pr-3 text-success">Location Asset Valuation</th>
-                                    <th className="p-1.5 border border-black text-center w-28">Stock Availability</th>
+                                    <th className="p-2 border border-slate-300 text-center w-12">Index</th>
+                                    <th className="p-2 border border-slate-300">Warehouse Location</th>
+                                    <th className="p-2 border border-slate-300">Product Stock Asset Name</th>
+                                    <th className="p-2 border border-slate-300">Group (UOM) / Brand</th>
+                                    <th className="p-2 border border-slate-300 text-center w-28">Available Stock</th>
+                                    <th className="p-2 border border-slate-300 text-right w-28">Unit Sale Rate</th>
+                                    <th className="p-2 border border-slate-300 text-right w-36 pr-3 text-success">Location Asset Valuation</th>
+                                    <th className="p-2 border border-slate-300 text-center w-28">Stock Availability</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -872,32 +872,32 @@ const StockReportPrint = () => {
                                     }
 
                                     return (
-                                        <tr key={row.id || idx} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                                            <td className="p-1.5 border border-black font-sans font-bold text-purple-800 uppercase bg-purple-50/40">{locName}</td>
-                                            <td className="p-1.5 border border-black font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                            <td className="p-1.5 border border-black font-sans"><span className="text-gray-700">{row.uom || 'PC'}</span> / <span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span></td>
-                                            <td className="p-1.5 border border-black text-center text-primary font-black text-sm">{qty.toLocaleString()}</td>
-                                            <td className="p-1.5 border border-black text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                            <td className="p-1.5 border border-black text-right text-success font-black pr-3 bg-success/5">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                            <td className="p-1.5 border border-black text-center">{statusBadge}</td>
+                                        <tr key={row.id || idx} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 font-sans font-bold text-purple-800 uppercase bg-purple-50/40">{locName}</td>
+                                            <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
+                                            <td className="p-2 border border-slate-300 font-sans"><span className="text-gray-700">{row.uom || 'PC'}</span> / <span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span></td>
+                                            <td className="p-2 border border-slate-300 text-center text-primary font-black text-sm">{qty.toLocaleString()}</td>
+                                            <td className="p-2 border border-slate-300 text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-2 border border-slate-300 text-right text-success font-black pr-3 bg-success/5">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-2 border border-slate-300 text-center">{statusBadge}</td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-gray-700">Total Location Stock & Valuation Summary:</td>
-                                    <td className="p-2 border border-black text-center text-primary font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
-                                    <td className="p-2 border border-black"></td>
-                                    <td className="p-2 border border-black text-right pr-3 text-success font-black text-sm bg-success/10">
+                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Location Stock & Valuation Summary:</td>
+                                    <td className="p-2 border border-slate-300 text-center text-primary font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-slate-300"></td>
+                                    <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm bg-success/10">
                                         Rs. {reportRows.reduce((sum, r) => {
                                             const q = Number(r.computed_true_stock || 0);
                                             const sp = Number(r.sale_price ?? r.retail_price ?? r.price ?? r.unit_price ?? r.mrp ?? r.rp ?? 0);
                                             return sum + (q * sp);
                                         }, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="p-2 border border-black"></td>
+                                    <td className="p-2 border border-slate-300"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -908,20 +908,17 @@ const StockReportPrint = () => {
                     )}
                 </div>
 
-                <div className="mt-24 grid grid-cols-2 gap-20 text-center text-[10px] font-sans font-bold uppercase tracking-wider text-gray-400">
-                    <div className="border-t border-black pt-2">Warehouse Master Count Verifier</div>
-                    <div className="border-t border-black pt-2">Corporate Internal Management Audit Release</div>
-                </div>
+
 
                 {/* 🏢 Software & Corporate Provider Footer */}
                 <div className="mt-12 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400">
                     <div className="flex items-center gap-2 font-bold">
-                        <span className="text-black font-black uppercase">ZOHAIB ALI & COMPANY</span>
+                        <span className="text-black font-black uppercase">ZOAIB ALI & COMPANY</span>
                         <span className="text-gray-400">|</span>
                         <span className="text-gray-700">Contact: <b className="text-black font-bold">03128039911</b></span>
                     </div>
                     <div className="text-[9px] text-gray-400 font-mono">
-                        System Generated Report • Zohaib Ali & Company
+                        System Generated Report • Zoaib Ali & Company
                     </div>
                 </div>
             </div>

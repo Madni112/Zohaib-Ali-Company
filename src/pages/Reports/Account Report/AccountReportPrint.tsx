@@ -717,7 +717,7 @@ const AccountReportPrint = () => {
             await exportToExcel({
                 fileName: `Financial_Report_Tab${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`,
                 sheetName: tabTitle.substring(0, 30),
-                companyName: businessName || 'ZOHAIB ALI & COMPANY',
+                companyName: businessName || 'ZOAIB ALI & COMPANY',
                 reportTitle: `Corporate Financial Audit - ${tabTitle}`,
                 filterSummary: filterMeta,
                 columns,
@@ -764,7 +764,7 @@ const AccountReportPrint = () => {
                 </div>
 
                 <div className="text-center space-y-1 py-4 border-b border-double border-black">
-                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">ZOHAIB ALI & COMPANY</h1>
+                    <h1 className="text-xl font-black uppercase tracking-widest font-serif">ZOAIB ALI & COMPANY</h1>
                     <p className="text-[10px] font-bold tracking-wider text-gray-500 uppercase">Master Corporate Ledger Book & Financial Audit Statement Summary</p>
 
                     <div className="text-[10px] pt-1 font-mono flex justify-between px-2 text-gray-600">
@@ -1243,12 +1243,12 @@ const AccountReportPrint = () => {
                 {/* 🏢 Software & Corporate Provider Footer */}
                 <div className="mt-12 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400">
                     <div className="flex items-center gap-2 font-bold">
-                        <span className="text-black font-black uppercase">ZOHAIB ALI & COMPANY</span>
+                        <span className="text-black font-black uppercase">ZOAIB ALI & COMPANY</span>
                         <span className="text-gray-400">|</span>
                         <span className="text-gray-700">Contact: <b className="text-black font-bold">03128039911</b></span>
                     </div>
                     <div className="text-[9px] text-gray-400 font-mono">
-                        System Generated Report • Zohaib Ali & Company
+                        System Generated Report • Zoaib Ali & Company
                     </div>
                 </div>
             </div>

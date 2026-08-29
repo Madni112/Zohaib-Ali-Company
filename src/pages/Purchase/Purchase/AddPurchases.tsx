@@ -537,6 +537,10 @@ const AddPurchases = () => {
                         {({ push, remove }) => (
                           <tbody className="divide-y divide-stroke dark:divide-strokedark">
                             {values.items.map((item: any, idx: number) => {
+                              const matchedProduct = productList.find(p => 
+                                (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)) ||
+                                (item.itemName && String(p.product_name || '').toLowerCase() === String(item.itemName || '').toLowerCase())
+                              );
                               const rawPcs = Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box ?? matchedProduct?.pieces_per_packing ?? 0);
                               const isTile = Boolean(
                                 matchedProduct && (

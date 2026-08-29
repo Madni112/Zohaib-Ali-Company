@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   });
   const [tenantId, setTenantId] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>('Zohaib Ali & Company');
+  const [businessName, setBusinessName] = useState<string | null>('Zoaib Ali & Company');
   const [userEmail, setUserEmail] = useState<string | null>(() => {
     try {
       return localStorage.getItem('zac_user_email') || null;
@@ -89,17 +89,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (isMounted) setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) {
-        handleAuthState(session);
-        setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('JWT Token auto-refreshed successfully');
       }
+      if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      } else if (session) {
+        handleAuthState(session);
+      }
+      if (isMounted) setLoading(false);
     });
+
+    // Auto-refresh JWT when user switches back to the ERP tab after inactivity
+    const handleVisibilityOrFocus = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            // Check if JWT token is near expiry and refresh silently
+            const expiresAt = session.expires_at || 0;
+            const now = Math.floor(Date.now() / 1000);
+            if (expiresAt - now < 300) { // Less than 5 mins remaining
+              await supabase.auth.refreshSession();
+            }
+          }
+        } catch (_) {}
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
 
     return () => {
       isMounted = false;
       clearTimeout(safetyTimer);
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
   }, []);
 
@@ -142,7 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(email || null);
       setRole(userRole);
       setTenantId(null);
-      setBusinessName('Zohaib Ali & Company');
+      setBusinessName('Zoaib Ali & Company');
       setAllowedModules(userPermissions);
 
       try {
@@ -157,7 +185,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUserEmail(null);
       setRole('Super Admin');
       setTenantId(null);
-      setBusinessName('Zohaib Ali & Company');
+      setBusinessName('Zoaib Ali & Company');
       setAllowedModules(ROLE_PRESETS['Super Admin'].modules);
 
       try {

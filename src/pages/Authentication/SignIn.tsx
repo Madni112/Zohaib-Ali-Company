@@ -68,7 +68,7 @@ const SignIn: React.FC = () => {
               Z
             </div>
             <div className="flex items-center gap-1.5 leading-tight">
-              <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">ZOHAIB ALI</span>
+              <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">ZOAIB ALI</span>
               <span className="text-base font-extrabold text-slate-800 dark:text-slate-100">& COMPANY</span>
             </div>
           </div>

@@ -140,7 +140,7 @@ const PrintInvoiceReceipt: React.FC = () => {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">
-                {businessName || 'Zohaib Ali & Company'}
+                {businessName || 'Zoaib Ali & Company'}
               </h1>
               <p className="text-xs text-slate-500 font-semibold mt-0.5">
                 Authorized Commercial Building Materials & Ceramic Store
