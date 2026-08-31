@@ -647,12 +647,12 @@ const NewInvoice = () => {
                   )}
                 </div>
 
-                <div className="border border-stroke dark:border-strokedark rounded-sm mt-4 relative z-30 overflow-visible">
+                <div className="border border-stroke dark:border-strokedark rounded-sm mt-4 relative z-30 overflow-x-auto min-h-[400px]">
                   <FieldArray name="items">
                     {({ push, remove }) => {
                       const showDiscount = values.showDiscount;
                       return (
-                        <div className="w-full overflow-visible">
+                        <div className="w-full min-w-[900px]">
                           <table className="w-full table-auto border-collapse text-left">
                             <thead className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b">
                               <tr>

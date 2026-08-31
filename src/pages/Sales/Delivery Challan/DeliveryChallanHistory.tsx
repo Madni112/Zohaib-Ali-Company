@@ -641,16 +641,10 @@ const DeliveryChallanHistory = () => {
 
       {/* Top Header Controls row */}
       <div className="flex justify-between items-center mb-6">
-        <div>
+        <div className="flex-1">
           <h4 className="text-xl font-semibold text-black dark:text-white">Delivery Challan / Gate Pass Registry</h4>
           <p className="text-xs text-gray-500 mt-0.5">Authorize, dispatch, and track warehouse goods gate-pass fulfillment</p>
         </div>
-        <button
-          onClick={() => navigate('/Delivery-Challan/Details')}
-          className="bg-primary text-white py-2 px-4 rounded text-sm font-medium hover:bg-opacity-90 transition shadow-sm"
-        >
-          + Add New
-        </button>
       </div>
 
       {/* Datatable Filters Wrapper */}

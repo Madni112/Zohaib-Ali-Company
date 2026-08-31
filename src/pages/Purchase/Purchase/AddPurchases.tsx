@@ -506,8 +506,8 @@ const AddPurchases = () => {
                 </div>
 
                 {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}
-                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-visible">
-                  <div className="w-full overflow-visible">
+                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-x-auto min-h-[400px]">
+                  <div className="w-full min-w-[900px]">
                     <table className="w-full table-auto border-collapse text-left">
                       <thead>
                         <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
