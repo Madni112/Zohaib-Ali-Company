@@ -449,7 +449,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
           bankAmount: editData.metadata?.bankAmount || '',
           notes: editData.remarks || ''
         } : {
-          receiptNo: `PRR-${Date.now().toString().slice(-6)}`,
+          receiptNo: '',
           paymentMethod: 'By Cash',
           selectedBankId: '',
           paymentDate: new Date().toISOString().split('T')[0],
@@ -495,9 +495,9 @@ const AddPurchaseReturnReceipt: React.FC = () => {
             return;
           }
 
-          if (effectiveDueForThisReceipt > 0 && finalAmount > effectiveDueForThisReceipt + 1) {
-            const confirmOver = window.confirm(`Collected amount (Rs. ${formatMoney(finalAmount)}) exceeds the pending return balance (Rs. ${formatMoney(effectiveDueForThisReceipt)}). Proceed anyway?`);
-            if (!confirmOver) return;
+          if (finalAmount > effectiveDueForThisReceipt + 1) {
+            toast.error(`Error: Collected amount (Rs. ${formatMoney(finalAmount)}) exceeds the pending return balance (Rs. ${formatMoney(effectiveDueForThisReceipt)}).`);
+            return;
           }
 
           try {
@@ -683,7 +683,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
             ? (Number(values.cashAmount || 0) + Number(values.bankAmount || 0))
             : (Number(values.amount) || 0);
 
-          const projectedRemaining = Math.max(0, effectiveDueForThisReceipt - currentTotalAmt);
+          const projectedRemaining = effectiveDueForThisReceipt - currentTotalAmt;
 
           return (
             <Form className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -697,10 +697,14 @@ const AddPurchaseReturnReceipt: React.FC = () => {
                     <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
                       Receipt Voucher #:
                     </label>
-                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
-                      <span>{values.receiptNo}</span>
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-sans uppercase font-bold">Auto</span>
-                    </div>
+                    <input
+                      type="text"
+                      name="receiptNo"
+                      onChange={handleChange}
+                      value={values.receiptNo}
+                      placeholder="e.g. PRR-12345"
+                      className="w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                    />
                   </div>
 
                   <div>

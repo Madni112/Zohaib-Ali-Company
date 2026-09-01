@@ -242,6 +242,31 @@ function AddPurchaseReceipt() {
         }
       });
 
+      // 3. Fetch Debit Notes (Purchase Returns) for this vendor
+      const { data: debitNotes } = await supabase
+        .from('purchase_returns')
+        .select('id, total_amount, amount_paid, purchase_no')
+        .eq('vendor_name', vendorName);
+
+      (debitNotes || []).forEach(d => {
+        const dAmt = Math.max(0, (Number(d.total_amount) || 0) - (Number(d.amount_paid) || 0));
+        if (dAmt <= 0) return;
+        totalVouchersPaid += dAmt;
+
+        const dPoRef = d.purchase_no || '';
+        if (dPoRef) {
+          const cleanDPoId = String(dPoRef).replace(/\D/g, '');
+          const matchedPo = sortedVendorPurchases.find(p => p.purchase_no === dPoRef || String(p.id) === cleanDPoId);
+          if (matchedPo && allocations[matchedPo.purchase_no]) {
+            allocations[matchedPo.purchase_no].specificVouchers += dAmt;
+          } else {
+            unallocatedGeneralVouchers += dAmt;
+          }
+        } else {
+          unallocatedGeneralVouchers += dAmt;
+        }
+      });
+
       // Allocate general unallocated vouchers across open POs (FIFO order)
       let generalRemaining = unallocatedGeneralVouchers;
       sortedVendorPurchases.forEach(p => {
@@ -406,7 +431,7 @@ function AddPurchaseReceipt() {
           bankAmount: editData.metadata?.bankAmount || '',
           notes: editData.narration || ''
         } : {
-          voucherNo: `PRC-${Date.now().toString().slice(-6)}`,
+          voucherNo: '',
           voucherType: 'By Cash',
           selectedBankId: '',
           paymentDate: new Date().toISOString().split('T')[0],
@@ -452,8 +477,8 @@ function AddPurchaseReceipt() {
             return;
           }
 
-          if (effectiveDueForThisReceipt > 0 && finalAmount > effectiveDueForThisReceipt + 1) {
-            toast.error(`Overpayment Warning: Total payable due is Rs. ${formatMoney(effectiveDueForThisReceipt)}.`);
+          if (finalAmount > effectiveDueForThisReceipt + 1) {
+            toast.error(`Error: Disbursement amount (Rs. ${formatMoney(finalAmount)}) exceeds the total payable due (Rs. ${formatMoney(effectiveDueForThisReceipt)}).`);
             return;
           }
 
@@ -595,7 +620,7 @@ function AddPurchaseReceipt() {
             ? (Number(values.cashAmount || 0) + Number(values.bankAmount || 0))
             : (Number(values.amount) || 0);
 
-          const projectedRemaining = Math.max(0, effectiveDueForThisReceipt - currentTotalAmt);
+          const projectedRemaining = effectiveDueForThisReceipt - currentTotalAmt;
 
           return (
             <Form className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -609,9 +634,14 @@ function AddPurchaseReceipt() {
                     <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
                       Receipt Voucher #:
                     </label>
-                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs">
-                      {values.voucherNo}
-                    </div>
+                    <input
+                      type="text"
+                      name="voucherNo"
+                      onChange={handleChange}
+                      value={values.voucherNo}
+                      placeholder="e.g. PRC-12345"
+                      className="w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                    />
                   </div>
 
                   <div>

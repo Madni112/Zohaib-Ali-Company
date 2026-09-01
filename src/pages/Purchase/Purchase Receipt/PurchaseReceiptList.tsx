@@ -115,7 +115,7 @@ const PurchaseReceiptList = () => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs">
-      
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -135,14 +135,14 @@ const PurchaseReceiptList = () => {
       </div>
 
       <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
-        
+
         {/* Controls */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">Show</span>
-            <select 
-              value={pageSize} 
-              onChange={(e) => setPageSize(Number(e.target.value))} 
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
               className="rounded border border-stroke py-1 px-2 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-bold"
             >
               <option value={5}>5</option>
@@ -154,12 +154,12 @@ const PurchaseReceiptList = () => {
           </div>
 
           <div className="w-full sm:w-auto">
-            <input 
-              type="text" 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
-              placeholder="Search receipt #, PO # or vendor..." 
-              className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold focus:border-primary" 
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search receipt #, PO # or vendor..."
+              className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-black dark:text-white text-xs font-semibold focus:border-primary"
             />
           </div>
         </div>
@@ -244,27 +244,27 @@ const PurchaseReceiptList = () => {
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
           </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Previous
-              </button>
-              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Next
-              </button>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+            >
+              Next
+            </button>
+          </div>
         </div>
 
       </div>

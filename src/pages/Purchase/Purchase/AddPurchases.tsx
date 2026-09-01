@@ -185,7 +185,7 @@ const AddPurchases = () => {
     }
     return {
       grnId: null,
-      purchaseNo: defaultPurchaseNo,
+      purchaseNo: '',
       supplierName: '',
       purchaseDate: new Date().toISOString().split('T')[0],
       applyTax: false,
@@ -606,9 +606,16 @@ const AddPurchases = () => {
                     </label>
                   </div>
 
-                  <span className="text-[11px] text-gray-500 font-mono">
-                    Purchase Order Ref: <strong className="text-primary font-bold">{values.purchaseNo}</strong>
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] text-gray-500 font-bold whitespace-nowrap">Purchase Order Ref:</label>
+                    <input
+                      type="text"
+                      name="purchaseNo"
+                      onChange={handleChange}
+                      value={values.purchaseNo}
+                      className="w-32 rounded border border-stroke dark:border-strokedark bg-transparent p-1 text-xs font-bold font-mono text-primary outline-none focus:border-primary"
+                    />
+                  </div>
                 </div>
 
                 {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}

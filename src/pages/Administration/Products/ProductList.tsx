@@ -554,11 +554,21 @@ const ProductList = () => {
                       {formatVal(bData.opening || 0)}
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Purchases</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Purchases</span>
+                        <span className="text-[9px] font-bold text-rose-500 mt-0.5 tracking-wide">
+                          (Returned: {bData.purchaseReturned || 0})
+                        </span>
+                      </div>
                       {formatVal(bData.purchased || 0)}
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
+                        <span className="text-[9px] font-bold text-rose-500 mt-0.5 tracking-wide">
+                          (Returned: {bData.salesReturned || 0})
+                        </span>
+                      </div>
                       {formatVal(bData.sold || 0)}
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-amber-50/50 dark:bg-amber-900/10 px-3 -mx-3 rounded-lg">
