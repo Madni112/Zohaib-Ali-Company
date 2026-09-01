@@ -21,6 +21,7 @@ const SalesReport = () => {
     const [categories, setCategories] = useState<any[]>([]);
     const [uoms, setUoms] = useState<any[]>([]);
     const [brands, setBrands] = useState<any[]>([]);
+    const [bins, setBins] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [locations, setLocations] = useState<any[]>([]);
     const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
@@ -30,7 +31,7 @@ const SalesReport = () => {
         salesman: location.state?.salesman || location.state?.criteria?.salesman || 'All',
         transport: location.state?.transport || location.state?.criteria?.transport || 'All',
         category: location.state?.category || location.state?.criteria?.category || 'All',
-        uom: 'All', brand: 'All', product: 'All', location: 'All',
+        uom: 'All', brand: 'All', bin: 'All', product: 'All', location: 'All',
         saleType: 'All', saleMethod: 'All', invoiceNo: 'All',
         withLedgerSummary: false,
         dateFrom: location.state?.dateFrom || location.state?.criteria?.dateFrom || new Date().toISOString().split('T')[0],
@@ -41,12 +42,13 @@ const SalesReport = () => {
         const fetchCriteriaLookups = async () => {
             try {
                 setLoading(true);
-                const [custRes, smRes, transRes, catRes, brndRes, prodRes, locRes, invRes, uomRes] = await Promise.all([
+                const [custRes, smRes, transRes, catRes, brndRes, binRes, prodRes, locRes, invRes, uomRes] = await Promise.all([
                     supabase.from('customers').select('id, customerName'),
                     supabase.from('salesmen').select('id, name'),
                     supabase.from('logistics_transportation').select('id, name'),
                     supabase.from('inventory_categories').select('id, name'),
                     supabase.from('inventory_brands').select('id, name'),
+                    supabase.from('inventory_surface_finishes').select('id, name'),
                     supabase.from('products').select('id, product_name'),
                     supabase.from('inventory_locations').select('id, name'),
                     supabase.from('sales_invoices').select('id, total_amount, customer_name').order('id', { ascending: false }),
@@ -58,6 +60,7 @@ const SalesReport = () => {
                 if (transRes.data) setTransportFleet(transRes.data);
                 if (catRes.data) setCategories(catRes.data);
                 if (brndRes.data) setBrands(brndRes.data);
+                if (binRes.data) setBins(binRes.data);
                 if (prodRes.data) setProducts(prodRes.data);
                 if (locRes.data) setLocations(locRes.data);
                 if (invRes.data) setAvailableInvoices(invRes.data);
@@ -88,6 +91,7 @@ const SalesReport = () => {
     const categoryOptions = useMemo(() => categories.map(c => c.name).filter(Boolean), [categories]);
     const uomOptions = useMemo(() => uoms.map(u => u.name).filter(Boolean), [uoms]);
     const brandOptions = useMemo(() => brands.map(b => b.name).filter(Boolean), [brands]);
+    const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
     const productOptions = useMemo(() => products.map(p => p.product_name).filter(Boolean), [products]);
     const locationOptions = useMemo(() => locations.map(l => l.name).filter(Boolean), [locations]);
     const invoiceOptions = useMemo(() => availableInvoices.map(i => `INV-${String(i.id).padStart(4, '0')}`), [availableInvoices]);
@@ -118,6 +122,7 @@ const SalesReport = () => {
                             <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
                             <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
                             <SearchableDropdown label="Brands Allocation:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+                            <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
                             <SearchableDropdown label="Target Products:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
                             <SearchableDropdown label="Inventory Locations:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
                             
@@ -145,6 +150,7 @@ const SalesReport = () => {
                             <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
                             <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
                             <SearchableDropdown label="Brands Allocation:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+                            <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
                             <SearchableDropdown label="Target Products:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
                             <SearchableDropdown label="Inventory Locations:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
                         </>

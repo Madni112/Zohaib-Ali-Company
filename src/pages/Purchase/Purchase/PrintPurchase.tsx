@@ -415,7 +415,7 @@ const PrintPurchase = () => {
             <thead>
               <tr className="bg-slate-900 text-white print-table-header text-[10.5px] font-black uppercase tracking-wider">
                 <th className="py-2.5 px-3 w-[5%] text-center">S#</th>
-                <th className="py-2.5 px-3 w-[14%] font-mono">SKU Code</th>
+                <th className="py-2.5 px-3 w-[14%] font-mono">Code</th>
                 <th className="py-2.5 px-3 w-[30%]">Product Description</th>
                 <th className="py-2.5 px-3 w-[17%] text-center">Received Qty</th>
                 <th className="py-2.5 px-3 w-[16%] text-right">Cost Rate (PKR)</th>

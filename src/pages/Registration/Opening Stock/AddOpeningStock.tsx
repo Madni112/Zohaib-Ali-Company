@@ -336,9 +336,9 @@ const AddOpeningStock = () => {
                                         <input name="stockNo" readOnly value={values.stockNo} className="w-full rounded border border-stroke bg-gray-50 dark:bg-meta-4/10 px-3 h-10 text-xs font-bold outline-none text-black dark:text-white" />
                                     </div>
 
-                                    {/* 1. SKU Code Typeable Search with Custom Full-Width Dropdown */}
+                                    {/* 1. Code Typeable Search with Custom Full-Width Dropdown */}
                                     <div className="relative" ref={skuDropdownRef}>
-                                        <label className="mb-2 block text-xs font-semibold text-gray-500">SKU Code (Search & Auto-Select)</label>
+                                        <label className="mb-2 block text-xs font-semibold text-gray-500">Code (Search & Auto-Select)</label>
                                         {(() => {
                                             const filteredProds = products.filter(p => {
                                                 if (!values.skuCode) return true;
@@ -390,7 +390,7 @@ const AddOpeningStock = () => {
                                                             setShowSkuDropdown(true);
                                                             setHighlightedSkuIndex(0);
 
-                                                            // Only auto-fill if the user has typed the EXACT FULL SKU code (e.g. SKU-002)
+                                                            // Only auto-fill if the user has typed the EXACT FULL Code (e.g. SKU-002)
                                                             const matched = products.find(
                                                                 p => p.item_sr_no && p.item_sr_no.toLowerCase() === typed.trim().toLowerCase()
                                                             );
@@ -399,7 +399,7 @@ const AddOpeningStock = () => {
                                                                 setFieldValue('purchasePrice', matched.purchase_price || 0);
                                                             }
                                                         }}
-                                                        placeholder="Type or select SKU Code..."
+                                                        placeholder="Type or select Code..."
                                                         className="w-full rounded border border-stroke px-3 h-10 bg-transparent text-xs font-mono font-bold outline-none focus:border-primary dark:bg-boxdark text-black dark:text-white uppercase"
                                                     />
 

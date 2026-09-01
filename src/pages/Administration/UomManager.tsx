@@ -73,15 +73,15 @@ const UomManager = () => {
         .update({ is_active: !currentStatus })
         .eq('id', id);
 
-      if (error) throw error;{
+      if (error) throw error; {
         !currentStatus ?
 
-      toast.success( 'UOM Turned ON'):
-      toast.error('UOM Turned OFF')
+          toast.success('UOM Turned ON') :
+          toast.error('UOM Turned OFF')
       }
     } catch (err: any) {
       toast.error('Database Sync Failure: ' + err.message);
-      fetchUomCatalog(); // Fallback reset from server if network fails
+      fetchUomCatalog();
     }
   };
 
@@ -101,20 +101,20 @@ const UomManager = () => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-xs">
-      
+
       {/* COMPONENT SUMMARY BAR HEADINGS */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-black dark:text-white">Units of Measurement (UOM) Switchboard</h2>
           <p className="text-gray-400 mt-0.5 text-xs">Turn individual units On or Off to instantly control dropdown visibility across active ERP forms.</p>
         </div>
-        
-        <input 
-          type="text" 
-          value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
-          placeholder="Search codes or headers..." 
-          className="w-full sm:w-72 rounded border border-stroke py-2 px-3 bg-white dark:bg-boxdark dark:border-strokedark outline-none focus:border-primary text-black dark:text-white shadow-xs" 
+
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search codes or headers..."
+          className="w-full sm:w-72 rounded border border-stroke py-2 px-3 bg-white dark:bg-boxdark dark:border-strokedark outline-none focus:border-primary text-black dark:text-white shadow-xs"
         />
       </div>
 
@@ -127,7 +127,7 @@ const UomManager = () => {
         <div className="space-y-6">
           {Object.keys(groupedUoms).map((categoryName) => (
             <div key={categoryName} className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark overflow-hidden shadow-xs">
-              
+
               {/* Categorized Ribbon Strip Label */}
               <div className="bg-gray-100 dark:bg-meta-4 px-5 py-3 border-b border-stroke dark:border-strokedark">
                 <h3 className="font-extrabold text-black dark:text-white tracking-wider text-[11px] uppercase">
@@ -139,11 +139,11 @@ const UomManager = () => {
               <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {groupedUoms[categoryName].map((unit: any) => {
                   return (
-                    <div 
-                      key={unit.id} 
+                    <div
+                      key={unit.id}
                       className={`flex items-center justify-between p-3 rounded border duration-150 transition
-                        ${unit.is_active 
-                          ? 'border-success/30 bg-success/5 text-black dark:text-white font-semibold' 
+                        ${unit.is_active
+                          ? 'border-success/30 bg-success/5 text-black dark:text-white font-semibold'
                           : 'border-stroke bg-white dark:border-strokedark dark:bg-boxdark text-gray-400'
                         }`}
                     >

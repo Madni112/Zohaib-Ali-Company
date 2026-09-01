@@ -56,7 +56,7 @@ export const PERMISSION_TREE: PermissionNode[] = [
     label: 'Administration',
     children: [
       { id: '/Administration/Categories/List', label: 'Categories' },
-      { id: '/Administration/Surface-Finish', label: 'Surface Finish' },
+      { id: '/Administration/Surface-Finish', label: 'Bin' },
       { id: '/Administration/UOM/List', label: 'UOM' },
       { id: '/Administration/Brands', label: 'Brands' },
       { id: '/Administration/Products/List', label: 'Products' },

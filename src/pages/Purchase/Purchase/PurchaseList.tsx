@@ -175,31 +175,38 @@ const PurchaseList = () => {
     if (!window.confirm('Are you certain you want to permanently erase this consignment registry? Shelf stock allocations will reverse!')) return;
 
     try {
-      const { data: targetRecord } = await supabase.from('supplier_purchases').select('items, target_warehouse').eq('id', id).single();
+      const { data: targetRecord } = await supabase.from('supplier_purchases').select('items, target_warehouse, metadata').eq('id', id).single();
       
-      if (targetRecord?.items) {
-        for (const item of targetRecord.items) {
-          const qty = Number(item.qty || item.quantity || 0);
-          const pName = item.itemName || item.product_name;
+      // Only reverse stock if this purchase was NOT linked to a GRN.
+      // If it is linked to a GRN, the GRN is the source of physical stock, so deleting the bill shouldn't touch stock.
+      if (!targetRecord?.metadata?.grn_id) {
+        if (targetRecord?.items) {
+          for (const item of targetRecord.items) {
+            const qty = Number(item.qty || item.quantity || 0);
+            const pName = item.itemName || item.product_name;
 
-          if (pName) {
-            // 1. Decrease Master Product Stock (-)
-            const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', pName).maybeSingle();
-            if (prod) {
-              const newStock = Math.max(0, (Number(prod.current_stock) || 0) - qty);
-              await supabase.from('products').update({ current_stock: newStock }).ilike('product_name', pName);
-            }
+            if (pName) {
+              // 1. Decrease Master Product Stock (-)
+              const { data: prod } = await supabase.from('products').select('current_stock').ilike('product_name', pName).maybeSingle();
+              if (prod) {
+                const newStock = Math.max(0, (Number(prod.current_stock) || 0) - qty);
+                await supabase.from('products').update({ current_stock: newStock }).ilike('product_name', pName);
+              }
 
-            // 2. Decrease Target Location Warehouse Stock (-)
-            if (targetRecord.target_warehouse) {
-              const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', targetRecord.target_warehouse).maybeSingle();
-              if (p) {
-                const newWhStock = Math.max(0, (Number(p.quantity) || 0) - qty);
-                await supabase.from('warehouse_inventory').update({ quantity: newWhStock }).eq('id', p.id);
+              // 2. Decrease Target Location Warehouse Stock (-)
+              if (targetRecord.target_warehouse) {
+                const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', targetRecord.target_warehouse).maybeSingle();
+                if (p) {
+                  const newWhStock = Math.max(0, (Number(p.quantity) || 0) - qty);
+                  await supabase.from('warehouse_inventory').update({ quantity: newWhStock }).eq('id', p.id);
+                }
               }
             }
           }
         }
+      } else {
+        // If it was linked to a GRN, revert the GRN status back to 'Confirm' so it can be billed again if needed
+        await supabase.from('grn_receipts').update({ status: 'Confirm' }).eq('id', targetRecord.metadata.grn_id);
       }
 
       const { error } = await supabase.from('supplier_purchases').delete().eq('id', id);
@@ -370,13 +377,25 @@ const PurchaseList = () => {
 
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
           <div className="text-sm text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Previous</button>
-              {Array.from({ length: totalPages }, (_, i) => <button key={i + 1} onClick={() => setCurrentPage(i + 1)} className={`px-3 py-1.5 rounded text-xs border transition cursor-pointer ${currentPage === i + 1 ? 'bg-primary text-white border-primary' : 'border-stroke dark:border-strokedark text-gray-500 hover:bg-gray-50'}`}>{i + 1}</button>)}
-              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Next</button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+              >
+                Next
+              </button>
             </div>
-          )}
         </div>
 
       </div>

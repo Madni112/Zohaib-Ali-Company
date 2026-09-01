@@ -10,7 +10,7 @@ const PrintPurchaseReturnReceipt: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { tenantId } = useAuth();
-  
+
   const [receipt, setReceipt] = useState<any>(null);
   const [linkedReturn, setLinkedReturn] = useState<any>(null);
   const [vendorInfo, setVendorInfo] = useState<any>(null);
@@ -75,10 +75,10 @@ const PrintPurchaseReturnReceipt: React.FC = () => {
   if (!receipt) return null;
 
   const receiptNo = receipt.receipt_no || `PRR-${receipt.id}`;
-  const receiptDate = receipt.payment_date 
+  const receiptDate = receipt.payment_date
     ? new Date(receipt.payment_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     : new Date(receipt.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  
+
   const vendorName = receipt.vendor_name || 'General Vendor';
   const amountReceived = Number(receipt.amount_received || 0);
   const meta = receipt.metadata || {};
@@ -99,8 +99,8 @@ const PrintPurchaseReturnReceipt: React.FC = () => {
   const bankTitle = meta.selectedBankTitle || meta.selectedBankId || '';
   const paymentMethodDisplay = isSplit
     ? `Split Refund (Cash: Rs. ${formatMoney(meta.cashAmount || 0)} + Bank: Rs. ${formatMoney(meta.bankAmount || 0)} - ${bankTitle || 'Bank'})`
-    : (isBank 
-      ? `Bank Wire Deposit (${bankTitle || 'Online Wire / Cheque'})` 
+    : (isBank
+      ? `Bank Wire Deposit (${bankTitle || 'Online Wire / Cheque'})`
       : 'Cash Drawer Inflow (Cash in Hand)');
 
   const returnRefDisplay = receipt.return_no || 'Vendor Return Settlement';
@@ -194,7 +194,7 @@ const PrintPurchaseReturnReceipt: React.FC = () => {
 
       {/* ── PRINTABLE DOCUMENT CONTAINER (Full A4 Width) ──────────────────────── */}
       <div className="print-container bg-white p-6 sm:p-8 border border-slate-200 rounded-xl shadow-xs print:border-none print:p-0 print:shadow-none">
-        
+
         {/* ── 1. CORPORATE EXECUTIVE HEADER ── */}
         <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-slate-900 pb-5 mb-5 gap-4">
           <div>

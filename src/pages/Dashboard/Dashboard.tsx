@@ -758,68 +758,74 @@ const Dashboard: React.FC = () => {
             <div className="flex justify-between items-center mb-3 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400">
-                    <MdLocalFireDepartment size={16} />
+                  <span className="p-1 rounded-md bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400">
+                    <MdWarning size={16} />
                   </span>
-                  Top Trending Products
+                  Low Stock Limit Alerts
                 </h3>
-                <p className="text-[11px] text-slate-400">Ranked by revenue velocity & order frequency</p>
+                <p className="text-[11px] text-slate-400">Products at or below minimum threshold</p>
               </div>
-              <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold">
-                Top Demand 🔥
+              <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold font-mono ${lowStockProducts.length > 0
+                ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
+                : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                }`}>
+                {lowStockProducts.length > 0 ? `${lowStockProducts.length} Items Critical` : 'Stock Healthy 🛡️'}
               </span>
             </div>
 
-            {/* List with 5 visible rows + scroll */}
-            <div className="space-y-2.5 max-h-[295px] overflow-y-auto pr-1">
-              {trendingProducts.length > 0 ? (
-                trendingProducts.map((p, idx) => (
+            {/* List with Up to 10 Low Stock Items */}
+            <div className="space-y-2 max-h-[295px] overflow-y-auto pr-1">
+              {lowStockProducts.length > 0 ? (
+                lowStockProducts.map((p) => (
                   <div
-                    key={p.name}
-                    className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/60 duration-150 flex items-center gap-3"
+                    key={p.id}
+                    className="p-2.5 rounded-xl border border-rose-100 dark:border-rose-950/40 bg-rose-50/40 dark:bg-rose-950/20 flex justify-between items-center gap-2 hover:bg-rose-50/70 duration-150"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-emerald-600/10 text-emerald-600 font-black text-xs flex items-center justify-center shrink-0">
-                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-900 dark:text-white text-xs truncate" title={p.name}>
+                        {p.name}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                        <span className="text-rose-600 font-bold">Avail: {p.currentStock} {p.unit}</span>
+                        <span>•</span>
+                        <span>Min Req: {p.minLimit} {p.unit}</span>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-baseline mb-1">
-                        <span className="font-bold text-slate-900 dark:text-white truncate text-xs" title={p.name}>
-                          {p.name}
-                        </span>
-                        <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-xs shrink-0 ml-2">
-                          Rs. {(p.totalRevenue / 1000).toFixed(1)}k
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1">
-                        <span>{p.category}</span>
-                        <span>{p.unitsSold.toLocaleString()} units sold ({p.transactionCount} bills)</span>
-                      </div>
-                      {/* Mini visual velocity bar */}
-                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full"
-                          style={{ width: `${Math.max(8, p.percentageOfTotal)}%` }}
-                        />
-                      </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2 py-0.5 rounded bg-rose-600 text-white font-mono font-bold text-[10px]">
+                        -{p.deficit} {p.unit}
+                      </span>
+                      <button
+                        onClick={() => navigate('/Purchase/Purchases/Add')}
+                        className="px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold hover:border-emerald-500 hover:text-emerald-600 transition"
+                        title="Create Purchase Order"
+                      >
+                        + Reorder
+                      </button>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="py-12 text-center text-slate-400 italic">
-                  No sales invoice items recorded yet.
+                <div className="py-12 text-center text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center gap-2">
+                  <MdCheckCircle size={32} />
+                  <span className="font-bold text-xs">All Products are above Minimum Stock Limits</span>
+                  <span className="text-[11px] text-slate-400">Inventory levels are currently optimal.</span>
                 </div>
               )}
             </div>
           </div>
+
           <div className="pt-2 text-right">
             <button
-              onClick={() => navigate('/Reports/Sales-Report')}
+              onClick={() => navigate('/Reports/Stock-Report')}
               className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-[11px]"
             >
-              View Full Product Sales Analytics →
+              Open Inventory Audit Matrix →
             </button>
           </div>
         </div>
+
       </div>
 
       {/* ========================================================================= */}
@@ -853,21 +859,19 @@ const Dashboard: React.FC = () => {
             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs">
               <button
                 onClick={() => setChartViewTab('daily')}
-                className={`px-3 py-1 rounded-lg transition-all ${
-                  chartViewTab === 'daily'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                }`}
+                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'daily'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                  }`}
               >
                 📅 Daily (Last 14d)
               </button>
               <button
                 onClick={() => setChartViewTab('monthly')}
-                className={`px-3 py-1 rounded-lg transition-all ${
-                  chartViewTab === 'monthly'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                }`}
+                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'monthly'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                  }`}
               >
                 📆 Monthly
               </button>
@@ -901,21 +905,19 @@ const Dashboard: React.FC = () => {
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-bold">
                   <button
                     onClick={() => setHoldingTab('warehouse')}
-                    className={`px-2.5 py-1 rounded-md transition ${
-                      holdingTab === 'warehouse'
-                        ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                        : 'text-slate-500'
-                    }`}
+                    className={`px-2.5 py-1 rounded-md transition ${holdingTab === 'warehouse'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                      : 'text-slate-500'
+                      }`}
                   >
                     Warehouse In-Charge
                   </button>
                   <button
                     onClick={() => setHoldingTab('invoice')}
-                    className={`px-2.5 py-1 rounded-md transition ${
-                      holdingTab === 'invoice'
-                        ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                        : 'text-slate-500'
-                    }`}
+                    className={`px-2.5 py-1 rounded-md transition ${holdingTab === 'invoice'
+                      ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                      : 'text-slate-500'
+                      }`}
                   >
                     Invoice-Wise
                   </button>
@@ -1012,71 +1014,65 @@ const Dashboard: React.FC = () => {
             <div className="flex justify-between items-center mb-3 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400">
-                    <MdWarning size={16} />
+                  <span className="p-1 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400">
+                    <MdLocalFireDepartment size={16} />
                   </span>
-                  Low Stock Limit Alerts
+                  Top Trending Products
                 </h3>
-                <p className="text-[11px] text-slate-400">Products at or below minimum threshold</p>
+                <p className="text-[11px] text-slate-400">Ranked by revenue velocity & order frequency</p>
               </div>
-              <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold font-mono ${
-                lowStockProducts.length > 0
-                  ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
-                  : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-              }`}>
-                {lowStockProducts.length > 0 ? `${lowStockProducts.length} Items Critical` : 'Stock Healthy 🛡️'}
+              <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold">
+                Top Demand 🔥
               </span>
             </div>
 
-            {/* List with Up to 10 Low Stock Items */}
-            <div className="space-y-2 max-h-[295px] overflow-y-auto pr-1">
-              {lowStockProducts.length > 0 ? (
-                lowStockProducts.map((p) => (
+            {/* List with 5 visible rows + scroll */}
+            <div className="space-y-2.5 max-h-[295px] overflow-y-auto pr-1">
+              {trendingProducts.length > 0 ? (
+                trendingProducts.map((p, idx) => (
                   <div
-                    key={p.id}
-                    className="p-2.5 rounded-xl border border-rose-100 dark:border-rose-950/40 bg-rose-50/40 dark:bg-rose-950/20 flex justify-between items-center gap-2 hover:bg-rose-50/70 duration-150"
+                    key={p.name}
+                    className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/60 duration-150 flex items-center gap-3"
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-slate-900 dark:text-white text-xs truncate" title={p.name}>
-                        {p.name}
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
-                        <span className="text-rose-600 font-bold">Avail: {p.currentStock} {p.unit}</span>
-                        <span>•</span>
-                        <span>Min Req: {p.minLimit} {p.unit}</span>
-                      </div>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-600/10 text-emerald-600 font-black text-xs flex items-center justify-center shrink-0">
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-2 py-0.5 rounded bg-rose-600 text-white font-mono font-bold text-[10px]">
-                        -{p.deficit} {p.unit}
-                      </span>
-                      <button
-                        onClick={() => navigate('/Purchase/Purchases/Add')}
-                        className="px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-[10px] font-bold hover:border-emerald-500 hover:text-emerald-600 transition"
-                        title="Create Purchase Order"
-                      >
-                        + Reorder
-                      </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className="font-bold text-slate-900 dark:text-white truncate text-xs" title={p.name}>
+                          {p.name}
+                        </span>
+                        <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 text-xs shrink-0 ml-2">
+                          Rs. {(p.totalRevenue / 1000).toFixed(1)}k
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1">
+                        <span>{p.category}</span>
+                        <span>{p.unitsSold.toLocaleString()} units sold ({p.transactionCount} bills)</span>
+                      </div>
+                      {/* Mini visual velocity bar */}
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full"
+                          style={{ width: `${Math.max(8, p.percentageOfTotal)}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="py-12 text-center text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center gap-2">
-                  <MdCheckCircle size={32} />
-                  <span className="font-bold text-xs">All Products are above Minimum Stock Limits</span>
-                  <span className="text-[11px] text-slate-400">Inventory levels are currently optimal.</span>
+                <div className="py-12 text-center text-slate-400 italic">
+                  No sales invoice items recorded yet.
                 </div>
               )}
             </div>
           </div>
-
           <div className="pt-2 text-right">
             <button
-              onClick={() => navigate('/Reports/Stock-Report')}
+              onClick={() => navigate('/Reports/Sales-Report')}
               className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline text-[11px]"
             >
-              Open Inventory Audit Matrix →
+              View Full Product Sales Analytics →
             </button>
           </div>
         </div>
@@ -1115,22 +1111,20 @@ const Dashboard: React.FC = () => {
               <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs">
                 <button
                   onClick={() => setLiquidityTab('bank')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
-                    liquidityTab === 'bank'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                  }`}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${liquidityTab === 'bank'
+                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                    }`}
                 >
                   <MdAccountBalance size={14} />
                   <span>Bank Accounts ({metrics.bankAccounts?.length || 0})</span>
                 </button>
                 <button
                   onClick={() => setLiquidityTab('cash')}
-                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
-                    liquidityTab === 'cash'
-                      ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                  }`}
+                  className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${liquidityTab === 'cash'
+                    ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                    }`}
                 >
                   <MdAccountBalanceWallet size={14} />
                   <span>Cash Drawer</span>
@@ -1214,17 +1208,15 @@ const Dashboard: React.FC = () => {
                             {c.party}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              c.type === 'Inflow'
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
-                                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'Inflow'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'
+                              }`}>
                               {c.type === 'Inflow' ? '+ Received' : '- Paid'}
                             </span>
                           </td>
-                          <td className={`py-2.5 px-3 text-right font-black ${
-                            c.type === 'Inflow' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                          }`}>
+                          <td className={`py-2.5 px-3 text-right font-black ${c.type === 'Inflow' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                            }`}>
                             Rs. {c.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
@@ -1256,7 +1248,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

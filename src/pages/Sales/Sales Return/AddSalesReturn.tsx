@@ -1086,7 +1086,7 @@ const AddSalesReturn = () => {
                             <thead>
                               <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                                 <th className="p-3 w-12 text-center">S#</th>
-                                <th className="p-3 w-36">SKU Code</th>
+                                <th className="p-3 w-36">Code</th>
                                 <th className="p-3 min-w-[220px]">Item Description</th>
                                 <th className="p-3 w-36">Return Warehouse</th>
                                 <th className="p-3 w-20 text-center">UOM</th>

@@ -138,7 +138,7 @@ const AddTileProduct: React.FC = () => {
     return `${tileHeight} × ${tileWidth} cm`;
   }, [tileHeight, tileWidth]);
 
-  // Auto-generate Product Name if empty
+  // Auto-generate Description if empty
   useEffect(() => {
     if (!isEditMode && (!productName || productName.startsWith('Tile '))) {
       const brandPrefix = brand ? `${brand} ` : '';
@@ -167,7 +167,7 @@ const AddTileProduct: React.FC = () => {
     e.preventDefault();
 
     if (!productName.trim()) {
-      toast.error('Please enter a product name for the tile item');
+      toast.error('Please enter a Description for the tile item');
       return;
     }
     if (!purchasePrice || !salePrice) {
@@ -204,7 +204,7 @@ const AddTileProduct: React.FC = () => {
         sro_schedule_no: sroScheduleNo.trim(),
       };
 
-      // 🔍 SKU Uniqueness Validation: Prevent duplicate SKU codes
+      // 🔍 SKU Uniqueness Validation: Prevent duplicate Codes
       const finalSku = itemSrNo.trim() || tileSizeFormatted;
       if (finalSku) {
         let skuQuery = supabase
@@ -218,7 +218,7 @@ const AddTileProduct: React.FC = () => {
 
         const { data: existingSku } = await skuQuery;
         if (existingSku && existingSku.length > 0) {
-          toast.error(`SKU Code "${finalSku}" is already assigned to "${existingSku[0].product_name}". Each product must have a unique SKU!`, {
+          toast.error(`Code "${finalSku}" is already assigned to "${existingSku[0].product_name}". Each product must have a unique SKU!`, {
             duration: 5000,
           });
           setLoading(false);
@@ -382,10 +382,10 @@ const AddTileProduct: React.FC = () => {
               />
             </div>
 
-            {/* Surface Finish */}
+            {/* Bin */}
             <div>
               <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
-                Surface Finish
+                Bin
               </label>
               <select
                 value={finishType}
@@ -443,10 +443,10 @@ const AddTileProduct: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             
-            {/* Product Name */}
+            {/* Description */}
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
-                Tile Product Name / Model Title *
+                Tile Description / Model Title *
               </label>
               <input
                 type="text"

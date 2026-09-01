@@ -12,6 +12,8 @@ const SaleReturnReceiptList: React.FC = () => {
   const [receipts, setReceipts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage] = useState(10);
 
   useEffect(() => {
     fetchReceiptsLog();
@@ -121,9 +123,9 @@ const SaleReturnReceiptList: React.FC = () => {
               {loading ? (
                 <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
               ) : filteredReceipts.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400 font-bold italic bg-gray-50/50">No remittance adjustment entries currently logged.</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-500 font-bold italic">No remittance adjustment entries currently logged.</td></tr>
               ) : (
-                filteredReceipts.map((rec) => {
+                filteredReceipts.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage).map((rec) => {
                   let displayDate = String(rec.payment_date || rec.processing_date || rec.created_at || '').trim();
                   if (displayDate.startsWith('[')) {
                     displayDate = displayDate.replace(/[\[\]"']/g, '').split(',')[0];
@@ -171,10 +173,35 @@ const SaleReturnReceiptList: React.FC = () => {
                   );
                 })
               )}
-            </tbody>
-          </table>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+        <div>
+          Showing {filteredReceipts.length > 0 ? (currentPage - 1) * entriesPerPage + 1 : 0} to {Math.min(currentPage * entriesPerPage, filteredReceipts.length)} of {filteredReceipts.length} entries
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+          >
+            Previous
+          </button>
+          <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+            Page {currentPage} of {Math.ceil(filteredReceipts.length / entriesPerPage) || 1}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(Math.ceil(filteredReceipts.length / entriesPerPage), p + 1))}
+            disabled={currentPage === Math.ceil(filteredReceipts.length / entriesPerPage) || filteredReceipts.length === 0}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+          >
+            Next
+          </button>
         </div>
       </div>
+    </div>
     </div>
   );
 };

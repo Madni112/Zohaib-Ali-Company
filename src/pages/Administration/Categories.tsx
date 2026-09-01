@@ -14,6 +14,7 @@ const Categories = () => {
 
     // Inline inputs form state hooks
     const [categoryName, setCategoryName] = useState('');
+    const [categoryCode, setCategoryCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     // FIXED: Added inline modification tracker states
@@ -55,9 +56,10 @@ const Categories = () => {
     const handleFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const cleanName = categoryName.trim();
+        const cleanCode = categoryCode.trim();
 
-        if (!cleanName) {
-            toast.error('Category name cannot be empty');
+        if (!cleanCode) {
+            toast.error('Category code is required');
             return;
         }
 
@@ -66,10 +68,10 @@ const Categories = () => {
 
             // Verify duplication against other registered entries
             const isDuplicate = categories.some(
-                (c) => c.name.toLowerCase() === cleanName.toLowerCase() && c.id !== editingId
+                (c) => c.code?.toLowerCase() === cleanCode.toLowerCase() && c.id !== editingId
             );
             if (isDuplicate) {
-                toast.error('This category label is already registered');
+                toast.error('This category code is already registered');
                 setSubmitting(false);
                 return;
             }
@@ -78,15 +80,15 @@ const Categories = () => {
                 // Path A: Edit Mode triggers a PostgREST SQL Update call
                 const { error } = await supabase
                     .from('inventory_categories')
-                    .update({ name: cleanName })
+                    .update({ name: cleanName, code: cleanCode })
                     .eq('id', editingId);
 
                 if (error) throw error;
-                toast.success('Category title modified successfully!');
+                toast.success('Category modified successfully!');
                 setEditingId(null);
             } else {
                 // Path B: Standard insertion saves a fresh entry row with tenant_id
-                const insertPayload: any = { name: cleanName };
+                const insertPayload: any = { name: cleanName, code: cleanCode };
                 if (tenantId) {
                     insertPayload.tenant_id = tenantId;
                 }
@@ -100,6 +102,7 @@ const Categories = () => {
             }
 
             setCategoryName('');
+            setCategoryCode('');
             fetchCategories(); // Instantly reload table list data parameters
         } catch (err: any) {
             toast.error(err.message);
@@ -112,13 +115,15 @@ const Categories = () => {
     // TRIGGERED WHEN USER CLICKS COMPONENT INLINE MDEDIT TARGET CELL BUTTON
     const handleTriggerEdit = (cat: any) => {
         setEditingId(cat.id);
-        setCategoryName(cat.name); // Hydrates the text block straight back into the horizontal form field instantly
+        setCategoryName(cat.name || ''); 
+        setCategoryCode(cat.code || '');
         window.scrollTo({ top: 0, behavior: 'smooth' }); // Smooth scrolls up to top inputs bar
     };
 
     const handleCancelEdit = () => {
         setEditingId(null);
         setCategoryName('');
+        setCategoryCode('');
     };
 
     const handleDeleteCategory = async (id: number | string) => {
@@ -140,7 +145,8 @@ const Categories = () => {
     };
 
     const filteredCategories = categories.filter((c) =>
-        c.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.code?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const totalEntries = filteredCategories.length;
@@ -175,18 +181,32 @@ const Categories = () => {
                     </span>
                 </div>
                 <form onSubmit={handleFormSubmit} className="flex flex-col md:flex-row items-end gap-4 text-xs">
-                    <div className="flex-1 w-full">
-                        <label className="block text-gray-500 mb-1.5 font-medium">
-                            Category Name: *
-                        </label>
-                        <input
-                            type="text"
-                            value={categoryName}
-                            onChange={(e) => setCategoryName(e.target.value)}
-                            className="w-full border border-stroke rounded p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-primary text-black dark:text-white font-bold text-xs h-[38px]"
-                            placeholder="Enter category name text description (e.g. Gas Cylinders, Industrial Valve)"
-                            required
-                        />
+                    <div className="flex-1 w-full flex flex-col md:flex-row gap-4">
+                        <div className="flex-1">
+                            <label className="block text-gray-500 mb-1.5 font-medium">
+                                Category Code: *
+                            </label>
+                            <input
+                                type="text"
+                                value={categoryCode}
+                                onChange={(e) => setCategoryCode(e.target.value)}
+                                className="w-full border border-stroke rounded p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-primary text-black dark:text-white font-bold text-xs h-[38px]"
+                                placeholder="Enter category code (e.g. GC-01)"
+                                required
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-gray-500 mb-1.5 font-medium">
+                                Category Name: (Optional)
+                            </label>
+                            <input
+                                type="text"
+                                value={categoryName}
+                                onChange={(e) => setCategoryName(e.target.value)}
+                                className="w-full border border-stroke rounded p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-primary text-black dark:text-white font-bold text-xs h-[38px]"
+                                placeholder="Enter category name text description"
+                            />
+                        </div>
                     </div>
                     <div className="flex gap-2 w-full md:w-auto shrink-0">
                         {editingId && (
@@ -250,7 +270,8 @@ const Categories = () => {
                         <thead>
                             <tr className={`bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke  dark:border-snakedark`}>
                                 <th className="py-4 px-4 font-semibold text-xs w-20">S#</th>
-                                <th className="py-4 px-4 font-semibold text-xs">Category Designation Name</th>
+                                <th className="py-4 px-4 font-semibold text-xs w-48">Code</th>
+                                <th className="py-4 px-4 font-semibold text-xs">Category Department Name</th>
                                 <th className="py-4 px-4 font-semibold text-xs w-32 text-center">Actions</th>
                             </tr>
                         </thead>
@@ -276,7 +297,8 @@ const Categories = () => {
                                         <tr key={cat.id} className={`border-b duration-150 text-xs
                       ${isCurrentRowEditing ? 'font-bold border-primary bg-meta-4/80' : 'border-stroke dark:border-strokedark'}`}>
                                             <td className="py-3.5 px-4 text-black dark:text-white font-medium">{serialNumber}</td>
-                                            <td className="py-3.5 px-4 text-black dark:text-white uppercase tracking-tight">{cat.name}</td>
+                                            <td className="py-3.5 px-4 text-black dark:text-white font-bold tracking-wider uppercase">{cat.code || '-'}</td>
+                                            <td className="py-3.5 px-4 text-black dark:text-white uppercase tracking-tight">{cat.name || '-'}</td>
 
                                             <td className="py-3.5 px-4 text-center">
                                                 <TableActions
@@ -300,34 +322,25 @@ const Categories = () => {
                         Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
                     </div>
 
-                    {totalPages > 1 && (
-                        <div className="flex items-center gap-1">
-                            <button
-                                disabled={currentPage === 1}
-                                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                                className="px-2 py-1 rounded border border-stroke dark:border-strokedark hover:bg-gray-100 text-[10px] font-medium disabled:opacity-30"
-                            >
-                                Previous
-                            </button>
-                            {Array.from({ length: totalPages }, (_, i) => (
-                                <button
-                                    key={i + 1}
-                                    onClick={() => setCurrentPage(i + 1)}
-                                    className={`px-2 py-1 rounded text-[10px] font-bold border transition ${currentPage === i + 1 ? 'bg-primary text-white border-primary' : 'border-stroke dark:border-strokedark text-gray-500 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    {i + 1}
-                                </button>
-                            ))}
-                            <button
-                                disabled={currentPage === totalPages}
-                                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                                className="px-2 py-1 rounded border border-stroke dark:border-strokedark hover:bg-gray-100 text-[10px] font-medium disabled:opacity-30"
-                            >
-                                Next
-                            </button>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+                        >
+                            Previous
+                        </button>
+                        <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+                            Page {currentPage} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages || totalPages === 0}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+                        >
+                            Next
+                        </button>
+                    </div>
                 </div>
 
             </div>

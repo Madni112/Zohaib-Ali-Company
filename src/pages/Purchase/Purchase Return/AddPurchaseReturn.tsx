@@ -165,7 +165,7 @@ const AddPurchaseReturn = () => {
             const matchedPo = purData?.find(p => p.purchase_no === poRef || String(p.id) === cleanId);
             if (matchedPo) setSelectedPoObj(matchedPo);
           } else {
-            setPoSearchQuery('-- General Return (Manual Items) --');
+            setPoSearchQuery('');
           }
         }
       } catch (err: any) {
@@ -197,7 +197,7 @@ const AddPurchaseReturn = () => {
   );
 
   const filteredPurchases = vendorPurchases.filter(p => {
-    if (!poSearchQuery || poSearchQuery.startsWith('-- General')) return true;
+    if (!poSearchQuery) return true;
     return (
       (p.purchase_no || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
       (p.purchase_date || '').toLowerCase().includes(poSearchQuery.toLowerCase()) ||
@@ -373,7 +373,6 @@ const AddPurchaseReturn = () => {
             }]
           }}
           enableReinitialize={isEditMode}
-          validationSchema={validationSchema}
           onSubmit={async (values) => {
             if (!values.vendorName) {
               toast.error('Validation Error: Please select a wholesale vendor first!');
@@ -693,7 +692,7 @@ const AddPurchaseReturn = () => {
               <Form className="p-6.5 space-y-6">
                 
                 {/* ── TOP METADATA BAR ── */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   
                   {/* Return Memo ID */}
                   <div>
@@ -733,6 +732,7 @@ const AddPurchaseReturn = () => {
                         disabled={isEditMode}
                         value={vendorSearchQuery}
                         onFocus={() => setIsVendorDropdownOpen(true)}
+                        onBlur={() => setIsVendorDropdownOpen(false)}
                         onKeyDown={(e) => {
                           if (e.key === 'ArrowDown') {
                             e.preventDefault();
@@ -816,35 +816,169 @@ const AddPurchaseReturn = () => {
                     )}
                   </div>
 
+                  {/* Purchase Invoice / Bill Reference */}
+                  <div className="relative" ref={poContainerRef}>
+                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1 flex items-center justify-between">
+                      <span>Purchase Invoice (Recommended):</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled={isEditMode || !values.vendorName}
+                        value={poSearchQuery}
+                        onFocus={() => setIsPoDropdownOpen(true)}
+                        onBlur={() => setIsPoDropdownOpen(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setHighlightedPoIndex(prev => Math.min(prev + 1, filteredPurchases.length));
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setHighlightedPoIndex(prev => Math.max(prev - 1, 0));
+                          } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (filteredPurchases[highlightedPoIndex]) {
+                               const p = filteredPurchases[highlightedPoIndex];
+                               const pNo = p.purchase_no || `PUR-${p.id}`;
+                               setPoSearchQuery(pNo);
+                               setSelectedPoNo(pNo);
+                               setSelectedPoObj(p);
+                               setFieldValue('purchaseNo', pNo);
+                               const newFormItems = (p.items || []).map((i: any) => ({
+                                 skuCode: i.skuCode || i.sku || i.item_sr_no || i.item_code || '',
+                                 itemName: i.itemName || i.product_name || '',
+                                 warehouse: values.sourceWarehouse || locations[0]?.name || 'Central Warehouse A',
+                                 qty: i.qty || i.quantity || 1,
+                                 rate: i.rate || i.cost_price || 0,
+                                 uom: i.uom || 'Nos',
+                                 discountPer: i.discountPer || i.discount_per || 0,
+                                 discountAmt: i.discountAmt || i.discount_amt || 0
+                               }));
+                               if (newFormItems.length > 0) setFieldValue('items', newFormItems);
+                            }
+                            setIsPoDropdownOpen(false);
+                          } else if (e.key === 'Escape') {
+                            setIsPoDropdownOpen(false);
+                          }
+                        }}
+                        onChange={(e) => {
+                          setPoSearchQuery(e.target.value);
+                          setIsPoDropdownOpen(true);
+                          setHighlightedPoIndex(0);
+                        }}
+                        placeholder={values.vendorName ? "Type to search invoice..." : "Select Vendor first..."}
+                        className={`w-full rounded border p-2 bg-white dark:bg-boxdark font-bold text-black dark:text-white text-xs outline-none border-stroke dark:border-strokedark focus:border-primary`}
+                      />
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {poSearchQuery && !isEditMode && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPoSearchQuery('');
+                              setSelectedPoNo('');
+                              setSelectedPoObj(null);
+                              setFieldValue('purchaseNo', '');
+                              setFieldValue('items', [{ skuCode: '', itemName: '', warehouse: values.sourceWarehouse || locations[0]?.name || 'Central Warehouse A', qty: 1, rate: 0, uom: 'Nos' }]);
+                            }}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <MdClear size={14} />
+                          </button>
+                        )}
+                        <MdKeyboardArrowDown className="text-gray-400" size={16} />
+                      </div>
+                    </div>
+                    {/* PO Dropdown */}
+                    {isPoDropdownOpen && !isEditMode && values.vendorName && (
+                      <div className="absolute left-0 top-full mt-1 z-[99999] w-full max-h-56 overflow-y-auto bg-white dark:bg-[#1A222C] border border-stroke dark:border-strokedark rounded-lg shadow-2xl divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredPurchases.length > 0 ? (
+                          filteredPurchases.map((p, idx) => {
+                            const pNo = p.purchase_no || `PUR-${p.id}`;
+                            return (
+                              <div
+                                key={p.id}
+                                onMouseEnter={() => setHighlightedPoIndex(idx)}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setPoSearchQuery(pNo);
+                                  setSelectedPoNo(pNo);
+                                  setSelectedPoObj(p);
+                                  setFieldValue('purchaseNo', pNo);
+                                  const newFormItems = (p.items || []).map((i: any) => ({
+                                    skuCode: i.skuCode || i.sku || i.item_sr_no || i.item_code || '',
+                                    itemName: i.itemName || i.product_name || '',
+                                    warehouse: values.sourceWarehouse || locations[0]?.name || 'Central Warehouse A',
+                                    qty: i.qty || i.quantity || 1,
+                                    rate: i.rate || i.cost_price || 0,
+                                    uom: i.uom || 'Nos',
+                                    discountPer: i.discountPer || i.discount_per || 0,
+                                    discountAmt: i.discountAmt || i.discount_amt || 0
+                                  }));
+                                  if (newFormItems.length > 0) setFieldValue('items', newFormItems);
+                                  setIsPoDropdownOpen(false);
+                                }}
+                                className={`p-2.5 cursor-pointer text-xs flex justify-between items-center ${highlightedPoIndex === idx || selectedPoNo === pNo ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-black dark:text-white'}`}
+                              >
+                                <div>
+                                  <p className="font-bold">{pNo}</p>
+                                  <p className="text-[10px] text-gray-400">{p.purchase_date || p.created_at?.substring(0,10)}</p>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-500 font-mono">Rs. {p.total_amount}</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-3 text-center text-xs text-gray-400 italic">No invoices found</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                 </div>
 
-                {/* ── RETURNED PRODUCT INVENTORY MANIFEST TABLE (EXACT MATCH TO PURCHASES PAGE) ── */}
-                <div className="overflow-visible">
+                {/* ── RETURNED PRODUCT INVENTORY MANIFEST TABLE ── */}
+                <div className="w-full">
                   <FieldArray name="items">
-                    {({ push, remove }) => (
-                      <div className="border border-stroke dark:border-strokedark rounded-sm overflow-visible bg-white dark:bg-boxdark">
-                        <table className="w-full table-auto border-collapse text-left text-xs">
+                    {({ push, remove }) => {
+                      const hasDiscount = values.items.some((i: any) => Number(i.discountAmt) > 0 || Number(i.discountPer) > 0);
+                      const isAnyTableDropdownOpen = activeSkuIndex !== null || activeProdNameIndex !== null;
+                      return (
+                      <div className={`border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-x-auto bg-white dark:bg-boxdark transition-all duration-200 ${isAnyTableDropdownOpen ? 'pb-64' : 'pb-4'}`}>
+                        <div className="w-full min-w-max">
+                          <table className="w-full table-auto border-collapse text-left text-xs">
                           <thead>
                             <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                              <th className="p-3 w-10 text-center">S#</th>
-                              <th className="p-3 w-48">SKU Code (Search)</th>
-                              <th className="p-3 min-w-[280px]">Product Description</th>
-                              <th className="p-3 w-44">Destination Warehouse</th>
-                              <th className="p-3 w-36 text-center">Arrived Qty (Boxes / Pcs / Sq.M)</th>
-                              <th className="p-3 w-32 text-right">Cost Price (PKR)</th>
-                              <th className="p-3 w-36 text-right pr-4">Net Total Line</th>
-                              <th className="p-3 w-12 text-center">Action</th>
+                              <th className="p-2 w-10 text-center">S#</th>
+                              <th className="p-2 w-36">Code (Search)</th>
+                              <th className="p-2 min-w-[200px]">Product Description</th>
+                              <th className="p-2 w-36">Destination Warehouse</th>
+                              <th className="p-2 w-32 text-center">Arrived Qty (Boxes / Pcs)</th>
+                              <th className="p-2 w-28 text-right">Cost Price (PKR)</th>
+                              {hasDiscount && (
+                                <>
+                                  <th className="p-2 w-20 text-center text-amber-700 bg-amber-50/40 dark:bg-amber-950/20">Disc %</th>
+                                  <th className="p-2 w-28 text-right text-amber-700 bg-amber-50/40 dark:bg-amber-950/20">Disc Amt</th>
+                                </>
+                              )}
+                              <th className="p-2 w-28 text-right pr-4">Net Total</th>
+                              <th className="p-2 w-10 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-stroke dark:divide-strokedark">
                             {values.items.map((item: any, idx: number) => {
-                              const lineTotal = (Number(item.qty || 0) * Number(item.rate || 0));
+                              const gross = (Number(item.qty || 0) * Number(item.rate || 0));
+                              const lineTotal = gross - Number(item.discountAmt || 0);
 
                               const isCurrentSkuActive = activeSkuIndex === idx;
                               const isCurrentProdNameActive = activeProdNameIndex === idx;
 
                               // All candidate products: prioritize vendor products, and include general catalog
                               const candidateProducts = boughtProducts.length > 0 ? boughtProducts : productList;
+
+                              const matchedProduct = productList.find((p: any) => 
+                                (item.itemName && p.product_name === item.itemName) || 
+                                (item.skuCode && (p.item_sr_no === item.skuCode || p.sku === item.skuCode || `SKU-${p.id}` === item.skuCode))
+                              );
 
                               const rawPcs = Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box ?? matchedProduct?.pieces_per_packing ?? 0);
                               const isTile = Boolean(
@@ -867,7 +1001,7 @@ const AddPurchaseReturn = () => {
                                 >
                                   <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
 
-                                  {/* 1. Searchable SKU Code */}
+                                  {/* 1. Searchable Code */}
                                   <td className="p-3 relative sku-container">
                                     {(() => {
                                       const query = (item.skuCode || '').toLowerCase().trim();
@@ -956,7 +1090,7 @@ const AddPurchaseReturn = () => {
                                     })()}
                                   </td>
 
-                                  {/* 2. Product Name / Description (Rich Two-Way Dropdown matching Purchases page) */}
+                                  {/* 2. Description / Description (Rich Two-Way Dropdown matching Purchases page) */}
                                   <td className="p-3 relative prod-name-container min-w-[280px]">
                                     {(() => {
                                       const query = (item.itemName || '').toLowerCase().trim();
@@ -1008,7 +1142,7 @@ const AddPurchaseReturn = () => {
                                                 handleProductSelection(matched, idx);
                                               }
                                             }}
-                                            placeholder="Search Product Name..."
+                                            placeholder="Search Description..."
                                             className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                           />
 
@@ -1306,11 +1440,64 @@ const AddPurchaseReturn = () => {
                                       step="any"
                                       name={`items.${idx}.rate`}
                                       onKeyDown={blockInvalidChar}
-                                      onChange={handleChange}
+                                      onChange={(e) => {
+                                        const newRate = Math.max(0, Number(e.target.value) || 0);
+                                        setFieldValue(`items.${idx}.rate`, newRate);
+                                        const cost = (Number(item.qty) || 0) * newRate;
+                                        if (Number(item.discountPer) > 0) {
+                                          setFieldValue(`items.${idx}.discountAmt`, Number(((cost * Number(item.discountPer)) / 100).toFixed(2)));
+                                        }
+                                      }}
                                       value={item.rate}
                                       className="w-full rounded border border-stroke dark:border-strokedark p-1.5 text-right font-bold font-mono text-xs outline-none focus:border-primary text-black dark:text-white"
                                     />
                                   </td>
+
+                                  {/* Discount Columns */}
+                                  {hasDiscount && (
+                                    <>
+                                      <td className="p-2 w-20 min-w-[80px] bg-amber-50/30 dark:bg-amber-950/10">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          name={`items.${idx}.discountPer`}
+                                          value={item.discountPer ?? 0}
+                                          onChange={(e) => {
+                                            const rawVal = e.target.value;
+                                            setFieldValue(`items.${idx}.discountPer`, rawVal);
+                                            const dPer = Number(rawVal);
+                                            if (!isNaN(dPer) && dPer >= 0) {
+                                              const g = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                              setFieldValue(`items.${idx}.discountAmt`, Number(((g * dPer) / 100).toFixed(2)));
+                                            }
+                                          }}
+                                          placeholder="0"
+                                          className="w-full text-center font-bold font-mono text-amber-700 bg-white dark:bg-boxdark border border-amber-300 rounded p-1 text-xs outline-none"
+                                        />
+                                      </td>
+                                      <td className="p-2 w-28 min-w-[100px] bg-amber-50/30 dark:bg-amber-950/10">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          onKeyDown={blockInvalidChar}
+                                          name={`items.${idx}.discountAmt`}
+                                          value={item.discountAmt ?? 0}
+                                          onChange={(e) => {
+                                            const rawVal = e.target.value;
+                                            setFieldValue(`items.${idx}.discountAmt`, rawVal);
+                                            const dAmt = Number(rawVal);
+                                            if (!isNaN(dAmt) && dAmt >= 0 && Number(item.rate) > 0 && Number(item.qty) > 0) {
+                                              const g = Number(item.qty) * Number(item.rate);
+                                              setFieldValue(`items.${idx}.discountPer`, Number(((dAmt / g) * 100).toFixed(2)));
+                                            }
+                                          }}
+                                          placeholder="0"
+                                          className="w-full text-right font-bold font-mono text-amber-700 bg-white dark:bg-boxdark border border-amber-300 rounded p-1 text-xs outline-none"
+                                        />
+                                      </td>
+                                    </>
+                                  )}
 
                                   {/* 6. Net Total Line */}
                                   <td className="p-3 text-right font-mono font-bold text-success pr-4 text-xs">
@@ -1334,8 +1521,10 @@ const AddPurchaseReturn = () => {
                             })}
                           </tbody>
                         </table>
+                        </div>
                       </div>
-                    )}
+                      );
+                    }}
                   </FieldArray>
 
                   <div className="mt-4">

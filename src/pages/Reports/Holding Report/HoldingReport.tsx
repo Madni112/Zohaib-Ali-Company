@@ -537,7 +537,7 @@ const HoldingReport: React.FC = () => {
           { header: 'Customer Name', key: 'customerName', width: 26 },
           { header: 'Salesman', key: 'salesman', width: 20 },
           { header: 'Product Description', key: 'productName', width: 32 },
-          { header: 'SKU Code', key: 'skuCode', width: 14 },
+          { header: 'Code', key: 'skuCode', width: 14 },
           { header: 'Warehouse', key: 'warehouse', width: 18 },
           { header: 'Order Qty', key: 'orderQty', width: 12, type: 'number' },
           { header: 'Dispatched Qty', key: 'dispatchedQty', width: 14, type: 'number' },

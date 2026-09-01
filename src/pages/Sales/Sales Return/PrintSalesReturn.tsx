@@ -405,7 +405,7 @@ const PrintSalesReturn: React.FC = () => {
           <thead>
             <tr className="print-table-header bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider text-center">
               <th className="p-2 border border-slate-700 w-10 text-center">S#</th>
-              <th className="p-2 border border-slate-700 w-24 text-left">SKU Code</th>
+              <th className="p-2 border border-slate-700 w-24 text-left">Code</th>
               <th className="p-2 border border-slate-700 text-left min-w-[180px]">Product Description</th>
               <th className="p-2 border border-slate-700 w-28 text-left">Warehouse</th>
               <th className="p-2 border border-slate-700 w-24 text-right">Sale Price</th>

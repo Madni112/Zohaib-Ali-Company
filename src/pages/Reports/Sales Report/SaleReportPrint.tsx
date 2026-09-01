@@ -119,6 +119,7 @@ const SaleReportPrint = () => {
         'Salesman': filters.salesman || 'All',
         'Transportation': filters.transport || 'All',
         'Location': filters.location || 'All',
+        'Bin': filters.bin || 'All',
         'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
       };
 

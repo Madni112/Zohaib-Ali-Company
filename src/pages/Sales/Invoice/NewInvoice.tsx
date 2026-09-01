@@ -56,9 +56,7 @@ const NewInvoice = () => {
         if (trans) setTransportList(trans);
 
         const combinedLocs = [
-          ...(locMaster || []).map((l: any) => l.name),
-          ...(wh || []).map((w: any) => w.location),
-          ...(invWh || []).map((iw: any) => iw.warehouse_name)
+          ...(locMaster || []).map((l: any) => l.name)
         ];
         const uniqueLocations = Array.from(new Set(combinedLocs.map((loc: any) => String(loc || '').trim()).filter(Boolean)));
         setWarehousesList(uniqueLocations);
@@ -144,7 +142,7 @@ const NewInvoice = () => {
     items: Yup.array().of(
       Yup.object().shape({
         itemName: Yup.string().required('Item Name is required'),
-        warehouse: Yup.string().nullable(),
+        warehouse: Yup.string().required('Warehouse is required'),
         qty: Yup.number().min(0.001, 'Qty must be > 0').required('Qty is required'),
         rp: Yup.number().min(0, 'Price cannot be negative').required('Price is required'),
         discountPer: Yup.number().min(0).nullable(),
@@ -552,7 +550,7 @@ const NewInvoice = () => {
 
             return (
               <Form className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Billing Date: *</label>
                     <input type="date" name="saleDate" value={values.saleDate} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.saleDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
@@ -563,26 +561,6 @@ const NewInvoice = () => {
                     <select name="salesman" value={values.salesman} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.salesman ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}>
                       <option value="">-- Select Officer --</option>
                       {salesmenList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-gray-500 mb-1">Warehouse Zone Source: *</label>
-                    <select name="dispatchWarehouse" value={values.dispatchWarehouse} onChange={async (e) => {
-                      const selectedWH = e.target.value;
-                      setFieldValue('dispatchWarehouse', selectedWH);
-                      if (values.items && values.items.length > 0) {
-                        for (let idx = 0; idx < values.items.length; idx++) {
-                          const rowItem = values.items[idx];
-                          if (rowItem.itemName) {
-                            const { data: stockRecord } = await supabase.from('warehouse_inventory').select('quantity').eq('product_name', rowItem.itemName).eq('warehouse_name', selectedWH).maybeSingle();
-                            setFieldValue(`items.${idx}.availableQty`, stockRecord ? Number(stockRecord.quantity) : 0);
-                          }
-                        }
-                      }
-                    }} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.dispatchWarehouse ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}>
-                      <option value="">-- Choose Dispatch Bin --</option>
-                      {warehousesList.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
                     </select>
                   </div>
                 </div>
@@ -657,7 +635,7 @@ const NewInvoice = () => {
                             <thead className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b">
                               <tr>
                                 <th className="p-2 w-8 text-center">S#</th>
-                                <th className="p-2 w-36">SKU Code (Search)</th>
+                                <th className="p-2 w-36">Code (Search)</th>
                                 <th className="p-2 min-w-[200px]">Item Product Description</th>
                                 <th className="p-2 w-40">Warehouse Zone Source</th>
                                 <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Stock In Warehouse</th>
@@ -709,7 +687,7 @@ const NewInvoice = () => {
                                   <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${isCurrentActive || isCurrentProdNameActive ? 'relative z-30' : 'relative z-10'} ${hasItemError ? 'bg-red-50/5' : ''}`}>
                                     <td className="p-2 text-center font-sans text-gray-400">{idx + 1}</td>
                                     
-                                    {/* SKU CODE REALTIME SEARCH / TYPEABLE INPUT IDENTICAL TO OPENING STOCK */}
+                                    {/* Code REALTIME SEARCH / TYPEABLE INPUT IDENTICAL TO OPENING STOCK */}
                                     <td className="p-2 relative sku-container">
                                       {(() => {
                                         const filteredProds = productsList.filter(p => {
@@ -758,7 +736,7 @@ const NewInvoice = () => {
                                                 setActiveSkuIndex(idx);
                                                 setHighlightedSkuIndex(0);
                                                 
-                                                // Only auto-fill if the user has typed the EXACT FULL SKU code (e.g. SKU-002)
+                                                // Only auto-fill if the user has typed the EXACT FULL Code (e.g. SKU-002)
                                                 const matched = productsList.find(
                                                   p => p.item_sr_no && p.item_sr_no.toLowerCase() === typed.trim().toLowerCase()
                                                 );
@@ -824,7 +802,7 @@ const NewInvoice = () => {
                                       })()}
                                     </td>
 
-                                     {/* PRODUCT NAME & DESCRIPTION (SEARCHABLE TWO-WAY INPUT WITH RICH DROPDOWN) */}
+                                     {/* Description & DESCRIPTION (SEARCHABLE TWO-WAY INPUT WITH RICH DROPDOWN) */}
                                      <td className="p-2 relative prod-name-container min-w-[220px] max-w-[320px]">
                                        {(() => {
                                          const query = (item.itemName || '').toLowerCase().trim();
@@ -876,7 +854,7 @@ const NewInvoice = () => {
                                                  setActiveProdNameIndex(idx);
                                                  setHighlightedProdNameIndex(0);
 
-                                                 // Exact product name match auto-sync
+                                                 // Exact Description match auto-sync
                                                  const matched = productsList.find(
                                                    p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
                                                  );
@@ -884,7 +862,7 @@ const NewInvoice = () => {
                                                    handleProductSelectionWithWH(matched, idx, values.dispatchWarehouse, setFieldValue, item);
                                                  }
                                                }}
-                                               placeholder="Search Product Name..."
+                                               placeholder="Search Description..."
                                                className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
                                              />
 
@@ -1017,6 +995,8 @@ const NewInvoice = () => {
                                           const boxes = Math.floor(currentQty);
                                           const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
                                           const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
+                                          
+                                          const isOverStock = Boolean(item.itemName && currentQty > totalAvailStock);
 
                                           return (
                                             <div className="flex flex-col gap-1">
@@ -1031,7 +1011,7 @@ const NewInvoice = () => {
                                               </div>
 
                                               {/* ── INPUTS CONTAINER ── */}
-                                              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/90 p-1.5 rounded-lg border border-stroke dark:border-strokedark shadow-inner">
+                                              <div className={`flex items-center gap-2 p-1.5 rounded-lg border shadow-inner transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-300 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800/90 border-stroke dark:border-strokedark'}`}>
                                                 {/* BOXES INPUT */}
                                                 <div className="flex-1 flex items-center bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded-md px-2 py-1 focus-within:border-primary shadow-sm">
                                                   <input
@@ -1121,9 +1101,10 @@ const NewInvoice = () => {
                                             'MTR', 'METER', 'FT', 'FEET', 'INCH', 'CM', 'MM', 'YD',
                                             'SQM', 'SQ.M', 'SQ.MTR', 'SQ.FT', 'SQF', 'SQY', 'SQUARE METER'
                                           ].includes(u);
+                                          const isOverStock = Boolean(item.itemName && Number(item.qty || 0) > totalAvailStock);
 
                                           return (
-                                            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1 border border-stroke dark:border-strokedark">
+                                            <div className={`flex items-center gap-1.5 rounded px-2 py-1 border transition ${isOverStock ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-800' : 'bg-slate-50 dark:bg-slate-800 border-stroke dark:border-strokedark'}`}>
                                               <input
                                                 type="text"
                                                 inputMode={isDecimalUom ? "decimal" : "numeric"}

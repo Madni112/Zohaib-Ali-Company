@@ -70,7 +70,7 @@ const SurfaceFinish = () => {
     const cleanName = finishName.trim();
 
     if (!cleanName) {
-      toast.error('Surface finish name cannot be empty');
+      toast.error('Bin name cannot be empty');
       return;
     }
 
@@ -81,7 +81,7 @@ const SurfaceFinish = () => {
         (f) => f.name.toLowerCase() === cleanName.toLowerCase() && f.id !== editingId
       );
       if (isDuplicate) {
-        toast.error('This surface finish is already registered');
+        toast.error('This Bin is already registered');
         setSubmitting(false);
         return;
       }
@@ -108,14 +108,14 @@ const SurfaceFinish = () => {
         updated = finishes.map((f) =>
           f.id === editingId ? { ...f, name: cleanName } : f
         );
-        toast.success('Surface finish updated successfully!');
+        toast.success('Bin updated successfully!');
       } else {
         const newEntry = {
           id: String(Date.now()),
           name: cleanName,
         };
         updated = [newEntry, ...finishes];
-        toast.success('New surface finish added successfully!');
+        toast.success('New Bin added successfully!');
       }
 
       setFinishes(updated);
@@ -141,7 +141,7 @@ const SurfaceFinish = () => {
   };
 
   const handleDeleteFinish = async (id: number | string) => {
-    if (!window.confirm('Are you sure you want to delete this surface finish?')) return;
+    if (!window.confirm('Are you sure you want to delete this Bin?')) return;
     try {
       try {
         await supabase.from('inventory_surface_finishes').delete().eq('id', id);
@@ -151,7 +151,7 @@ const SurfaceFinish = () => {
       const updated = finishes.filter((f) => f.id !== id);
       setFinishes(updated);
       localStorage.setItem('zac_surface_finishes', JSON.stringify(updated));
-      toast.success('Surface finish deleted');
+      toast.success('Bin deleted');
     } catch (err: any) {
       toast.error('Deletion failed: ' + err.message);
     }
@@ -175,7 +175,7 @@ const SurfaceFinish = () => {
       {/* SCREEN ROUTE TITLE HEADER */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
-          Surface Finishes
+          Bines
         </h2>
       </div>
 
@@ -184,7 +184,7 @@ const SurfaceFinish = () => {
         <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
             <MdTexture className="text-teal-600 text-lg" />
-            <span>{editingId ? 'Edit Tile Surface Finish' : 'Register New Tile Surface Finish'}</span>
+            <span>{editingId ? 'Edit Tile Bin' : 'Register New Tile Bin'}</span>
           </div>
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
             {finishes.length} Finishes Registered
@@ -194,7 +194,7 @@ const SurfaceFinish = () => {
         <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1 w-full">
             <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1.5">
-              Surface Finish Name *
+              Bin Name *
             </label>
             <input
               type="text"
@@ -213,7 +213,7 @@ const SurfaceFinish = () => {
               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 px-6 text-xs font-bold text-white transition shadow-sm cursor-pointer disabled:opacity-50"
             >
               {submitting ? <Spinner /> : editingId ? <MdCheckCircle /> : <MdAdd />}
-              <span>{editingId ? 'Update Finish' : 'Add Surface Finish'}</span>
+              <span>{editingId ? 'Update Finish' : 'Add Bin'}</span>
             </button>
             {editingId && (
               <button
@@ -253,7 +253,7 @@ const SurfaceFinish = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search surface finishes..."
+              placeholder="Search Bines..."
               className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-xs text-slate-800 dark:text-white transition"
             />
           </div>
@@ -264,7 +264,7 @@ const SurfaceFinish = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 w-16 text-center">S#</th>
-                <th className="py-3.5 px-4">Surface Finish Name</th>
+                <th className="py-3.5 px-4">Bin Name</th>
                 <th className="py-3.5 px-4 w-28 text-center">Actions</th>
               </tr>
             </thead>
@@ -278,7 +278,7 @@ const SurfaceFinish = () => {
               ) : paginatedFinishes.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="text-center py-12 text-xs text-slate-400 italic">
-                    No surface finishes found.
+                    No Bines found.
                   </td>
                 </tr>
               ) : (

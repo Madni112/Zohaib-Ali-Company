@@ -118,24 +118,16 @@ const AddVendor = () => {
                   <input
                     type="text"
                     name="cellNo"
-                    onChange={handleChange}
+                    onChange={(e) => {
+                      e.target.value = e.target.value.replace(/[^0-9]/g, '');
+                      handleChange(e);
+                    }}
                     value={values.cellNo}
                     className="w-full rounded border border-stroke dark:border-strokedark px-3 h-10 bg-white dark:bg-boxdark text-xs font-bold font-mono text-black dark:text-white outline-none focus:border-primary"
                     placeholder="e.g., 0300-1234567"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-gray-500 mb-1.5 font-bold uppercase tracking-wide">Landline / Office Phone:</label>
-                  <input
-                    type="text"
-                    name="phoneNo"
-                    onChange={handleChange}
-                    value={values.phoneNo}
-                    className="w-full rounded border border-stroke dark:border-strokedark px-3 h-10 bg-white dark:bg-boxdark text-xs text-black dark:text-white outline-none focus:border-primary"
-                    placeholder="e.g., 055-3850000"
-                  />
-                </div>
 
                 <div>
                   <label className="block text-gray-500 mb-1.5 font-bold uppercase tracking-wide">Email Address (Optional):</label>

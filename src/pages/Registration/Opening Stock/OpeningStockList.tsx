@@ -9,6 +9,8 @@ import { MdInventory } from 'react-icons/md';
 const OpeningStockList = () => {
   const [stocks, setStocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage] = useState(10);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -108,10 +110,10 @@ const OpeningStockList = () => {
             {loading ? (
               <tr><td colSpan={9} className="text-center py-10"><Spinner /></td></tr>
             ) : stocks.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-10 text-gray-500 font-medium">No inventory data initialized yet.</td></tr>
+              <tr><td colSpan={8} className="text-center py-10 text-gray-500 italic">No opening stock initialized yet.</td></tr>
             ) : (
-              stocks.map((stock) => (
-                <tr key={stock.id} className="border-b border-[#eee] dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4/10 transition-colors">
+              stocks.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage).map((stock) => (
+                <tr key={stock.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/20 transition-colors">
                   <td className="py-5 px-4 font-mono text-xs font-bold text-textColor dark:text-white">
                     {stock.stockNo || stock.stock_no || 'N/A'}
                   </td>
@@ -156,6 +158,31 @@ const OpeningStockList = () => {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+        <div>
+          Showing {stocks.length > 0 ? (currentPage - 1) * entriesPerPage + 1 : 0} to {Math.min(currentPage * entriesPerPage, stocks.length)} of {stocks.length} entries
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+          >
+            Previous
+          </button>
+          <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+            Page {currentPage} of {Math.ceil(stocks.length / entriesPerPage) || 1}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(Math.ceil(stocks.length / entriesPerPage), p + 1))}
+            disabled={currentPage === Math.ceil(stocks.length / entriesPerPage) || stocks.length === 0}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

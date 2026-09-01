@@ -398,7 +398,7 @@ const PrintPurchaseReturn: React.FC = () => {
             <thead>
               <tr className="print-table-header bg-slate-900 text-white font-black text-[11px] uppercase tracking-wider">
                 <th className="py-2.5 px-3 w-10 text-center">#</th>
-                <th className="py-2.5 px-3 w-24">SKU Code</th>
+                <th className="py-2.5 px-3 w-24">Code</th>
                 <th className="py-2.5 px-3">Product Description</th>
                 <th className="py-2.5 px-3 w-28">Source Location</th>
                 <th className="py-2.5 px-3 w-24 font-mono">Matched PO</th>

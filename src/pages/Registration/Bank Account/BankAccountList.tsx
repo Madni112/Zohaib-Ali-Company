@@ -9,6 +9,8 @@ import { MdAccountBalance } from 'react-icons/md';
 const BankAccountList = () => {
   const [banks, setBanks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage] = useState(10);
   const navigate = useNavigate();
 
   useEffect(() => { fetchBanks(); }, []);
@@ -77,7 +79,7 @@ const BankAccountList = () => {
             ) : banks.length === 0 ? (
               <tr><td colSpan={5} className="text-center py-10 text-slate-400 italic">No bank records found. Click "+ Add Bank Account" to begin.</td></tr>
             ) : (
-              banks.map((b) => (
+              banks.slice((currentPage - 1) * entriesPerPage, currentPage * entriesPerPage).map((b) => (
                 <tr key={b.id} className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{b.accountTitle}</td>
                   <td className="py-3.5 px-4 font-mono text-slate-600 dark:text-slate-300 font-semibold">{b.accountNumber}</td>
@@ -96,6 +98,31 @@ const BankAccountList = () => {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+        <div>
+          Showing {banks.length > 0 ? (currentPage - 1) * entriesPerPage + 1 : 0} to {Math.min(currentPage * entriesPerPage, banks.length)} of {banks.length} entries
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+          >
+            Previous
+          </button>
+          <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+            Page {currentPage} of {Math.ceil(banks.length / entriesPerPage) || 1}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(Math.ceil(banks.length / entriesPerPage), p + 1))}
+            disabled={currentPage === Math.ceil(banks.length / entriesPerPage) || banks.length === 0}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

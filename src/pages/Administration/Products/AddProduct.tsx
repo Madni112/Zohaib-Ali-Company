@@ -27,6 +27,18 @@ const AddProduct = () => {
   const [surfaceFinishes, setSurfaceFinishes] = useState<any[]>([]);
   const [groupedUoms, setGroupedUoms] = useState<{ [key: string]: UomItem[] }>({});
 
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [highlightedCategoryIndex, setHighlightedCategoryIndex] = useState(0);
+
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
+  const [highlightedBrandIndex, setHighlightedBrandIndex] = useState(0);
+
+  const [isUomDropdownOpen, setIsUomDropdownOpen] = useState(false);
+  const [highlightedUomIndex, setHighlightedUomIndex] = useState(0);
+
+  const [isBinDropdownOpen, setIsBinDropdownOpen] = useState(false);
+  const [highlightedBinIndex, setHighlightedBinIndex] = useState(0);
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -41,7 +53,7 @@ const AddProduct = () => {
         
         const { data: catData } = await supabase
           .from('inventory_categories')
-          .select('id, name')
+          .select('id, name, code')
           .order('name', { ascending: true });
         const { data: brandData } = await supabase
           .from('inventory_brands')
@@ -133,7 +145,6 @@ const AddProduct = () => {
             category: editData.category || '',
             brand: editData.brand || '',
             uom: editData.uom || 'PCS',
-            productDescription: editData.product_description || '',
             profit: editData.profit || 0,
             purchasePrice: editData.purchase_price || 0,
             scenarioName: editData.scenario_name || '',
@@ -155,14 +166,13 @@ const AddProduct = () => {
               if (match && Number(match[1]) > 0) return Number(match[1]);
               return raw > 0 ? raw : 4;
             })(),
-            finishType: 'Glazed Polished',
+            finishType: '',
             weightPerBox: 28,
           } : {
             productName: '',
             category: '',
             brand: '',
             uom: '',
-            productDescription: '',
             profit: 0,
             purchasePrice: '',
             scenarioName: '',
@@ -177,12 +187,12 @@ const AddProduct = () => {
             tileWidth: 60,
             tileThickness: '',
             piecesPerBox: 4,
-            finishType: 'Glazed Polished',
+            finishType: '',
             weightPerBox: 28,
           }}
           enableReinitialize={true}
           validationSchema={Yup.object().shape({
-            productName: Yup.string().required('Product Name is required'),
+            productName: Yup.string().required('Description is required'),
             category: Yup.string().required('Category is required'),
             purchasePrice: Yup.number().typeError('Must be a number').min(0).required('Required'),
             retailPrice: Yup.number().typeError('Must be a number').min(0).required('Required'),
@@ -193,7 +203,7 @@ const AddProduct = () => {
             const isTileCategory = String(values.category || '').trim().toLowerCase().includes('tile');
             const computedProfit = (Number(values.retailPrice) || 0) - (Number(values.purchasePrice) || 0);
 
-            let finalDescription = values.productDescription?.trim() || '';
+            let finalDescription = '';
             let finalUom = values.uom;
             let finalHsCode = values.hsCode?.trim() || '';
             let finalItemSrNo = values.itemSrNo?.trim() || '';
@@ -206,7 +216,7 @@ const AddProduct = () => {
               const totalSqMetersPerBox = sqMetersPerTile * pcs;
               const tileSizeFormatted = `${h} × ${w} cm`;
 
-              finalDescription = `[TILE PRODUCT] Size: ${tileSizeFormatted} | Box: ${pcs} pcs (${totalSqMetersPerBox.toFixed(2)} sq.m / box) | Finish: ${values.finishType}${values.tileThickness ? ` | Thickness: ${values.tileThickness}` : ''}${values.weightPerBox ? ` | Wt: ${values.weightPerBox}kg` : ''}${values.productDescription ? ` — ${values.productDescription}` : ''}`;
+              finalDescription = `[TILE PRODUCT] Size: ${tileSizeFormatted} | Box: ${pcs} pcs (${totalSqMetersPerBox.toFixed(2)} sq.m / box) | Finish: ${values.finishType}${values.tileThickness ? ` | Thickness: ${values.tileThickness}` : ''}${values.weightPerBox ? ` | Wt: ${values.weightPerBox}kg` : ''}`;
               finalUom = values.uom || 'BOX';
               finalHsCode = values.hsCode?.trim() || '6907.2100';
               finalItemSrNo = values.itemSrNo?.trim() || tileSizeFormatted;
@@ -233,7 +243,7 @@ const AddProduct = () => {
             };
 
             try {
-              // 🔍 SKU Uniqueness Validation: Prevent duplicate SKU codes
+              // 🔍 SKU Uniqueness Validation: Prevent duplicate Codes
               if (finalItemSrNo) {
                 let skuQuery = supabase
                   .from('products')
@@ -248,7 +258,7 @@ const AddProduct = () => {
                 if (skuCheckError) console.warn('SKU Check warning:', skuCheckError);
 
                 if (existingSku && existingSku.length > 0) {
-                  toast.error(`SKU Code "${finalItemSrNo}" is already assigned to "${existingSku[0].product_name}". Each product must have a unique SKU!`, {
+                  toast.error(`Code "${finalItemSrNo}" is already assigned to "${existingSku[0].product_name}". Each product must have a unique SKU!`, {
                     duration: 5000,
                   });
                   setLoading(false);
@@ -327,39 +337,118 @@ const AddProduct = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {/* 1. Category Selector */}
                     <div>
                       <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
                         Product Category *
                       </label>
-                      <select
-                        name="category"
-                        onChange={handleChange}
-                        value={values.category}
-                        className={`w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 dark:text-white ${
-                          touched.category && errors.category ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
-                        }`}
-                      >
-                        <option value="">Select Category</option>
-                        {categories.map(c => (
-                          <option key={c.id} value={c.name}>
-                            {c.name}
-                          </option>
-                        ))}
-                        {!categories.some(c => c.name.toLowerCase() === 'tiles' || c.name.toLowerCase() === 'tile') && (
-                          <option value="Tiles">Tiles</option>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="category"
+                          autoComplete="off"
+                          onChange={(e) => {
+                            handleChange(e);
+                            setIsCategoryDropdownOpen(true);
+                            setHighlightedCategoryIndex(0);
+                          }}
+                          onFocus={() => {
+                            setIsCategoryDropdownOpen(true);
+                            setHighlightedCategoryIndex(0);
+                          }}
+                          onBlur={() => {
+                            // Delay hiding so clicks register
+                            setTimeout(() => setIsCategoryDropdownOpen(false), 200);
+                          }}
+                          onKeyDown={(e) => {
+                            const query = String(values.category || '').toLowerCase();
+                            const filteredCats = categories.filter(c => 
+                              c.name?.toLowerCase().includes(query) || 
+                              c.code?.toLowerCase().includes(query)
+                            );
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setHighlightedCategoryIndex((prev) => prev < filteredCats.length - 1 ? prev + 1 : 0);
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setHighlightedCategoryIndex((prev) => prev > 0 ? prev - 1 : filteredCats.length - 1);
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (filteredCats.length > 0) {
+                                setFieldValue('category', filteredCats[highlightedCategoryIndex]?.name || filteredCats[0]?.name);
+                                setIsCategoryDropdownOpen(false);
+                              }
+                            } else if (e.key === 'Tab' || e.key === 'Escape') {
+                              setIsCategoryDropdownOpen(false);
+                            }
+                          }}
+                          value={values.category}
+                          className={`w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 dark:text-white ${
+                            touched.category && errors.category ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
+                          }`}
+                          placeholder="Search or enter category..."
+                        />
+                        {isCategoryDropdownOpen && (
+                          <div className="absolute left-0 top-full mt-1.5 z-[99999] w-full min-w-[200px] max-h-[250px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                            {(() => {
+                              const query = String(values.category || '').toLowerCase();
+                              const filteredCats = categories.filter(c => 
+                                c.name?.toLowerCase().includes(query) || 
+                                c.code?.toLowerCase().includes(query)
+                              );
+                              
+                              return filteredCats.length > 0 ? (
+                                filteredCats.map((cat, idx) => {
+                                  const isHighlighted = idx === highlightedCategoryIndex;
+                                  return (
+                                    <div
+                                      key={cat.id || idx}
+                                      onMouseEnter={() => setHighlightedCategoryIndex(idx)}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setFieldValue('category', cat.name);
+                                        setIsCategoryDropdownOpen(false);
+                                      }}
+                                      className={`p-3 cursor-pointer transition text-xs flex items-center justify-between gap-4 ${
+                                        isHighlighted 
+                                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 text-emerald-700 dark:text-emerald-400' 
+                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200'
+                                      }`}
+                                    >
+                                      <span className="font-bold uppercase truncate">{cat.name || 'Unnamed Category'}</span>
+                                      {cat.code && <span className="text-[10px] opacity-80 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 whitespace-nowrap">Code: {cat.code}</span>}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="p-4 text-center text-xs text-slate-400 italic">
+                                  Press Enter to add "{values.category}"
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
-                      </select>
+                      </div>
+                      {(() => {
+                        const selectedCategory = categories.find(c => c.name?.toLowerCase() === String(values.category || '').trim().toLowerCase());
+                        return selectedCategory?.code ? (
+                          <div className="mt-1.5 ml-1 text-[10.5px] font-bold font-mono text-emerald-600 dark:text-emerald-400 opacity-90">
+                            CODE: {selectedCategory.code}
+                          </div>
+                        ) : null;
+                      })()}
                       {touched.category && errors.category && (
                         <p className="text-[10px] text-rose-500 mt-1 font-semibold">{errors.category as string}</p>
                       )}
                     </div>
 
-                    {/* 2. SKU Code (Placed right after Category) */}
+                    {/* 2. Code (Placed right after Category) */}
                     <div>
                       <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
-                        SKU Code
+                        Code
                       </label>
                       <input
                         type="text"
@@ -367,14 +456,14 @@ const AddProduct = () => {
                         onChange={handleChange}
                         value={values.itemSrNo}
                         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs text-slate-800 dark:text-white font-mono"
-                        placeholder="Enter SKU Code"
+                        placeholder="Enter Code"
                       />
                     </div>
 
-                    {/* 3. Product Name */}
+                    {/* 3. Description */}
                     <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
                       <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
-                        Product Name *
+                        Description *
                       </label>
                       <input
                         type="text"
@@ -384,37 +473,11 @@ const AddProduct = () => {
                         className={`w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-900 dark:text-white ${
                           touched.productName && errors.productName ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
                         }`}
-                        placeholder={isTileCategory ? "e.g. Master Tiles Calacatta White 60x60 (Glazed Polished)" : "Enter Product Name"}
+                        placeholder={isTileCategory ? "e.g. Master Tiles Calacatta White 60x60 (Glazed Polished)" : "Enter Description"}
                       />
                       {touched.productName && errors.productName && (
                         <p className="text-[10px] text-rose-500 mt-1 font-semibold">{errors.productName as string}</p>
                       )}
-                    </div>
-
-                    {/* 4. Brand */}
-                    <div>
-                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">Brand *</label>
-                      <select
-                        name="brand"
-                        onChange={handleChange}
-                        value={values.brand}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
-                      >
-                        <option value="">Select Brand</option>
-                        {brands.map(b => (
-                          <option key={b.id} value={b.name}>
-                            {b.name}
-                          </option>
-                        ))}
-                        {isTileCategory && (
-                          <>
-                            {!brands.some(b => b.name === 'Master Tiles') && <option value="Master Tiles">Master Tiles</option>}
-                            {!brands.some(b => b.name === 'Karam Ceramics') && <option value="Karam Ceramics">Karam Ceramics</option>}
-                            {!brands.some(b => b.name === 'Sonex') && <option value="Sonex">Sonex</option>}
-                            {!brands.some(b => b.name === 'Imported Porcelain') && <option value="Imported Porcelain">Imported Porcelain</option>}
-                          </>
-                        )}
-                      </select>
                     </div>
 
                     {/* 5. UOM */}
@@ -422,31 +485,187 @@ const AddProduct = () => {
                       <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
                         {isTileCategory ? 'Inventory UOM (e.g. BOX)' : 'UOM *'}
                       </label>
-                      <select
-                        name="uom"
-                        onChange={handleChange}
-                        value={values.uom || (isTileCategory ? 'BOX' : '')}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-bold text-emerald-600 dark:text-emerald-400"
-                      >
-                        <option value="">Select UOM</option>
-                        {isTileCategory && (
-                          <>
-                            <option value="BOX">BOX = Master Tile Box</option>
-                            <option value="SQM">SQM = Square Meter</option>
-                            <option value="SQFT">SQFT = Square Feet</option>
-                            <option value="PCS">PCS = Pieces</option>
-                          </>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="uom"
+                          autoComplete="off"
+                          onChange={(e) => {
+                            handleChange(e);
+                            setIsUomDropdownOpen(true);
+                            setHighlightedUomIndex(0);
+                          }}
+                          onFocus={() => {
+                            setIsUomDropdownOpen(true);
+                            setHighlightedUomIndex(0);
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setIsUomDropdownOpen(false), 200);
+                          }}
+                          onKeyDown={(e) => {
+                            let availableUoms: string[] = [];
+                            if (isTileCategory) {
+                              availableUoms = ['BOX', 'SQM', 'SQFT', 'PCS'];
+                            }
+                            Object.keys(groupedUoms).forEach(cat => {
+                              groupedUoms[cat].forEach(u => availableUoms.push(u.short_code));
+                            });
+                            availableUoms.push('EACH');
+                            availableUoms = Array.from(new Set(availableUoms));
+                            const filteredUoms = availableUoms.filter(u => u.toLowerCase().includes(String(values.uom || '').toLowerCase()));
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setHighlightedUomIndex((prev) => prev < filteredUoms.length - 1 ? prev + 1 : 0);
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setHighlightedUomIndex((prev) => prev > 0 ? prev - 1 : filteredUoms.length - 1);
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (filteredUoms.length > 0) {
+                                setFieldValue('uom', filteredUoms[highlightedUomIndex] || filteredUoms[0]);
+                                setIsUomDropdownOpen(false);
+                              }
+                            } else if (e.key === 'Tab' || e.key === 'Escape') {
+                              setIsUomDropdownOpen(false);
+                            }
+                          }}
+                          value={values.uom}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-bold text-emerald-600 dark:text-emerald-400"
+                          placeholder="Search or enter UOM..."
+                        />
+                        {isUomDropdownOpen && (
+                          <div className="absolute left-0 top-full mt-1.5 z-[99999] w-full min-w-[200px] max-h-[250px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                            {(() => {
+                              let availableUoms: string[] = [];
+                              if (isTileCategory) {
+                                availableUoms = ['BOX', 'SQM', 'SQFT', 'PCS'];
+                              }
+                              Object.keys(groupedUoms).forEach(cat => {
+                                groupedUoms[cat].forEach(u => availableUoms.push(u.short_code));
+                              });
+                              availableUoms.push('EACH');
+                              availableUoms = Array.from(new Set(availableUoms));
+                              const filteredUoms = availableUoms.filter(u => u.toLowerCase().includes(String(values.uom || '').toLowerCase()));
+                              
+                              return filteredUoms.length > 0 ? (
+                                filteredUoms.map((uom, idx) => {
+                                  const isHighlighted = idx === highlightedUomIndex;
+                                  return (
+                                    <div
+                                      key={uom}
+                                      onMouseEnter={() => setHighlightedUomIndex(idx)}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setFieldValue('uom', uom);
+                                        setIsUomDropdownOpen(false);
+                                      }}
+                                      className={`p-3 cursor-pointer transition text-xs font-bold flex items-center ${
+                                        isHighlighted 
+                                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 text-emerald-700 dark:text-emerald-400' 
+                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200'
+                                      }`}
+                                    >
+                                      {uom}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="p-4 text-center text-xs text-slate-400 italic">
+                                  Press Enter to add "{values.uom}"
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
-                        {Object.keys(groupedUoms).map((categoryName) => (
-                          <optgroup key={categoryName} label={categoryName} className="bg-slate-100 dark:bg-slate-700 text-[10px] uppercase font-bold text-emerald-600 py-1">
-                            {groupedUoms[categoryName].map((u) => (
-                              <option key={u.id} value={u.short_code}>
-                                {`${u.short_code} = ${u.full_name}`}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
+                      </div>
+                    </div>
+
+                    {/* 6. Bin */}
+                    <div>
+                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
+                        Bin
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="finishType"
+                          autoComplete="off"
+                          onChange={(e) => {
+                            handleChange(e);
+                            setIsBinDropdownOpen(true);
+                            setHighlightedBinIndex(0);
+                          }}
+                          onFocus={() => {
+                            setIsBinDropdownOpen(true);
+                            setHighlightedBinIndex(0);
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setIsBinDropdownOpen(false), 200);
+                          }}
+                          onKeyDown={(e) => {
+                            let availableBins = surfaceFinishes.map((f: any) => f.name);
+                            const filteredBins = availableBins.filter(b => b.toLowerCase().includes(String(values.finishType || '').toLowerCase()));
+                            
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setHighlightedBinIndex((prev) => prev < filteredBins.length - 1 ? prev + 1 : 0);
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setHighlightedBinIndex((prev) => prev > 0 ? prev - 1 : filteredBins.length - 1);
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (filteredBins.length > 0) {
+                                setFieldValue('finishType', filteredBins[highlightedBinIndex] || filteredBins[0]);
+                                setIsBinDropdownOpen(false);
+                              }
+                            } else if (e.key === 'Tab' || e.key === 'Escape') {
+                              setIsBinDropdownOpen(false);
+                            }
+                          }}
+                          value={values.finishType}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
+                          placeholder="Search or enter bin..."
+                        />
+                        {isBinDropdownOpen && (
+                          <div className="absolute left-0 top-full mt-1.5 z-[99999] w-full min-w-[200px] max-h-[250px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                            {(() => {
+                              let availableBins = surfaceFinishes.map((f: any) => f.name);
+                              const filteredBins = availableBins.filter(b => b.toLowerCase().includes(String(values.finishType || '').toLowerCase()));
+                              
+                              return filteredBins.length > 0 ? (
+                                filteredBins.map((bin, idx) => {
+                                  const isHighlighted = idx === highlightedBinIndex;
+                                  return (
+                                    <div
+                                      key={bin}
+                                      onMouseEnter={() => setHighlightedBinIndex(idx)}
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setFieldValue('finishType', bin);
+                                        setIsBinDropdownOpen(false);
+                                      }}
+                                      className={`p-3 cursor-pointer transition text-xs font-bold flex items-center ${
+                                        isHighlighted 
+                                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 text-emerald-700 dark:text-emerald-400' 
+                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200'
+                                      }`}
+                                    >
+                                      {bin}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="p-4 text-center text-xs text-slate-400 italic">
+                                  Press Enter to add "{values.finishType}"
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -540,36 +759,6 @@ const AddProduct = () => {
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50/50 dark:bg-slate-800/80 outline-none focus:border-teal-600 text-xs text-slate-800 dark:text-white"
                         />
                       </div>
-
-                      {/* Surface Finish */}
-                      <div>
-                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
-                          Surface Finish
-                        </label>
-                        <select
-                          name="finishType"
-                          value={values.finishType}
-                          onChange={handleChange}
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50/50 dark:bg-slate-800/80 outline-none focus:border-teal-600 text-xs text-slate-800 dark:text-slate-200"
-                        >
-                          {surfaceFinishes.length > 0 ? (
-                            surfaceFinishes.map((f: any) => (
-                              <option key={f.id} value={f.name}>
-                                {f.name}
-                              </option>
-                            ))
-                          ) : (
-                            <>
-                              <option value="Glazed Polished">Glazed Polished (High Gloss)</option>
-                              <option value="Super White Matte">Matte / Satin Finish</option>
-                              <option value="Carving / Sugar">Carving / Sugar Finish</option>
-                              <option value="Rustic Anti-Slip">Rustic / Anti-Slip</option>
-                              <option value="Wooden Planks">Wooden Grain Finish</option>
-                              <option value="Full Body Porcelain">Full Body Porcelain</option>
-                            </>
-                          )}
-                        </select>
-                      </div>
                     </div>
 
                     {/* LIVE COMPUTED SQUARE METER BADGES */}
@@ -604,22 +793,6 @@ const AddProduct = () => {
                   </div>
                 )}
 
-                {/* 3. NON-TILE FIELDS (Only shown for regular products) */}
-                {!isTileCategory && (
-                  <div className="bg-slate-50/30 dark:bg-slate-800/20 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-                    <div>
-                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">Product Description</label>
-                      <input
-                        type="text"
-                        name="productDescription"
-                        onChange={handleChange}
-                        value={values.productDescription}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs text-slate-800 dark:text-white"
-                        placeholder="Enter Description details"
-                      />
-                    </div>
-                  </div>
-                )}
 
                 {/* 4. PRICING SECTION (Clean Purchase Price & Sale Price) */}
                 <div className="bg-white dark:bg-boxdark rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-5 space-y-4">

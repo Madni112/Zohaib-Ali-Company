@@ -45,8 +45,8 @@ const PurchaseReturnReceiptList: React.FC = () => {
     }
   };
 
-  useEffect(() => { 
-    fetchReceiptLogs(); 
+  useEffect(() => {
+    fetchReceiptLogs();
   }, []);
 
   const handleDeleteReceipt = async (id: string | number) => {
@@ -56,13 +56,13 @@ const PurchaseReturnReceiptList: React.FC = () => {
       if (error) throw error;
       toast.success('Collection receipt deleted successfully!');
       fetchReceiptLogs();
-    } catch (err: any) { 
-      toast.error(err.message); 
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
-  const filteredReceipts = receipts.filter(r => 
-    (r.receipt_no || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredReceipts = receipts.filter(r =>
+    (r.receipt_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (r.return_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (r.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -75,7 +75,7 @@ const PurchaseReturnReceiptList: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-black dark:text-bodydark text-xs antialiased font-sans">
-      
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -92,9 +92,9 @@ const PurchaseReturnReceiptList: React.FC = () => {
           </p>
         </div>
 
-        <button 
-          type="button" 
-          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Add`)} 
+        <button
+          type="button"
+          onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchase-Return-Receipt/Add`)}
           className="flex items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 px-5 text-xs font-bold text-white shadow-md hover:bg-opacity-90 transition cursor-pointer"
         >
           + Add Return Receipt
@@ -102,14 +102,14 @@ const PurchaseReturnReceiptList: React.FC = () => {
       </div>
 
       <div className="rounded-xl border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
-        
+
         {/* Controls */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <span>Show</span>
-            <select 
-              value={pageSize} 
-              onChange={(e) => setPageSize(Number(e.target.value))} 
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
               className="rounded-lg border border-stroke py-1 px-2.5 bg-transparent dark:border-strokedark font-bold outline-none cursor-pointer"
             >
               <option value="10">10</option>
@@ -119,12 +119,12 @@ const PurchaseReturnReceiptList: React.FC = () => {
             <span>entries</span>
           </div>
 
-          <input 
-            type="text" 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            placeholder="Search by receipt #, return note, vendor..." 
-            className="rounded-lg border border-stroke py-1.5 px-3 bg-transparent outline-none w-full sm:w-72 text-xs font-semibold focus:border-primary dark:border-strokedark" 
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by receipt #, return note, vendor..."
+            className="rounded-lg border border-stroke py-1.5 px-3 bg-transparent outline-none w-full sm:w-72 text-xs font-semibold focus:border-primary dark:border-strokedark"
           />
         </div>
 
@@ -161,13 +161,12 @@ const PurchaseReturnReceiptList: React.FC = () => {
                       <td className="py-3.5 px-4 whitespace-nowrap flex items-center gap-1.5"><MdPerson className="text-gray-400 shrink-0" size={16} />{rcpt.vendor_name}</td>
                       <td className="py-3.5 px-4 text-center text-gray-500 whitespace-nowrap"><span className="inline-flex items-center gap-1 text-[11px]"><MdEvent size={13} className="shrink-0" />{dateFormatted}</span></td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 border text-[10px] rounded-full font-bold uppercase tracking-wide whitespace-nowrap ${
-                          method === 'By Cash' 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' 
-                            : method === 'Split'
+                        <span className={`px-2.5 py-0.5 border text-[10px] rounded-full font-bold uppercase tracking-wide whitespace-nowrap ${method === 'By Cash'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
+                          : method === 'Split'
                             ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/60'
                             : 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800/60'
-                        }`}>
+                          }`}>
                           {method}
                         </span>
                       </td>
@@ -195,13 +194,25 @@ const PurchaseReturnReceiptList: React.FC = () => {
         {/* Pagination Footer */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
           <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Previous</button>
-              {Array.from({ length: totalPages }, (_, i) => <button key={i + 1} onClick={() => setCurrentPage(i + 1)} className={`px-3 py-1.5 rounded text-xs border transition cursor-pointer ${currentPage === i + 1 ? 'bg-primary text-white border-primary' : 'border-stroke dark:border-strokedark text-gray-500 hover:bg-gray-50'}`}>{i + 1}</button>)}
-              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} className="px-3 py-1.5 rounded text-xs font-medium border border-stroke dark:border-strokedark hover:bg-gray-100 dark:hover:bg-meta-4 transition disabled:opacity-30 cursor-pointer">Next</button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+              >
+                Next
+              </button>
             </div>
-          )}
         </div>
 
       </div>

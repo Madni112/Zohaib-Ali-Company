@@ -25,6 +25,10 @@ const AddPurchases = () => {
   const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState<number>(0);
   const [isVendorDropdownOpen, setIsVendorDropdownOpen] = useState(false);
   const [highlightedVendorIndex, setHighlightedVendorIndex] = useState<number>(0);
+  const [pendingGrns, setPendingGrns] = useState<any[]>([]);
+  const [isGrnDropdownOpen, setIsGrnDropdownOpen] = useState(false);
+  const [highlightedGrnIndex, setHighlightedGrnIndex] = useState(0);
+  const [grnSearchTerm, setGrnSearchTerm] = useState('');
 
   const [defaultPurchaseNo] = useState(() => `PUR-${Math.floor(100000 + Math.random() * 900000)}`);
 
@@ -46,6 +50,9 @@ const AddPurchases = () => {
       if (!target.closest('.vendor-search-container')) {
         setIsVendorDropdownOpen(false);
       }
+      if (!target.closest('.grn-search-container')) {
+        setIsGrnDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -58,6 +65,8 @@ const AddPurchases = () => {
         const { data: vendorData, error: vendorError } = await supabase
           .from('vendors')
           .select('*');
+        const { data: grnData } = await supabase.from('grn_receipts').select('*, grn_items(*)').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false });
+        if (grnData) setPendingGrns(grnData);
 
         if (vendorError) throw vendorError;
 
@@ -145,10 +154,11 @@ const AddPurchases = () => {
       const settlementMode = paymentTerm.includes('Bank') && paymentTerm.includes('Cash')
         ? 'Split'
         : paymentTerm.includes('Bank')
-        ? 'Bank'
-        : 'Cash';
+          ? 'Bank'
+          : 'Cash';
 
       return {
+        grnId: editData.grn_id || null,
         purchaseNo: editData.purchase_no || '',
         supplierName: editData.supplier_name || '',
         targetWarehouse: editData.target_warehouse || '',
@@ -174,6 +184,7 @@ const AddPurchases = () => {
       };
     }
     return {
+      grnId: null,
       purchaseNo: defaultPurchaseNo,
       supplierName: '',
       purchaseDate: new Date().toISOString().split('T')[0],
@@ -200,12 +211,13 @@ const AddPurchases = () => {
     };
   }, [isEditMode, editData, defaultPurchaseNo]);
 
-  if (metadataLoading) return <div className="flex h-64 items-center justify-center bg-white"><Spinner /></div>;
+  if (loading) return <div className="flex h-64 items-center justify-center bg-white dark:bg-boxdark"><Spinner /></div>;
+  if (metadataLoading) return <div className="flex h-64 items-center justify-center bg-white dark:bg-boxdark"><Spinner /></div>;
 
   return (
     <div className="mx-auto max-w-7xl text-black dark:text-bodydark text-xs pb-12">
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
-        
+
         {/* Header Bar */}
         <div className="border-b border-stroke py-4 px-6.5 dark:border-strokedark flex flex-wrap justify-between items-center gap-4">
           <div>
@@ -231,13 +243,13 @@ const AddPurchases = () => {
             try {
               setLoading(true);
 
-              const totalBillAmount = values.items.reduce((acc, item) => {
+              const totalBillAmount = values.items.reduce((acc: any, item: any) => {
                 return acc + calculatePurchaseLineTotals(item, values.applyTax).netTotal;
               }, 0);
 
               const totalPaid = (values.settlementMode === 'Cash' ? Number(values.cashAmountPaid || 0) : 0) +
-                                (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : 0) +
-                                (values.settlementMode === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : 0);
+                (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : 0) +
+                (values.settlementMode === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : 0);
 
               const remainingBalance = Math.max(0, totalBillAmount - totalPaid);
 
@@ -267,7 +279,8 @@ const AddPurchases = () => {
                   selectedBankTitle: values.selectedBankTitle,
                   cashAmountPaid: values.cashAmountPaid,
                   bankAmountPaid: values.bankAmountPaid,
-                  applyTax: values.applyTax
+                  applyTax: values.applyTax,
+                  grn_id: values.grnId || null
                 }
               };
 
@@ -285,15 +298,19 @@ const AddPurchases = () => {
                 if (error) throw error;
 
                 // Restock receiving warehouse inventory bins
-                for (const item of values.items) {
-                  const effectiveWarehouse = item.warehouse || values.targetWarehouse;
-                  if (!effectiveWarehouse || !item.itemName) continue;
-                  const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', effectiveWarehouse).maybeSingle();
-                  if (p) {
-                    await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) + Number(item.qty) }).eq('id', p.id);
-                  } else {
-                    await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: effectiveWarehouse, quantity: Number(item.qty) }]);
+                if (!values.grnId) {
+                  for (const item of values.items) {
+                    const effectiveWarehouse = item.warehouse || values.targetWarehouse;
+                    if (!effectiveWarehouse || !item.itemName) continue;
+                    const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', effectiveWarehouse).maybeSingle();
+                    if (p) {
+                      await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) + Number(item.qty) }).eq('id', p.id);
+                    } else {
+                      await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: effectiveWarehouse, quantity: Number(item.qty) }]);
+                    }
                   }
+                } else {
+                  await supabase.from('grn_receipts').update({ status: 'Billed' }).eq('id', values.grnId);
                 }
 
                 toast.success('Procurement inventory batch recorded successfully!');
@@ -312,19 +329,110 @@ const AddPurchases = () => {
           }}
         >
           {({ handleChange, values, errors, touched, setFieldValue, submitForm }) => {
-            const totalBillAmount = values.items.reduce((acc, item) => {
+            const totalBillAmount = values.items.reduce((acc: any, item: any) => {
               return acc + calculatePurchaseLineTotals(item, values.applyTax).netTotal;
             }, 0);
 
             const totalPaid = (values.settlementMode === 'Cash' ? Number(values.cashAmountPaid || 0) : 0) +
-                              (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : 0) +
-                              (values.settlementMode === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : 0);
+              (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : 0) +
+              (values.settlementMode === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : 0);
 
             const remainingBalance = Math.max(0, totalBillAmount - totalPaid);
 
             return (
               <Form className="p-6 space-y-6">
-                
+
+                {/* Optional GRN Importer */}
+                {!isEditMode && pendingGrns.length > 0 && (
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 rounded-lg flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-emerald-800 dark:text-emerald-400">Import from Goods Receipt Note (GRN)</h4>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-500">Auto-fill this invoice from an unbilled physical receipt.</p>
+                    </div>
+                    <div className="relative grn-search-container w-64">
+                      <input
+                        type="text"
+                        value={grnSearchTerm || (() => {
+                          const grn = pendingGrns.find(g => g.id === values.grnId);
+                          return grn ? `${grn.grn_no} (${grn.vendor_name})` : '';
+                        })()}
+                        autoComplete="new-password"
+                        onChange={(e) => {
+                          setGrnSearchTerm(e.target.value);
+                          if (values.grnId) {
+                            setFieldValue('grnId', null);
+                          }
+                          setIsGrnDropdownOpen(true);
+                          setHighlightedGrnIndex(0);
+                        }}
+                        onFocus={() => { setIsGrnDropdownOpen(true); setHighlightedGrnIndex(0); }}
+                        onKeyDown={(e) => {
+                          const filtered = pendingGrns.filter(g => `${g.grn_no} ${g.vendor_name}`.toLowerCase().includes(grnSearchTerm.toLowerCase()));
+                          if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedGrnIndex(prev => prev < filtered.length - 1 ? prev + 1 : 0); }
+                          else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedGrnIndex(prev => prev > 0 ? prev - 1 : filtered.length - 1); }
+                          else if (e.key === 'Enter' && filtered.length > 0) {
+                            e.preventDefault();
+                            const grn = filtered[highlightedGrnIndex] || filtered[0];
+                            setFieldValue('grnId', grn.id);
+                            setFieldValue('supplierName', grn.vendor_name);
+                            setFieldValue('items', grn.grn_items.map((it: any) => ({
+                              itemName: it.product_name,
+                              skuCode: productList.find((p: any) => p.product_name === it.product_name)?.item_sr_no || '',
+                              warehouse: it.warehouse_name,
+                              qty: Number(it.accepted_qty ?? it.qty ?? 0),
+                              rate: 0,
+                              discountPer: 0,
+                              discountAmt: 0,
+                              gstRate: 18,
+                              gstAmt: 0
+                            })));
+                            setGrnSearchTerm('');
+                            setIsGrnDropdownOpen(false);
+                            toast.success(`Loaded ${grn.grn_items.length} items from ${grn.grn_no}`);
+                          } else if (e.key === 'Tab' || e.key === 'Escape') { setIsGrnDropdownOpen(false); }
+                        }}
+                        placeholder="Search Pending GRN..."
+                        className="border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-boxdark rounded p-2 text-sm font-bold w-full outline-none focus:border-emerald-500 text-black dark:text-white"
+                      />
+                      {isGrnDropdownOpen && (
+                        <div className="absolute left-0 top-full mt-1 z-[99999] w-full max-h-64 overflow-y-auto bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-xl divide-y divide-stroke dark:divide-strokedark rounded-lg">
+                          {(() => {
+                            const filtered = pendingGrns.filter(g => `${g.grn_no} ${g.vendor_name}`.toLowerCase().includes(grnSearchTerm.toLowerCase()));
+                            return filtered.length > 0 ? filtered.map((g, gIdx) => (
+                              <div
+                                key={g.id}
+                                onMouseEnter={() => setHighlightedGrnIndex(gIdx)}
+                                onMouseDown={(e) => {
+                                  e.preventDefault(); e.stopPropagation();
+                                  setFieldValue('grnId', g.id);
+                                  setFieldValue('supplierName', g.vendor_name);
+                                  setFieldValue('items', g.grn_items.map((it: any) => ({
+                                    itemName: it.product_name,
+                                    skuCode: productList.find((p: any) => p.product_name === it.product_name)?.item_sr_no || '',
+                                    warehouse: it.warehouse_name,
+                                    qty: Number(it.accepted_qty ?? it.qty ?? 0),
+                                    rate: 0,
+                                    discountPer: 0,
+                                    discountAmt: 0,
+                                    gstRate: 18,
+                                    gstAmt: 0
+                                  })));
+                                  setGrnSearchTerm('');
+                                  setIsGrnDropdownOpen(false);
+                                  toast.success(`Loaded ${g.grn_items.length} items from ${g.grn_no}`);
+                                }}
+                                className={`p-2.5 cursor-pointer text-xs font-semibold text-black dark:text-white ${highlightedGrnIndex === gIdx ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-meta-4/30'}`}
+                              >
+                                {g.grn_no} ({g.vendor_name})
+                              </div>
+                            )) : <div className="p-4 text-center italic text-gray-400">No GRNs found</div>;
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* ── TOP 2-COLUMN HEADER BAR ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
                   <div>
@@ -386,9 +494,8 @@ const AddPurchases = () => {
                               setHighlightedVendorIndex(0);
                             }}
                             placeholder="Type or search vendor name..."
-                            className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${
-                              hasAttempted && errors.supplierName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'
-                            }`}
+                            className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.supplierName ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'
+                              }`}
                           />
 
                           {isVendorDropdownOpen && (
@@ -410,11 +517,10 @@ const AddPurchases = () => {
                                       setFieldValue('supplierName', vendor.vendor_name);
                                       setIsVendorDropdownOpen(false);
                                     }}
-                                    className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${
-                                      highlightedVendorIndex === vIdx || values.supplierName === vendor.vendor_name
+                                    className={`p-3 cursor-pointer text-xs flex justify-between items-center transition ${highlightedVendorIndex === vIdx || values.supplierName === vendor.vendor_name
                                         ? 'bg-primary/10 text-primary font-bold'
                                         : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100'
-                                    }`}
+                                      }`}
                                   >
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-xs font-bold">{vendor.vendor_name}</span>
@@ -506,13 +612,13 @@ const AddPurchases = () => {
                 </div>
 
                 {/* ── PRODUCT ITEM CATALOG ENTRY TABLE ── */}
-                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-x-auto min-h-[400px]">
-                  <div className="w-full min-w-[900px]">
+                <div className="border border-stroke dark:border-strokedark rounded-sm relative z-30 overflow-x-auto pb-16">
+                  <div className="w-full min-w-max">
                     <table className="w-full table-auto border-collapse text-left">
                       <thead>
                         <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                           <th className="p-3 w-10 text-center">S#</th>
-                          <th className="p-3 w-48">SKU Code (Search)</th>
+                          <th className="p-3 w-48">Code (Search)</th>
                           <th className="p-3 min-w-[240px]">Product Description</th>
                           <th className="p-3 w-44">Destination Warehouse</th>
                           <th className="p-3 min-w-[260px] text-center">Arrived Qty (Boxes / Pcs / Sq.m)</th>
@@ -537,14 +643,14 @@ const AddPurchases = () => {
                         {({ push, remove }) => (
                           <tbody className="divide-y divide-stroke dark:divide-strokedark">
                             {values.items.map((item: any, idx: number) => {
-                              const matchedProduct = productList.find(p => 
+                              const matchedProduct = productList.find(p =>
                                 (item.skuCode && (p.item_sr_no === item.skuCode || `SKU-${p.id}` === item.skuCode)) ||
                                 (item.itemName && String(p.product_name || '').toLowerCase() === String(item.itemName || '').toLowerCase())
                               );
                               const rawPcs = Number(matchedProduct?.pieces_per_box ?? matchedProduct?.pcs_per_box ?? matchedProduct?.pieces_per_packing ?? 0);
                               const isTile = Boolean(
                                 matchedProduct && (
-                                  String(matchedProduct.category || '').toLowerCase().includes('tile') || 
+                                  String(matchedProduct.category || '').toLowerCase().includes('tile') ||
                                   String(matchedProduct.scenario_name || '').toLowerCase().includes('tile')
                                 ) && (rawPcs > 1 || String(matchedProduct.scenario_name || '').toLowerCase().includes('tile'))
                               );
@@ -580,7 +686,7 @@ const AddPurchases = () => {
                                 <tr key={idx} className={`border-b border-stroke dark:border-strokedark text-xs transition ${isCurrentActive || isCurrentProdNameActive ? 'relative z-50 bg-slate-50/90 dark:bg-meta-4/20' : 'relative z-10 bg-white dark:bg-boxdark hover:bg-slate-50 dark:hover:bg-meta-4/10'}`}>
                                   <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
 
-                                  {/* Searchable SKU Code */}
+                                  {/* Searchable Code */}
                                   <td className="p-3 relative sku-container">
                                     {(() => {
                                       const filteredProds = productList.filter(p => {
@@ -658,7 +764,7 @@ const AddPurchases = () => {
                                     })()}
                                   </td>
 
-                                  {/* Product Name & Description (Searchable Two-Way Input with Rich Dropdown matching Sales page) */}
+                                  {/* Description & Description (Searchable Two-Way Input with Rich Dropdown matching Sales page) */}
                                   <td className="p-3 relative prod-name-container min-w-[260px]">
                                     {(() => {
                                       const query = (item.itemName || '').toLowerCase().trim();
@@ -709,7 +815,7 @@ const AddPurchases = () => {
                                                 handleProductSelection(matched);
                                               }
                                             }}
-                                            placeholder="Search Product Name..."
+                                            placeholder="Search Description..."
                                             className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-1.5 outline-none text-xs text-black dark:text-white focus:border-primary shadow-xs"
                                           />
 
@@ -733,11 +839,10 @@ const AddPurchases = () => {
                                                       e.stopPropagation();
                                                       handleProductSelection(p);
                                                     }}
-                                                    className={`p-3 cursor-pointer transition flex items-center justify-between group ${
-                                                      isHighlighted
+                                                    className={`p-3 cursor-pointer transition flex items-center justify-between group ${isHighlighted
                                                         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
                                                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
-                                                    }`}
+                                                      }`}
                                                   >
                                                     <div className="flex flex-col gap-0.5 text-left pr-2">
                                                       <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 leading-tight">
@@ -786,7 +891,7 @@ const AddPurchases = () => {
                                         const desc = matchedProduct?.product_description || '';
                                         const sku = matchedProduct?.item_sr_no || '';
                                         const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
-                                                          sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+                                          sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
                                         if (sizeMatch) {
                                           tileHeightCm = Number(sizeMatch[1]) || 60;
                                           tileWidthCm = Number(sizeMatch[2]) || 60;
@@ -863,8 +968,8 @@ const AddPurchases = () => {
                                                     const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
                                                     const remLoose = enteredLoose % pcsPerBox;
                                                     const finalBoxes = currentBoxes + extraBoxes;
-                                                    const combinedQty = remLoose > 0 
-                                                      ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3)) 
+                                                    const combinedQty = remLoose > 0
+                                                      ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3))
                                                       : finalBoxes;
 
                                                     setFieldValue(`items.${idx}.qty`, combinedQty);
@@ -935,7 +1040,7 @@ const AddPurchases = () => {
                                   </td>
 
                                   {/* Cost Price */}
-                                  <td className="p-3 w-36">
+                                  <td className="p-3 w-36 min-w-[120px]">
                                     <input
                                       type="number"
                                       min="0"
@@ -962,7 +1067,7 @@ const AddPurchases = () => {
                                   {/* Discount Columns */}
                                   {values.showDiscount && (
                                     <>
-                                      <td className="p-3 bg-amber-50/30 dark:bg-amber-950/10">
+                                      <td className="p-3 w-24 min-w-[90px] bg-amber-50/30 dark:bg-amber-950/10">
                                         <input
                                           type="number"
                                           min="0"
@@ -970,16 +1075,19 @@ const AddPurchases = () => {
                                           name={`items.${idx}.discountPer`}
                                           value={item.discountPer ?? 0}
                                           onChange={(e) => {
-                                            const dPer = Math.max(0, Number(e.target.value) || 0);
-                                            setFieldValue(`items.${idx}.discountPer`, dPer);
-                                            const gross = (Number(item.qty) || 0) * (Number(item.rate) || 0);
-                                            setFieldValue(`items.${idx}.discountAmt`, Number(((gross * dPer) / 100).toFixed(2)));
+                                            const rawVal = e.target.value;
+                                            setFieldValue(`items.${idx}.discountPer`, rawVal);
+                                            const dPer = Number(rawVal);
+                                            if (!isNaN(dPer) && dPer >= 0) {
+                                              const gross = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                              setFieldValue(`items.${idx}.discountAmt`, Number(((gross * dPer) / 100).toFixed(2)));
+                                            }
                                           }}
                                           placeholder="0"
                                           className="w-full text-center font-bold font-mono text-amber-700 bg-white dark:bg-boxdark border border-amber-300 rounded p-1 text-xs outline-none"
                                         />
                                       </td>
-                                      <td className="p-3 bg-amber-50/30 dark:bg-amber-950/10">
+                                      <td className="p-3 w-32 min-w-[110px] bg-amber-50/30 dark:bg-amber-950/10">
                                         <input
                                           type="number"
                                           min="0"
@@ -987,11 +1095,14 @@ const AddPurchases = () => {
                                           name={`items.${idx}.discountAmt`}
                                           value={item.discountAmt ?? 0}
                                           onChange={(e) => {
-                                            const dAmt = Math.max(0, Number(e.target.value) || 0);
-                                            setFieldValue(`items.${idx}.discountAmt`, dAmt);
-                                            const gross = (Number(item.qty) || 0) * (Number(item.rate) || 0);
-                                            const per = gross > 0 ? (dAmt / gross) * 100 : 0;
-                                            setFieldValue(`items.${idx}.discountPer`, Number(per.toFixed(2)));
+                                            const rawVal = e.target.value;
+                                            setFieldValue(`items.${idx}.discountAmt`, rawVal);
+                                            const dAmt = Number(rawVal);
+                                            if (!isNaN(dAmt) && dAmt >= 0) {
+                                              const gross = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                              const per = gross > 0 ? (dAmt / gross) * 100 : 0;
+                                              setFieldValue(`items.${idx}.discountPer`, Number(per.toFixed(2)));
+                                            }
                                           }}
                                           placeholder="0"
                                           className="w-full text-right font-bold font-mono text-amber-700 bg-white dark:bg-boxdark border border-amber-300 rounded p-1 text-xs outline-none"
@@ -1003,7 +1114,7 @@ const AddPurchases = () => {
                                   {/* GST Columns */}
                                   {values.applyTax && (
                                     <>
-                                      <td className="p-3 bg-emerald-50/30 dark:bg-emerald-950/10">
+                                      <td className="p-3 w-24 min-w-[90px] bg-emerald-50/30 dark:bg-emerald-950/10">
                                         <input
                                           type="number"
                                           min="0"
@@ -1011,22 +1122,28 @@ const AddPurchases = () => {
                                           name={`items.${idx}.gstRate`}
                                           value={item.gstRate ?? 18}
                                           onChange={(e) => {
-                                            const r = Math.max(0, Number(e.target.value) || 0);
-                                            setFieldValue(`items.${idx}.gstRate`, r);
-                                            const cost = (Number(item.qty) || 0) * (Number(item.rate) || 0) - (Number(item.discountAmt) || 0);
-                                            setFieldValue(`items.${idx}.gstAmt`, Number(((cost * r) / 100).toFixed(2)));
+                                            const rawVal = e.target.value;
+                                            setFieldValue(`items.${idx}.gstRate`, rawVal);
+                                            const r = Number(rawVal);
+                                            if (!isNaN(r) && r >= 0) {
+                                              const cost = (Number(item.qty) || 0) * (Number(item.rate) || 0) - (Number(item.discountAmt) || 0);
+                                              setFieldValue(`items.${idx}.gstAmt`, Number(((cost * r) / 100).toFixed(2)));
+                                            }
                                           }}
                                           className="w-full text-center font-bold font-mono text-emerald-700 bg-white dark:bg-boxdark border border-emerald-300 rounded p-1 text-xs outline-none"
                                         />
                                       </td>
-                                      <td className="p-3 bg-emerald-50/30 dark:bg-emerald-950/10">
+                                      <td className="p-3 w-32 min-w-[110px] bg-emerald-50/30 dark:bg-emerald-950/10">
                                         <input
                                           type="number"
                                           min="0"
                                           onKeyDown={blockInvalidChar}
                                           name={`items.${idx}.gstAmt`}
                                           value={item.gstAmt ?? 0}
-                                          onChange={(e) => setFieldValue(`items.${idx}.gstAmt`, Math.max(0, Number(e.target.value) || 0))}
+                                          onChange={(e) => {
+                                            const rawVal = e.target.value;
+                                            setFieldValue(`items.${idx}.gstAmt`, rawVal);
+                                          }}
                                           className="w-full text-right font-bold font-mono text-emerald-700 bg-white dark:bg-boxdark border border-emerald-300 rounded p-1 text-xs outline-none"
                                         />
                                       </td>
@@ -1076,7 +1193,7 @@ const AddPurchases = () => {
 
                 {/* ── BOTTOM SETTLEMENT BAR: CASH / BANK / SPLIT SWITCHER ── */}
                 <div className="flex flex-col md:flex-row justify-between items-start gap-6 border border-stroke dark:border-strokedark p-5 rounded-sm bg-slate-50/40 dark:bg-meta-4/5 mt-6">
-                  
+
                   {/* Left: Payment Method Controls */}
                   <div className="w-full md:w-1/2 space-y-4">
                     <div>

@@ -1,12 +1,12 @@
-import { 
-  MdDashboard, MdReceipt, MdPeople, MdAdminPanelSettings, MdEmojiTransportation, 
-  MdEdit, MdInventory2, MdClass, MdAccountBox, MdCategory, MdStraighten, MdDomain, 
-  MdInventory, MdBadge, MdShoppingCart, MdLocationOn, MdLocalShipping, MdCompareArrows, 
-  MdFormatListBulleted, MdAccountTree, MdReceiptLong, MdAccountBalance, MdLaptop, 
-  MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview, 
-  MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn, 
-  MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet, 
-  MdBalance, MdPauseCircleFilled 
+import {
+  MdDashboard, MdReceipt, MdPeople, MdAdminPanelSettings, MdEmojiTransportation,
+  MdEdit, MdInventory2, MdClass, MdAccountBox, MdCategory, MdStraighten, MdDomain,
+  MdInventory, MdBadge, MdShoppingCart, MdLocationOn, MdLocalShipping, MdCompareArrows,
+  MdFormatListBulleted, MdAccountTree, MdReceiptLong, MdAccountBalance, MdLaptop,
+  MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview,
+  MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn,
+  MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet,
+  MdBalance, MdPauseCircleFilled, MdInbox
 } from 'react-icons/md';
 import HoldingReport from '../pages/Reports/Holding Report/HoldingReport';
 import HoldingReportPrint from '../pages/Reports/Holding Report/HoldingReportPrint';
@@ -53,6 +53,10 @@ import AddMultiInvoiceReceipt from '../pages/Registration/Multi Invoice Receipt/
 import AddPurchases from '../pages/Purchase/Purchase/AddPurchases';
 import PurchaseList from '../pages/Purchase/Purchase/PurchaseList';
 import PrintPurchase from '../pages/Purchase/Purchase/PrintPurchase';
+import GRNList from '../pages/Purchase/GRN/GRNList';
+import AddGRN from '../pages/Purchase/GRN/AddGRN';
+import InwardChallanList from '../pages/Purchase/Inward Challan/InwardChallanList';
+import VerifyInward from '../pages/Purchase/Inward Challan/VerifyInward';
 import VendorList from '../pages/Purchase/Vendor/VendorList';
 import AddVendor from '../pages/Purchase/Vendor/AddVendor';
 import PurchaseReceiptList from '../pages/Purchase/Purchase Receipt/PurchaseReceiptList';
@@ -98,21 +102,23 @@ export const adminRoutes = [
       {
         path: '/Administration/Surface-Finish',
         component: <SurfaceFinish />,
-        label: 'Surface Finish',
+        label: 'Bin',
         icon: MdTexture
       },
       {
         path: '/Administration/UOM/List',
         component: <UomManager />,
-        label: 'UOM',
+        label: 'UOMs',
         icon: MdStraighten
       },
+      /*
       {
         path: '/Administration/Brands',
         component: <Brands />,
         label: 'Brands',
         icon: MdDomain
       },
+      */
       {
         label: 'Products',
         icon: MdDashboard,
@@ -232,6 +238,18 @@ export const adminRoutes = [
         path: '/Purchase/Purchases/List',
         component: <PurchaseList />,
         icon: MdLaptopChromebook
+      },
+      {
+        label: 'GRN (Goods Receipt)',
+        path: '/Purchase/GRN/List',
+        component: <GRNList />,
+        icon: MdInventory
+      },
+      {
+        label: 'Inward Challan (Warehouse)',
+        path: '/Purchase/Inward-Challan/List',
+        component: <InwardChallanList />,
+        icon: MdInbox
       },
       {
         label: 'Purchase Receipt',
@@ -574,6 +592,21 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
+        path: '/Purchase/GRN/Add',
+        component: <AddGRN />,
+        hideFromSidebar: true
+  },
+  {
+        path: '/Purchase/GRN/Edit/:id',
+        component: <AddGRN />,
+        hideFromSidebar: true
+  },
+  {
+        path: '/Purchase/Inward-Challan/Verify/:id',
+        component: <VerifyInward />,
+        hideFromSidebar: true
+  },
+  {
     path: '/Purchase/Purchases/Print/:id',
     component: <PrintPurchase />,
     label: 'Print Purchase',
@@ -673,7 +706,7 @@ export const adminRoutes = [
   },
   {
     path: '/Reports/Account-Report/Print',
-    component: <AccountReportPrint/>,
+    component: <AccountReportPrint />,
     hideFromSidebar: true
   },
   {

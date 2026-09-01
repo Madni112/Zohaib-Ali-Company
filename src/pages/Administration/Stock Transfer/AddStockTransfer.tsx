@@ -13,12 +13,39 @@ const AddStockTransfer = () => {
   const [metadataLoading, setMetadataLoading] = useState(true);
   const [locations, setLocations] = useState<any[]>([]);
   const [productList, setProductList] = useState<any[]>([]);
+  const [openDropdownRowIndex, setOpenDropdownRowIndex] = useState<number | null>(null);
+  const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
 
   const location = useLocation();
   const navigate = useNavigate();
 
   const editData = location.state?.transfer;
   const isEditMode = !!editData;
+
+  const formInitialValues = React.useMemo(() => {
+    return isEditMode ? {
+      transferNo: editData.transfer_no || '',
+      fromLocation: editData.from_location || '',
+      toLocation: editData.to_location || '',
+      transferDate: editData.transfer_date || '',
+      status: editData.status || 'Confirm',
+      remarks: editData.remarks || '',
+      items: (editData.items || []).map((item: any) => ({
+        itemName: item.itemName || '',
+        qty: item.qty || 1,
+        uom: item.uom || 'Nos',
+        availableQty: item.availableQty || 0
+      }))
+    } : {
+      transferNo: `TRF-${Date.now().toString().slice(-6)}`,
+      fromLocation: '',
+      toLocation: '',
+      transferDate: new Date().toISOString().split('T')[0],
+      status: 'Confirm',
+      remarks: '',
+      items: [{ itemName: '', qty: 1, uom: 'Nos', availableQty: 0 }]
+    };
+  }, [isEditMode, editData]);
 
   useEffect(() => {
     const fetchTransferMetadata = async () => {
@@ -40,12 +67,9 @@ const AddStockTransfer = () => {
 
   const handleProductSelectionWithWarehouseBalance = async (selectedName: string, index: number, sourceWarehouse: string, setFieldValue: any) => {
     if (!selectedName) {
-      setFieldValue(`items.${index}.itemName`, '');
       setFieldValue(`items.${index}.availableQty`, 0);
       return;
     }
-
-    setFieldValue(`items.${index}.itemName`, selectedName);
 
     if (!sourceWarehouse) {
       setFieldValue(`items.${index}.availableQty`, 0);
@@ -100,28 +124,7 @@ const AddStockTransfer = () => {
 
 
         <Formik
-          initialValues={isEditMode ? {
-            transferNo: editData.transfer_no || '',
-            fromLocation: editData.from_location || '',
-            toLocation: editData.to_location || '',
-            transferDate: editData.transfer_date || '',
-            status: editData.status || 'Confirm',
-            remarks: editData.remarks || '',
-            items: (editData.items || []).map((item: any) => ({
-              itemName: item.itemName || '',
-              qty: item.qty || 1,
-              uom: item.uom || 'Nos',
-              availableQty: item.availableQty || 0
-            }))
-          } : {
-            transferNo: `TRF-${Date.now().toString().slice(-6)}`,
-            fromLocation: '',
-            toLocation: '',
-            transferDate: new Date().toISOString().split('T')[0],
-            status: 'Confirm',
-            remarks: '',
-            items: [{ itemName: '', qty: 1, uom: 'Nos', availableQty: 0 }]
-          }}
+          initialValues={formInitialValues}
           enableReinitialize={true}
           validationSchema={validationSchema}
           onSubmit={async (values) => {
@@ -262,14 +265,32 @@ const AddStockTransfer = () => {
                     className={`w-full rounded border p-2 bg-transparent outline-none text-black dark:text-white font-semibold focus:border-primary ${touched.fromLocation && errors.fromLocation ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
                   >
                     <option value="" className="bg-white dark:bg-boxdark font-semibold text-black dark:text-white text-xs py-1">Select Departure Point</option>
-                    {locations.map(l => <option key={l.id} value={l.name} className="bg-white dark:bg-boxdark font-semibold text-black dark:text-white text-xs py-1">{l.name}</option>)}
+                    {locations.map(l => (
+                      <option 
+                        key={l.id} 
+                        value={l.name} 
+                        disabled={values.toLocation === l.name}
+                        className={`bg-white dark:bg-boxdark font-semibold text-xs py-1 ${values.toLocation === l.name ? 'text-red-400 dark:text-red-500 bg-red-50 dark:bg-red-900/10' : 'text-black dark:text-white'}`}
+                      >
+                        {l.name} {values.toLocation === l.name ? '(Selected in Destination)' : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-gray-500 dark:text-gray-400 mb-1 font-medium">Destination Warehouse (To): *</label>
                   <select name="toLocation" disabled={isEditMode} onChange={handleChange} value={values.toLocation} className={`w-full rounded border p-2 bg-transparent outline-none text-black dark:text-white font-semibold focus:border-primary ${touched.toLocation && errors.toLocation ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}>
                     <option value="" className="bg-white dark:bg-boxdark font-semibold text-black dark:text-white text-xs py-1">Select Receiving Destination</option>
-                    {locations.map(l => <option key={l.id} value={l.name} className="bg-white dark:bg-boxdark font-semibold text-black dark:text-white text-xs py-1">{l.name}</option>)}
+                    {locations.map(l => (
+                      <option 
+                        key={l.id} 
+                        value={l.name} 
+                        disabled={values.fromLocation === l.name}
+                        className={`bg-white dark:bg-boxdark font-semibold text-xs py-1 ${values.fromLocation === l.name ? 'text-red-400 dark:text-red-500 bg-red-50 dark:bg-red-900/10' : 'text-black dark:text-white'}`}
+                      >
+                        {l.name} {values.fromLocation === l.name ? '(Selected in Source)' : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -303,20 +324,109 @@ const AddStockTransfer = () => {
                             <tr key={index} className="bg-white dark:bg-boxdark text-xs border-b border-stroke dark:border-strokedark text-black dark:text-white">
                               <td className="p-2 border border-stroke dark:border-strokedark font-medium">{index + 1}</td>
                               <td className="p-2 border border-stroke dark:border-strokedark">
-                                <select
-                                  name={`items.${index}.itemName`}
-                                  disabled={isEditMode}
-                                  value={item.itemName}
-                                  onChange={(e) => {
-                                    handleProductSelectionWithWarehouseBalance(e.target.value, index, values.fromLocation, setFieldValue);
-                                    const selectObj = productList.find(p => p.product_name === e.target.value);
-                                    if (selectObj) setFieldValue(`items.${index}.uom`, selectObj.uom || 'Nos');
-                                  }}
-                                  className="w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark"
-                                >
-                                  <option value="" className="bg-white dark:bg-boxdark font-semibold text-black dark:text-white text-xs py-1">Pick Product</option>
-                                  {productList.map(p => <option key={p.id} value={p.product_name} className="bg-white dark:bg-boxdark font-semibold text-black dark:text-white text-xs py-1">{p.product_name}</option>)}
-                                </select>
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    disabled={isEditMode}
+                                    name={`items.${index}.itemName`}
+                                    value={item.itemName}
+                                    autoComplete="new-password"
+                                    onChange={(e) => {
+                                      setFieldValue(`items.${index}.itemName`, e.target.value);
+                                      setOpenDropdownRowIndex(index);
+                                      setHighlightedProductIndex(0);
+                                    }}
+                                    onFocus={() => {
+                                      if (!isEditMode) {
+                                        setOpenDropdownRowIndex(index);
+                                        setHighlightedProductIndex(0);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      setTimeout(() => setOpenDropdownRowIndex(null), 200);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      const availableProducts = productList.map((p: any) => p.product_name);
+                                      const filteredProducts = availableProducts.filter((p: string) => p.toLowerCase().includes(String(item.itemName || '').toLowerCase()));
+                                      
+                                      if (e.key === 'ArrowDown') {
+                                        e.preventDefault();
+                                        setHighlightedProductIndex((prev) => prev < filteredProducts.length - 1 ? prev + 1 : 0);
+                                      } else if (e.key === 'ArrowUp') {
+                                        e.preventDefault();
+                                        setHighlightedProductIndex((prev) => prev > 0 ? prev - 1 : filteredProducts.length - 1);
+                                      } else if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (filteredProducts.length > 0) {
+                                          const selectedValue = filteredProducts[highlightedProductIndex] || filteredProducts[0];
+                                          const selectObj = productList.find(p => p.product_name === selectedValue);
+                                          
+                                          const updatedItems = [...values.items];
+                                          updatedItems[index] = {
+                                            ...updatedItems[index],
+                                            itemName: selectedValue,
+                                            uom: selectObj ? selectObj.uom : 'Nos'
+                                          };
+                                          setFieldValue('items', updatedItems);
+                                          
+                                          handleProductSelectionWithWarehouseBalance(selectedValue, index, values.fromLocation, setFieldValue);
+                                          setOpenDropdownRowIndex(null);
+                                        }
+                                      } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                        setOpenDropdownRowIndex(null);
+                                      }
+                                    }}
+                                    className="w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left"
+                                    placeholder="Search Product..."
+                                  />
+                                  {openDropdownRowIndex === index && (
+                                    <div className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[300px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
+                                      {(() => {
+                                        const availableProducts = productList.map((p: any) => p.product_name);
+                                        const filteredProducts = availableProducts.filter((p: string) => p.toLowerCase().includes(String(item.itemName || '').toLowerCase()));
+                                        
+                                        return filteredProducts.length > 0 ? (
+                                          filteredProducts.map((pName, idx) => {
+                                            const isHighlighted = idx === highlightedProductIndex;
+                                            return (
+                                              <div
+                                                key={pName}
+                                                onMouseEnter={() => setHighlightedProductIndex(idx)}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  const selectObj = productList.find(p => p.product_name === pName);
+                                                  
+                                                  const updatedItems = [...values.items];
+                                                  updatedItems[index] = {
+                                                    ...updatedItems[index],
+                                                    itemName: pName,
+                                                    uom: selectObj ? selectObj.uom : 'Nos'
+                                                  };
+                                                  setFieldValue('items', updatedItems);
+                                                  
+                                                  handleProductSelectionWithWarehouseBalance(pName, index, values.fromLocation, setFieldValue);
+                                                  setOpenDropdownRowIndex(null);
+                                                }}
+                                                className={`p-2.5 cursor-pointer transition text-xs font-semibold text-black dark:text-white flex items-center ${
+                                                  isHighlighted 
+                                                    ? 'bg-primary/10 border-l-4 border-primary text-primary' 
+                                                    : 'hover:bg-gray-100 dark:hover:bg-meta-4'
+                                                }`}
+                                              >
+                                                {pName}
+                                              </div>
+                                            );
+                                          })
+                                        ) : (
+                                          <div className="p-4 text-center text-xs text-gray-400 italic">
+                                            No matching products found.
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="p-2 border border-stroke dark:border-strokedark font-bold text-success font-mono text-center w-36 text-sm">
                                 {Number(item.availableQty || 0).toLocaleString()}

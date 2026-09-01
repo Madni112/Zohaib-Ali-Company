@@ -6,6 +6,7 @@ interface ModalContextType {
     content: ReactNode,
     title?: string,
     onSubmit?: (result: boolean) => void,
+    maxWidth?: string
   ) => void;
   hideModal: (result?: boolean) => void;
 }
@@ -18,6 +19,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [content, setContent] = useState<ReactNode | null>(null);
   const [title, setTitle] = useState<string | undefined>();
+  const [maxWidth, setMaxWidth] = useState<string>('max-w-xl');
   const [onSubmitCallback, setOnSubmitCallback] = useState<
     ((result: boolean) => void) | null
   >(null);
@@ -26,9 +28,11 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
     newContent: ReactNode,
     newTitle?: string,
     onSubmit?: (result: boolean) => void,
+    newMaxWidth?: string
   ) => {
     setContent(newContent);
     setTitle(newTitle);
+    setMaxWidth(newMaxWidth || 'max-w-xl');
     setOnSubmitCallback(() => onSubmit || null);
     setIsOpen(true);
   };
@@ -40,6 +44,7 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
     setIsOpen(false);
     setContent(null);
     setTitle(undefined);
+    setMaxWidth('max-w-xl');
     setOnSubmitCallback(null);
   };
 
@@ -47,12 +52,12 @@ export const ModalProvider: React.FC<{ children: ReactNode }> = ({
     <ModalContext.Provider value={{ showModal, hideModal }}>
       {children}
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center mx-4">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
           <div
             className="fixed inset-0 bg-black opacity-50"
             onClick={() => hideModal(false)} // Close without submission
           ></div>
-          <div className="relative bg-white p-6 mt-20 rounded-md shadow-md z-10 max-w-xl w-full sm:mx-4 dark:bg-black">
+          <div className={`relative bg-white p-6 mt-10 rounded-md shadow-md z-10 ${maxWidth} w-full dark:bg-black overflow-y-auto max-h-[90vh]`}>
             {title && (
               <div className="flex justify-between items-center pb-4 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

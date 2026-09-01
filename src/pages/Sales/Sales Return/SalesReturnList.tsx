@@ -259,38 +259,27 @@ const SalesReturnList = () => {
           <div className="text-slate-500 dark:text-slate-400">
             Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
           </div>
-          {totalPages > 1 && (
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-30 cursor-pointer font-semibold"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
               >
                 Previous
               </button>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  type="button"
-                  key={i + 1}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`px-3 py-1.5 rounded-lg border transition font-bold cursor-pointer ${
-                    currentPage === i + 1 ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+                Page {currentPage} of {totalPages}
+              </span>
               <button
                 type="button"
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-30 cursor-pointer font-semibold"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
               >
                 Next
               </button>
             </div>
-          )}
         </div>
       </div>
     </div>
