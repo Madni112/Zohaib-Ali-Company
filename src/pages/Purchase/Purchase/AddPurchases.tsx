@@ -1120,7 +1120,38 @@ const AddPurchases = () => {
                                     {values.items.length > 1 && (
                                       <button
                                         type="button"
-                                        onClick={() => remove(idx)}
+                                        onClick={async () => {
+                                          if (isEditMode && item.itemName) {
+                                            // Pre-deletion stock check
+                                            let qtyToReverse = Number(item.qty || 0);
+                                            
+                                            // Check GRN if this purchase is linked to one
+                                            let grnItems = [];
+                                            if (editData?.metadata?.grn_id) {
+                                              const { data: gi } = await supabase.from('grn_items').select('*').eq('grn_id', editData.metadata.grn_id);
+                                              if (gi) {
+                                                const gItem = gi.find(g => String(g.product_name || '').toLowerCase() === String(item.itemName).toLowerCase());
+                                                if (gItem) qtyToReverse = Number(gItem.accepted_qty ?? 0);
+                                                else qtyToReverse = 0;
+                                              }
+                                            }
+
+                                            if (qtyToReverse > 0) {
+                                              const { data: p } = await supabase.from('warehouse_inventory')
+                                                .select('quantity')
+                                                .ilike('product_name', item.itemName)
+                                                .ilike('warehouse_name', item.warehouse)
+                                                .maybeSingle();
+
+                                              const currentStock = Number(p?.quantity || 0);
+                                              if (currentStock < qtyToReverse) {
+                                                toast.error(`Error: You currently only have ${currentStock} in ${item.warehouse}. Cannot delete this entry as it would cause negative stock.`, { duration: 5000 });
+                                                return; // Block removal
+                                              }
+                                            }
+                                          }
+                                          remove(idx);
+                                        }}
                                         className="text-gray-400 hover:text-danger transition cursor-pointer"
                                       >
                                         <FiTrash2 size={14} />

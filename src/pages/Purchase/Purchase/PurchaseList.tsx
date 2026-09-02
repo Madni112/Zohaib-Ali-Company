@@ -177,6 +177,47 @@ const PurchaseList = () => {
     try {
       const { data: targetRecord } = await supabase.from('supplier_purchases').select('items, target_warehouse, metadata').eq('id', id).single();
       
+      // PRE-DELETION STOCK VALIDATION
+      if (targetRecord?.items) {
+        let grnItems: any[] = [];
+        if (targetRecord.metadata?.grn_id) {
+           const { data: gi } = await supabase.from('grn_items').select('*').eq('grn_id', targetRecord.metadata.grn_id);
+           grnItems = gi || [];
+        }
+
+        for (const item of targetRecord.items) {
+          const pName = item.itemName || item.product_name;
+          if (!pName) continue;
+          
+          let qtyToReverse = Number(item.qty || item.quantity || 0);
+          
+          // If linked to GRN, the actual stock added was the accepted_qty
+          if (targetRecord.metadata?.grn_id) {
+             const gItem = grnItems.find(g => String(g.product_name || '').toLowerCase() === String(pName).toLowerCase());
+             if (gItem) {
+                qtyToReverse = Number(gItem.accepted_qty ?? 0);
+             } else {
+                qtyToReverse = 0;
+             }
+          }
+
+          if (qtyToReverse > 0) {
+             const { data: p } = await supabase.from('warehouse_inventory')
+               .select('quantity')
+               .ilike('product_name', pName)
+               .ilike('warehouse_name', targetRecord.target_warehouse)
+               .maybeSingle();
+               
+             const currentStock = Number(p?.quantity || 0);
+             
+             if (currentStock < qtyToReverse) {
+                toast.error(`Cannot Delete Purchase.\nInsufficient stock for: ${pName} in ${targetRecord.target_warehouse}.\nRequired to reverse: ${qtyToReverse}\nCurrently Available: ${currentStock}`, { duration: 5000 });
+                return; // Halt deletion
+             }
+          }
+        }
+      }
+      
       // Only reverse stock if this purchase was NOT linked to a GRN.
       // If it is linked to a GRN, the GRN is the source of physical stock, so deleting the bill shouldn't touch stock.
       if (!targetRecord?.metadata?.grn_id) {
