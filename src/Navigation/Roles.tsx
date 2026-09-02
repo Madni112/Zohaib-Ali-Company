@@ -29,6 +29,7 @@ import AddSalesReturn from '../pages/Sales/Sales Return/AddSalesReturn';
 import PrintSalesReturn from '../pages/Sales/Sales Return/PrintSalesReturn';
 import ProductList from '../pages/Administration/Products/ProductList';
 import AddProduct from '../pages/Administration/Products/AddProduct';
+import BulkProductUpload from '../pages/Administration/Products/BulkProductUpload';
 import Categories from '../pages/Administration/Categories';
 import UomManager from '../pages/Administration/UomManager';
 import SurfaceFinish from '../pages/Administration/SurfaceFinish';
@@ -125,6 +126,12 @@ export const adminRoutes = [
         icon: MdDashboard,
         path: '/Administration/Products/List',
         component: <ProductList />,
+      },
+      {
+        path: '/Administration/Products/Bulk-Upload',
+        component: <BulkProductUpload />,
+        label: 'Bulk Product Upload',
+        icon: MdDashboard,
       },
       {
         path: '/Administration/Locations/List',
