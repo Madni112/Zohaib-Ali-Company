@@ -58,10 +58,11 @@ const AddGRN = () => {
     const fetchMetadata = async () => {
       try {
         setMetadataLoading(true);
-        const [venRes, prodRes, locRes] = await Promise.all([
+        const [venRes, prodRes, locRes, grnCountRes] = await Promise.all([
           supabase.from('vendors').select('vendor_name').order('vendor_name'),
-          supabase.from('products').select('id, product_name, uom, item_sr_no').order('product_name'),
-          supabase.from('inventory_locations').select('name, location_type').order('name')
+          supabase.from('products').select('id, product_name, uom, item_sr_no, category, pieces_per_box, pcs_per_box, pieces_per_packing, product_description').order('product_name'),
+          supabase.from('inventory_locations').select('name, location_type').order('name'),
+          supabase.from('grn_receipts').select('*', { count: 'exact', head: true })
         ]);
 
         if (venRes.data) setVendors(venRes.data);
@@ -93,6 +94,9 @@ const AddGRN = () => {
               };
             })
           });
+        } else {
+          const nextGrnNo = `GRN-${String((grnCountRes.count || 0) + 1).padStart(4, '0')}`;
+          setInitialValues(prev => ({ ...prev, grnNo: nextGrnNo }));
         }
       } catch (err) {
         toast.error('Failed to load data.');
@@ -280,8 +284,8 @@ const AddGRN = () => {
                     type="text" 
                     name="grnNo"
                     value={values.grnNo} 
-                    onChange={handleChange}
-                    className={`w-full border rounded p-2 bg-transparent font-bold font-mono outline-none focus:border-primary ${touched.grnNo && errors.grnNo ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`} 
+                    readOnly
+                    className={`w-full border rounded p-2 bg-gray-50 dark:bg-meta-4 text-gray-500 font-bold font-mono outline-none cursor-not-allowed ${touched.grnNo && errors.grnNo ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`} 
                   />
                 </div>
 
@@ -505,33 +509,116 @@ const AddGRN = () => {
                             </td>
 
                             <td className="p-3">
-                              <input
-                                type="number" 
-                                min="0" 
-                                step={['kg', 'ltr', 'cm', 'mm', 'yd', 'm', 'g', 'ml', 'ton', 'sqm', 'sqft', 'cbm'].includes(String(item.uom).toLowerCase()) ? '0.01' : '1'}
-                                name={`items.${idx}.qty`}
-                                value={item.qty}
-                                onKeyDown={(e) => {
-                                  const decimalUoms = ['kg', 'ltr', 'cm', 'mm', 'yd', 'm', 'g', 'ml', 'ton', 'sqm', 'sqft', 'cbm'];
-                                  const isDecimalAllowed = decimalUoms.includes(String(item.uom).toLowerCase());
-                                  if (!isDecimalAllowed && e.key === '.') {
-                                    e.preventDefault();
-                                  }
-                                }}
-                                onChange={(e) => {
-                                  const decimalUoms = ['kg', 'ltr', 'cm', 'mm', 'yd', 'm', 'g', 'ml', 'ton', 'sqm', 'sqft', 'cbm'];
-                                  const isDecimalAllowed = decimalUoms.includes(String(item.uom).toLowerCase());
-                                  let valStr = e.target.value;
-                                  if (!isDecimalAllowed && valStr.includes('.')) {
-                                    valStr = valStr.split('.')[0];
-                                  }
-                                  setFieldValue(`items.${idx}.qty`, Math.max(0, Number(valStr) || 0));
-                                }}
-                                className={`w-full text-right rounded border p-2 bg-transparent font-bold font-mono outline-none focus:border-primary ${touched.items?.[idx]?.qty && (errors.items as any)?.[idx]?.qty ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
-                              />
+                              {(() => {
+                                const selectedProd = productList.find(p => p.product_name === item.itemName);
+                                const isTile = String(selectedProd?.category || '').toLowerCase() === 'tiles';
+                                const rawPcs = Number(selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 0);
+                                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+
+                                if (isTile && pcsPerBox > 1) {
+                                  return (
+                                    <div className="flex items-center gap-1 p-1 rounded bg-slate-50 dark:bg-slate-800 border border-stroke dark:border-strokedark">
+                                      {/* BOXES */}
+                                      <div className="flex-1 flex items-center bg-white dark:bg-boxdark rounded px-1 focus-within:border-primary shadow-sm border border-stroke dark:border-strokedark">
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          value={(() => {
+                                            const b = Math.floor(Number(item.qty || 0));
+                                            return b === 0 ? '' : b;
+                                          })()}
+                                          placeholder="0"
+                                          onChange={(e) => {
+                                            const val = e.target.value.trim();
+                                            const newBoxes = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                            const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                            const combinedQty = Number((newBoxes + currentLoose / pcsPerBox).toFixed(3));
+                                            setFieldValue(`items.${idx}.qty`, combinedQty);
+                                          }}
+                                          onKeyDown={(e) => { if (!/[0-9BackspaceTabEnterArrowLeftArrowRight]/.test(e.key)) e.preventDefault(); }}
+                                          className="w-full bg-transparent text-center font-bold text-sm text-primary outline-none min-w-[28px] py-1"
+                                        />
+                                        <span className="text-[10px] font-bold text-gray-400 select-none pr-1">Box</span>
+                                      </div>
+                                      <span className="text-gray-400 font-bold text-xs">+</span>
+                                      {/* PCS */}
+                                      <div className="flex-1 flex items-center bg-white dark:bg-boxdark rounded px-1 focus-within:border-emerald-500 shadow-sm border border-stroke dark:border-strokedark">
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          value={(() => {
+                                            const currentLoose = Math.round((Number(item.qty || 0) - Math.floor(Number(item.qty || 0))) * pcsPerBox);
+                                            return currentLoose === 0 ? '' : currentLoose;
+                                          })()}
+                                          placeholder={`${pcsPerBox}`}
+                                          onChange={(e) => {
+                                            const val = e.target.value.trim();
+                                            const enteredLoose = val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0);
+                                            const currentBoxes = Math.floor(Number(item.qty || 0));
+                                            
+                                            const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
+                                            const remLoose = enteredLoose % pcsPerBox;
+                                            const finalBoxes = currentBoxes + extraBoxes;
+                                            const combinedQty = remLoose > 0
+                                              ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3))
+                                              : finalBoxes;
+                                            setFieldValue(`items.${idx}.qty`, combinedQty);
+                                          }}
+                                          onKeyDown={(e) => { if (!/[0-9BackspaceTabEnterArrowLeftArrowRight]/.test(e.key)) e.preventDefault(); }}
+                                          className="w-full bg-transparent text-center font-bold text-sm text-emerald-600 outline-none min-w-[28px] py-1"
+                                        />
+                                        <span className="text-[10px] font-bold text-gray-400 select-none pr-1">Pcs</span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <input
+                                    type="number" 
+                                    min="0" 
+                                    step={['kg', 'ltr', 'cm', 'mm', 'yd', 'm', 'g', 'ml', 'ton', 'sqm', 'sqft', 'cbm'].includes(String(item.uom).toLowerCase()) ? '0.01' : '1'}
+                                    name={`items.${idx}.qty`}
+                                    value={item.qty}
+                                    onKeyDown={(e) => {
+                                      const decimalUoms = ['kg', 'ltr', 'cm', 'mm', 'yd', 'm', 'g', 'ml', 'ton', 'sqm', 'sqft', 'cbm'];
+                                      const isDecimalAllowed = decimalUoms.includes(String(item.uom).toLowerCase());
+                                      if (!isDecimalAllowed && e.key === '.') {
+                                        e.preventDefault();
+                                      }
+                                    }}
+                                    onChange={(e) => {
+                                      const decimalUoms = ['kg', 'ltr', 'cm', 'mm', 'yd', 'm', 'g', 'ml', 'ton', 'sqm', 'sqft', 'cbm'];
+                                      const isDecimalAllowed = decimalUoms.includes(String(item.uom).toLowerCase());
+                                      let valStr = e.target.value;
+                                      if (!isDecimalAllowed && valStr.includes('.')) {
+                                        valStr = valStr.split('.')[0];
+                                      }
+                                      setFieldValue(`items.${idx}.qty`, Math.max(0, Number(valStr) || 0));
+                                    }}
+                                    className={`w-full text-right rounded border p-2 bg-transparent font-bold font-mono outline-none focus:border-primary ${touched.items?.[idx]?.qty && (errors.items as any)?.[idx]?.qty ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
+                                  />
+                                );
+                              })()}
                             </td>
 
-                            <td className="p-3 font-mono text-center">{item.uom}</td>
+                            <td className="p-3 font-mono text-center">
+                              {(() => {
+                                const selectedProd = productList.find(p => p.product_name === item.itemName);
+                                const isTile = String(selectedProd?.category || '').toLowerCase() === 'tiles';
+                                const rawPcs = Number(selectedProd?.pieces_per_box || selectedProd?.pcs_per_box || selectedProd?.pieces_per_packing || 0);
+                                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+                                if (isTile && pcsPerBox > 1) {
+                                  return (
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-xs font-bold">{item.uom || 'BOX'}</span>
+                                      <span className="text-[9px] text-gray-500 font-bold whitespace-nowrap">({pcsPerBox} Pcs/Box)</span>
+                                    </div>
+                                  );
+                                }
+                                return <span className="text-xs font-bold">{item.uom || 'Nos'}</span>;
+                              })()}
+                            </td>
 
                             <td className="p-3 text-center">
                               {values.items.length > 1 && (

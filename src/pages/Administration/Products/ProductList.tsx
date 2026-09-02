@@ -58,7 +58,7 @@ const ProductList = () => {
           const getWh = (whName: string) => {
             const key = String(whName || 'Global / Unassigned').trim();
             if (!whBreakdowns[key]) {
-              whBreakdowns[key] = { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0 };
+              whBreakdowns[key] = { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0, rejected: 0 };
             }
             return whBreakdowns[key];
           };
@@ -103,16 +103,23 @@ const ProductList = () => {
           });
 
           // 2.5 GRN stock calculation
+          let totalRejected = 0;
           (grnReceipts || []).forEach((grn: any) => {
-            if (grn.status === 'Confirm' || grn.status === 'Partially Received' || grn.status === 'Billed') {
+            if (grn.status === 'Confirm' || grn.status === 'Partially Received' || grn.status === 'Billed' || grn.status === 'Rejected') {
               (grn.grn_items || []).forEach((item: any) => {
                 const pName = String(item.product_name || '').trim().toLowerCase();
                 if (pName === name || pName.includes(name)) {
                   // Only add stock if there's an accepted_qty (from QC) 
                   // If it's a legacy confirmed GRN without accepted_qty, fallback to qty
                   const qty = Number(item.accepted_qty ?? (grn.status === 'Partially Received' ? 0 : item.qty) ?? 0);
+                  const rejected = Number(item.rejected_qty ?? 0);
+                  
                   totalPurchased += qty;
-                  getWh(item.warehouse_name || grn.target_warehouse || grn.warehouse || 'Global / Unassigned').purchased += qty;
+                  totalRejected += rejected;
+                  
+                  const warehouse = item.warehouse_name || grn.target_warehouse || grn.warehouse || 'Global / Unassigned';
+                  getWh(warehouse).purchased += qty;
+                  getWh(warehouse).rejected += rejected;
                 }
               });
             }
@@ -207,7 +214,8 @@ const ProductList = () => {
               ...w,
               opening: w.opening, // This is the actual opening_stocks table value
               available: wAvailable,
-              onHand: wOnHand
+              onHand: wOnHand,
+              rejected: w.rejected || 0
             };
           });
 
@@ -221,6 +229,7 @@ const ProductList = () => {
               salesReturned: totalSalesReturned,
               purchaseReturned: totalPurchaseReturned,
               hold: totalHold,
+              rejected: totalRejected,
               onHand: onHandStock,
               available: trueRemainingStock
             },
@@ -588,6 +597,10 @@ const ProductList = () => {
                         </span>
                       </div>
                       {formatVal(bData.sold || 0)}
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-rose-50/50 dark:bg-rose-900/10 px-3 -mx-3 rounded-lg mb-1">
+                      <span className="text-xs font-bold text-rose-700 dark:text-rose-500">Rejected (QC Failed)</span>
+                      <div className="text-rose-700 dark:text-rose-500">{formatVal(bData.rejected || 0)}</div>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-amber-50/50 dark:bg-amber-900/10 px-3 -mx-3 rounded-lg">
                       <span className="text-xs font-bold text-amber-700 dark:text-amber-500">Committed (Hold)</span>

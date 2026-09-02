@@ -30,7 +30,7 @@ const AddPurchases = () => {
   const [highlightedGrnIndex, setHighlightedGrnIndex] = useState(0);
   const [grnSearchTerm, setGrnSearchTerm] = useState('');
 
-  const [defaultPurchaseNo] = useState(() => `PUR-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [defaultPurchaseNo, setDefaultPurchaseNo] = useState('');
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -65,6 +65,11 @@ const AddPurchases = () => {
         const { data: vendorData, error: vendorError } = await supabase
           .from('vendors')
           .select('*');
+        
+        // Auto-generate serial purchaseNo
+        const { count } = await supabase.from('supplier_purchases').select('*', { count: 'exact', head: true });
+        setDefaultPurchaseNo(String((count || 0) + 1).padStart(2, '0'));
+
         const { data: grnData } = await supabase.from('grn_receipts').select('*, grn_items(*)').in('status', ['Confirm', 'Partially Received']).order('created_at', { ascending: false });
         if (grnData) setPendingGrns(grnData);
 
@@ -186,7 +191,7 @@ const AddPurchases = () => {
     }
     return {
       grnId: null,
-      purchaseNo: '',
+      purchaseNo: defaultPurchaseNo,
       supplierName: '',
       purchaseDate: new Date().toISOString().split('T')[0],
       applyTax: false,
@@ -377,108 +382,7 @@ const AddPurchases = () => {
             return (
               <Form className="p-6 space-y-6">
 
-                {/* Optional GRN Importer */}
-                {!isEditMode && pendingGrns.length > 0 && (
-                  <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 rounded-lg flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-emerald-800 dark:text-emerald-400">Import from Goods Receipt Note (GRN)</h4>
-                      <p className="text-xs text-emerald-600 dark:text-emerald-500">Auto-fill this invoice from an unbilled physical receipt.</p>
-                    </div>
-                    <div className="relative grn-search-container w-64">
-                      <input
-                        type="text"
-                        value={grnSearchTerm || (() => {
-                          const grn = pendingGrns.find(g => g.id === values.grnId);
-                          return grn ? `${grn.grn_no} (${grn.vendor_name})` : '';
-                        })()}
-                        autoComplete="new-password"
-                        onChange={(e) => {
-                          setGrnSearchTerm(e.target.value);
-                          if (values.grnId) {
-                            setFieldValue('grnId', null);
-                          }
-                          setIsGrnDropdownOpen(true);
-                          setHighlightedGrnIndex(0);
-                        }}
-                        onFocus={() => { setIsGrnDropdownOpen(true); setHighlightedGrnIndex(0); }}
-                        onKeyDown={(e) => {
-                          const filtered = pendingGrns.filter(g => `${g.grn_no} ${g.vendor_name}`.toLowerCase().includes(grnSearchTerm.toLowerCase()));
-                          if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedGrnIndex(prev => prev < filtered.length - 1 ? prev + 1 : 0); }
-                          else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedGrnIndex(prev => prev > 0 ? prev - 1 : filtered.length - 1); }
-                          else if (e.key === 'Enter' && filtered.length > 0) {
-                            e.preventDefault();
-                            const grn = filtered[highlightedGrnIndex] || filtered[0];
-                            setFieldValue('grnId', grn.id);
-                            setFieldValue('supplierName', grn.vendor_name);
-                            setFieldValue('items', grn.grn_items.map((it: any) => ({
-                              itemName: it.product_name,
-                              skuCode: productList.find((p: any) => p.product_name === it.product_name)?.item_sr_no || '',
-                              warehouse: it.warehouse_name,
-                              qty: Number(it.accepted_qty ?? it.qty ?? 0),
-                              rate: 0,
-                              discountPer: 0,
-                              discountAmt: 0,
-                              gstRate: 18,
-                              gstAmt: 0
-                            })));
-                            setGrnSearchTerm('');
-                            setIsGrnDropdownOpen(false);
-                            
-                            const rejectedItems = grn.grn_items.filter((it: any) => Number(it.rejected_qty) > 0);
-                            if (rejectedItems.length > 0) {
-                              toast.error(`Warning: This GRN has ${rejectedItems.length} item(s) with rejected quantities. The vendor bill will only auto-fill the accepted quantity. If the vendor billed for the full amount, manually adjust the qty to match the bill and raise a Purchase Return for the rejected stock.`);
-                            } else {
-                              toast.success(`Loaded ${grn.grn_items.length} items from ${grn.grn_no}`);
-                            }
-                          } else if (e.key === 'Tab' || e.key === 'Escape') { setIsGrnDropdownOpen(false); }
-                        }}
-                        placeholder="Search Pending GRN..."
-                        className="border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-boxdark rounded p-2 text-sm font-bold w-full outline-none focus:border-emerald-500 text-black dark:text-white"
-                      />
-                      {isGrnDropdownOpen && (
-                        <div className="absolute left-0 top-full mt-1 z-[99999] w-full max-h-64 overflow-y-auto bg-white dark:bg-boxdark border border-stroke dark:border-strokedark shadow-xl divide-y divide-stroke dark:divide-strokedark rounded-lg">
-                          {(() => {
-                            const filtered = pendingGrns.filter(g => `${g.grn_no} ${g.vendor_name}`.toLowerCase().includes(grnSearchTerm.toLowerCase()));
-                            return filtered.length > 0 ? filtered.map((g, gIdx) => (
-                              <div
-                                key={g.id}
-                                onMouseEnter={() => setHighlightedGrnIndex(gIdx)}
-                                onMouseDown={(e) => {
-                                  e.preventDefault(); e.stopPropagation();
-                                  setFieldValue('grnId', g.id);
-                                  setFieldValue('supplierName', g.vendor_name);
-                                  setFieldValue('items', g.grn_items.map((it: any) => ({
-                                    itemName: it.product_name,
-                                    skuCode: productList.find((p: any) => p.product_name === it.product_name)?.item_sr_no || '',
-                                    warehouse: it.warehouse_name,
-                                    qty: Number(it.accepted_qty ?? it.qty ?? 0),
-                                    rate: 0,
-                                    discountPer: 0,
-                                    discountAmt: 0,
-                                    gstRate: 18,
-                                    gstAmt: 0
-                                  })));
-                                  setGrnSearchTerm('');
-                                  setIsGrnDropdownOpen(false);
-                                  
-                                  const rejectedItems = g.grn_items.filter((it: any) => Number(it.rejected_qty) > 0);
-                                  if (rejectedItems.length > 0) {
-                                    toast.error(`Warning: This GRN has ${rejectedItems.length} item(s) with rejected quantities. The vendor bill will only auto-fill the accepted quantity. If the vendor billed for the full amount, manually adjust the qty to match the bill and raise a Purchase Return for the rejected stock.`);
-                                  } else {
-                                    toast.success(`Loaded ${g.grn_items.length} items from ${g.grn_no}`);
-                                  }
-                                }}
-                                className={`p-2.5 cursor-pointer text-xs font-semibold text-black dark:text-white ${highlightedGrnIndex === gIdx ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-meta-4/30'}`}
-                              >
-                                {g.grn_no} ({g.vendor_name})
-                              </div>
-                            )) : <div className="p-4 text-center italic text-gray-400">No GRNs found</div>;
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* ── TOP 2-COLUMN HEADER BAR ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
@@ -658,10 +562,10 @@ const AddPurchases = () => {
                     <input
                       type="text"
                       name="purchaseNo"
-                      onChange={handleChange}
                       value={values.purchaseNo}
-                      className={`w-32 rounded border bg-transparent p-1 text-xs font-bold font-mono text-primary outline-none focus:border-primary ${
-                        touched.purchaseNo && errors.purchaseNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-stroke dark:border-strokedark'
+                      readOnly
+                      className={`w-32 rounded border bg-gray-50 dark:bg-meta-4 cursor-not-allowed p-1 text-xs font-bold font-mono text-gray-500 outline-none ${
+                        touched.purchaseNo && errors.purchaseNo ? 'border-red-500' : 'border-stroke dark:border-strokedark'
                       }`}
                     />
                   </div>

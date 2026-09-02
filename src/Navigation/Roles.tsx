@@ -246,12 +246,7 @@ export const adminRoutes = [
         component: <PurchaseList />,
         icon: MdLaptopChromebook
       },
-      {
-        label: 'GRN (Goods Receipt)',
-        path: '/Purchase/GRN/List',
-        component: <GRNList />,
-        icon: MdInventory
-      },
+
       {
         label: 'Inward Challan (Warehouse)',
         path: '/Purchase/Inward-Challan/List',

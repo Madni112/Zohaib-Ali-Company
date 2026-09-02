@@ -205,8 +205,10 @@ const PurchaseList = () => {
           }
         }
       } else {
-        // If it was linked to a GRN, revert the GRN status back to 'Confirm' so it can be billed again if needed
-        await supabase.from('grn_receipts').update({ status: 'Confirm' }).eq('id', targetRecord.metadata.grn_id);
+        // If it was linked to an auto-generated GRN, completely delete the GRN and its items
+        // This automatically reverses stock (since stock is calculated dynamically) and removes it from inward queues.
+        await supabase.from('grn_items').delete().eq('grn_id', targetRecord.metadata.grn_id);
+        await supabase.from('grn_receipts').delete().eq('id', targetRecord.metadata.grn_id);
       }
 
       const { error } = await supabase.from('supplier_purchases').delete().eq('id', id);
