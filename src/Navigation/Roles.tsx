@@ -21,6 +21,7 @@ import AddSalesman from '../pages/Sales/Salesman/AddSalesman';
 import SalesmanHistory from '../pages/Sales/Salesman/SalesmanHistory';
 import AddCompany from '../pages/Administration/AddCompany';
 import DeliveryChallanHistory from '../pages/Sales/Delivery Challan/DeliveryChallanHistory';
+import ShopDispatchQueue from '../pages/Sales/Delivery Challan/ShopDispatchQueue';
 import AddDeliveryChallan from '../pages/Sales/Delivery Challan/AddDeliveryChallan';
 import PrintChallan from '../pages/Sales/Delivery Challan/PrintChallan';
 import SalesReturnList from '../pages/Sales/Sales Return/SalesReturnList';
@@ -226,6 +227,12 @@ export const adminRoutes = [
         path: '/Sales/Delivery-Challan/List',
         component: <DeliveryChallanHistory />,
         icon: MdEmojiTransportation,
+      },
+      {
+        label: 'Shop Dispatch Queue (SDQ)',
+        path: '/Sales/Shop-Dispatch/List',
+        component: <ShopDispatchQueue />,
+        icon: MdEmojiTransportation,
       }
     ],
   },
@@ -248,7 +255,13 @@ export const adminRoutes = [
       {
         label: 'Inward Challan (Warehouse)',
         path: '/Purchase/Inward-Challan/List',
-        component: <InwardChallanList />,
+        component: <InwardChallanList locationFilter="WAREHOUSE" />,
+        icon: MdInbox
+      },
+      {
+        label: 'Shop Receiving Queue',
+        path: '/Purchase/Shop-Receiving',
+        component: <InwardChallanList locationFilter="SHOP" />,
         icon: MdInbox
       },
       {

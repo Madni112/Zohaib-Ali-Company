@@ -39,8 +39,8 @@ const ProductList = () => {
 
       if (baseProducts && baseProducts.length > 0) {
         const { data: openStocks } = await supabase.from('opening_stocks').select('*');
-        const { data: purchases } = await supabase.from('supplier_purchases').select('items, payment_term, metadata');
-        const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status, receipt_status');
+        const { data: purchases } = await supabase.from('supplier_purchases').select('id, purchase_no, items, payment_term, metadata, target_warehouse');
+        const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status, receipt_status, dispatch_warehouse');
         const { data: sReturns } = await supabase.from('sales_returns').select('*');
         const { data: pReturns } = await supabase.from('purchase_returns').select('*');
         const { data: deliveryChallans } = await supabase.from('delivery_challans').select('*').order('created_at', { ascending: false });
@@ -63,14 +63,14 @@ const ProductList = () => {
             return whBreakdowns[key];
           };
 
-          // 1. Opening stock calculation
-          let totalOpening = 0;
+          // 1. Live stock from warehouse_inventory
+          let liveStock = 0;
           (openStocks || []).forEach((os: any) => {
             const osName = String(os.product_name || os.item_name || os.itemName || os.item_details || os.itemDetails || '').trim().toLowerCase();
             if (osName === name || osName.includes(name) || name.includes(osName)) {
               const qty = Number(os.quantity || os.qty || 0);
-              totalOpening += qty;
-              getWh(os.location || 'Global / Unassigned').opening += qty;
+              liveStock += qty;
+              getWh(os.warehouse_name || os.location || 'Global / Unassigned').opening += qty;
             }
           });
 
@@ -78,15 +78,25 @@ const ProductList = () => {
           let totalPurchased = 0;
           (purchases || []).forEach((p: any) => {
             const termClean = String(p.payment_term || '').trim().toLowerCase();
-            // Skip purchases that have a linked GRN to prevent double-counting (the physical stock is counted in GRN calculation)
-            if (termClean !== 'cancel' && termClean !== 'deleted' && termClean !== 'draft' && !p.metadata?.grn_id) {
+            // Safely parse metadata
+            const metadata = typeof p.metadata === 'string' ? JSON.parse(p.metadata || '{}') : (p.metadata || {});
+            // Skip purchases that have a linked GRN to prevent double-counting
+            const hasGrn = metadata?.grn_id || 
+                           (Array.isArray(metadata?.grn_ids) && metadata.grn_ids.length > 0) ||
+                           (grnReceipts || []).some((g: any) => 
+                             (p.purchase_no && g.grn_no?.includes(p.purchase_no)) ||
+                             (p.id && g.metadata?.linkedPurchaseId === p.id)
+                           );
+            
+            if (termClean !== 'cancel' && termClean !== 'deleted' && termClean !== 'draft' && !hasGrn) {
               const itemsArray = Array.isArray(p.items) ? p.items : JSON.parse(p.items || '[]');
               itemsArray.forEach((item: any) => {
                 const pName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
                 if (pName === name || pName.includes(name)) {
                   const qty = Number(item.qty || item.quantity || 0);
                   totalPurchased += qty;
-                  getWh(item.warehouse || item.location || p.receiving_warehouse || p.warehouse || 'Global / Unassigned').purchased += qty;
+                  const resolvedWh = item.warehouse || item.location || p.target_warehouse || p.receiving_warehouse || p.warehouse || 'Global / Unassigned';
+                  getWh(resolvedWh).purchased += qty;
                 }
               });
             }
@@ -98,10 +108,11 @@ const ProductList = () => {
               (grn.grn_items || []).forEach((item: any) => {
                 const pName = String(item.product_name || '').trim().toLowerCase();
                 if (pName === name || pName.includes(name)) {
-                  // Only add stock if there's an accepted_qty (from QC) or fallback to qty for non-QC'd confirm
-                  const qty = Number(item.accepted_qty ?? item.qty ?? 0);
+                  // Only add stock if there's an accepted_qty (from QC) 
+                  // If it's a legacy confirmed GRN without accepted_qty, fallback to qty
+                  const qty = Number(item.accepted_qty ?? (grn.status === 'Partially Received' ? 0 : item.qty) ?? 0);
                   totalPurchased += qty;
-                  getWh(item.warehouse_name || 'Global / Unassigned').purchased += qty;
+                  getWh(item.warehouse_name || grn.target_warehouse || grn.warehouse || 'Global / Unassigned').purchased += qty;
                 }
               });
             }
@@ -143,7 +154,8 @@ const ProductList = () => {
           // 5. Purchase returns calculation (Stock returned back to vendor)
           let totalPurchaseReturned = 0;
           (pReturns || []).forEach((pr: any) => {
-            if (String(pr.status || '').trim().toLowerCase() !== 'cancel' && String(pr.status || '').trim().toLowerCase() !== 'deleted') {
+            const statusClean = String(pr.status || '').trim().toLowerCase();
+            if (statusClean !== 'cancel' && statusClean !== 'deleted') {
               const itemsArray = Array.isArray(pr.items) ? pr.items : JSON.parse(pr.items || '[]');
               itemsArray.forEach((item: any) => {
                 const prName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
@@ -166,8 +178,13 @@ const ProductList = () => {
                 const dcName = String(item.product_name || item.itemName || item.pDescription || '').trim().toLowerCase();
                 if (dcName === name || dcName.includes(name)) {
                   const orderQty = Number(item.orderQty ?? item.qty ?? 0);
-                  const dispatchedQty = Number(item.dispatchedQty ?? (dc.status === 'Approved' || dc.status === 'Dispatched' ? orderQty : 0));
-                  const holdQty = Number(item.holdQty !== undefined ? item.holdQty : Math.max(0, orderQty - dispatchedQty));
+                  const dispatchedQty = Number(item.dispatchedQty ?? (statusClean === 'approved' || statusClean === 'dispatched' || statusClean === 'fully dispatched' ? orderQty : 0));
+                  let holdQty = 0;
+                  if (statusClean === 'pending approval' || statusClean === 'pending') {
+                    holdQty = orderQty;
+                  } else {
+                    holdQty = Number(item.holdQty !== undefined ? item.holdQty : Math.max(0, orderQty - dispatchedQty));
+                  }
                   totalHold += holdQty;
                   getWh(item.warehouse || item.location || dc.dispatch_warehouse || dc.warehouse || 'Global / Unassigned').hold += holdQty;
                 }
@@ -175,8 +192,8 @@ const ProductList = () => {
             }
           });
 
-          // ✅ THE MATHEMATICALLY ACCURATE FORMULA MATCHING YOUR REPORTS
-          const trueRemainingStock = (totalOpening + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned;
+          // The mathematically accurate formula matching reports
+          const trueRemainingStock = (liveStock + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned;
 
           const onHandStock = trueRemainingStock + totalHold;
 
@@ -188,6 +205,7 @@ const ProductList = () => {
             const wOnHand = wAvailable + w.hold;
             finalWhBreakdowns[key] = {
               ...w,
+              opening: w.opening, // This is the actual opening_stocks table value
               available: wAvailable,
               onHand: wOnHand
             };
@@ -197,7 +215,7 @@ const ProductList = () => {
             ...product,
             current_stock: trueRemainingStock,
             breakdown: {
-              opening: totalOpening,
+              opening: liveStock,
               purchased: totalPurchased,
               sold: totalSold,
               salesReturned: totalSalesReturned,
@@ -575,9 +593,13 @@ const ProductList = () => {
                       <span className="text-xs font-bold text-amber-700 dark:text-amber-500">Committed (Hold)</span>
                       <div className="text-amber-700 dark:text-amber-500">{formatVal(bData.hold || 0)}</div>
                     </div>
-                    <div className="flex justify-between items-center py-3 mt-1 bg-emerald-50 dark:bg-emerald-900/20 px-3 -mx-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50 shadow-sm">
-                      <span className="text-sm font-black tracking-tight text-emerald-800 dark:text-emerald-400">Available Stock <span className="text-[10px] font-bold opacity-70">(On Hand)</span></span>
-                      <div className="text-emerald-700 dark:text-emerald-400">{formatVal(bData.available || 0)}</div>
+                    <div className="flex justify-between items-center py-2 mt-1 bg-emerald-50 dark:bg-emerald-900/20 px-3 -mx-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50 shadow-sm">
+                      <span className="text-sm font-black tracking-tight text-emerald-800 dark:text-emerald-400">Physical Stock <span className="text-[10px] font-bold opacity-70">(On Hand)</span></span>
+                      <div className="text-emerald-700 dark:text-emerald-400">{formatVal(bData.onHand || 0)}</div>
+                    </div>
+                    <div className="flex justify-between items-center py-2 mt-1 bg-blue-50 dark:bg-blue-900/20 px-3 -mx-3 rounded-xl border border-blue-100 dark:border-blue-800/50 shadow-sm">
+                      <span className="text-sm font-black tracking-tight text-blue-800 dark:text-blue-400">Available Stock <span className="text-[10px] font-bold opacity-70">(To Sell)</span></span>
+                      <div className="text-blue-700 dark:text-blue-400">{formatVal(bData.available || 0)}</div>
                     </div>
                   </>
                 );

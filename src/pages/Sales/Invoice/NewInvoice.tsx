@@ -28,6 +28,8 @@ const NewInvoice = () => {
   const [highlightedSkuIndex, setHighlightedSkuIndex] = useState<number>(0);
   const [activeProdNameIndex, setActiveProdNameIndex] = useState<number | null>(null);
   const [highlightedProdNameIndex, setHighlightedProdNameIndex] = useState<number>(0);
+  const [activeWhIndex, setActiveWhIndex] = useState<number | null>(null);
+  const [highlightedWhIndex, setHighlightedWhIndex] = useState<number>(0);
 
   const [showCustomerModal, setShowCustomerModal] = useState<boolean>(false);
   const [customerModalType, setCustomerModalType] = useState<'walkin' | 'recorded'>('walkin');
@@ -78,6 +80,9 @@ const NewInvoice = () => {
       if (!target.closest('.prod-name-container')) {
         setActiveProdNameIndex(null);
       }
+      if (!target.closest('.wh-container')) {
+        setActiveWhIndex(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -89,6 +94,7 @@ const NewInvoice = () => {
         ? editData.items
         : JSON.parse(editData.items || '[]');
       return {
+        invoiceNo: editData.invoice_no || '',
         customerName: editData.customer_name || editData.customerName || '',
         saleDate: editData.sale_date || new Date().toISOString().split('T')[0],
         paymentTerm: editData.payment_term || 'Cash',
@@ -98,8 +104,8 @@ const NewInvoice = () => {
         salesman: editData.salesman || '',
         transportType: editData.transport_name || 'No Transport (Handover)',
         transportCharges: Number(editData.transport_charges || 0),
-        settlementMode: (Number(editData.cash_amount_paid || 0) > 0 && (Number(editData.bank_amount || 0) > 0 || editData.selected_bank)) 
-          ? 'Split' 
+        settlementMode: (Number(editData.cash_amount_paid || 0) > 0 && (Number(editData.bank_amount || 0) > 0 || editData.selected_bank))
+          ? 'Split'
           : (editData.selected_bank || Number(editData.bank_amount || 0) > 0 ? 'Bank' : 'Cash'),
         selectedBankTitle: editData.selected_bank || '',
         cashAmountPaid: Number(editData.cash_amount_paid || 0),
@@ -115,7 +121,7 @@ const NewInvoice = () => {
       };
     }
     return {
-      customerName: '', saleDate: new Date().toISOString().split('T')[0], paymentTerm: 'Cash',
+      invoiceNo: '', customerName: '', saleDate: new Date().toISOString().split('T')[0], paymentTerm: 'Cash',
       dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
       transportType: 'No Transport (Handover)', transportCharges: 0, settlementMode: 'Cash',
       selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0, dcNo: '',
@@ -124,13 +130,32 @@ const NewInvoice = () => {
   };
 
   const validationSchema = Yup.object().shape({
+    invoiceNo: Yup.string().required('Invoice # is required').test(
+      'check-invoice-unique',
+      'This Invoice Number already exists!',
+      async function (value) {
+        if (!value) return true;
+        const originalInvoiceNo = editData?.invoice_no;
+        if (originalInvoiceNo && String(originalInvoiceNo).trim().toLowerCase() === String(value).trim().toLowerCase()) {
+          return true;
+        }
+        try {
+          const { data, error } = await supabase
+            .from('sales_invoices')
+            .select('id')
+            .ilike('invoice_no', value.trim())
+            .maybeSingle();
+          if (error) return true;
+          if (data) return false;
+          return true;
+        } catch (e) {
+          return true;
+        }
+      }
+    ),
     saleDate: Yup.string().required('Required Field'),
-    paymentTerm: Yup.string().oneOf(['Cash', 'Credit']).required('Required Field'),
-    dispatchWarehouse: Yup.string().required('Required Field'),
     taxScenario: Yup.string().required('Required Field'),
     salesman: Yup.string().required('Required Field'),
-    transportType: Yup.string().required('Required Field'),
-    transportCharges: Yup.number().min(0).required('Required Field'),
     settlementMode: Yup.string().oneOf(['Cash', 'Bank', 'Split']).required('Required Field'),
     cashAmountPaid: Yup.number().min(0).required('Required Field'),
     bankAmountPaid: Yup.number().min(0).nullable(),
@@ -212,15 +237,15 @@ const NewInvoice = () => {
     const remainingRetail = grossBase - discountAmt;
 
     if (!applyFbrTax) {
-      return { 
-        grossBase, 
-        activeGstRate: 0, 
-        activeFTaxPer: 0, 
-        gstAmt: 0, 
-        fTaxAmt: 0, 
-        discountAmt, 
-        remainingRetail, 
-        netTotal: remainingRetail 
+      return {
+        grossBase,
+        activeGstRate: 0,
+        activeFTaxPer: 0,
+        gstAmt: 0,
+        fTaxAmt: 0,
+        discountAmt,
+        remainingRetail,
+        netTotal: remainingRetail
       };
     }
 
@@ -296,6 +321,7 @@ const NewInvoice = () => {
       const runningBalanceTerm = totalPaidCombined >= calculatedGrandTotal ? 'Cash' : 'Credit';
 
       const databasePayload = {
+        invoice_no: values.invoiceNo,
         customer_name: customerFinalName,
         sale_date: values.saleDate,
         payment_term: runningBalanceTerm,
@@ -333,7 +359,7 @@ const NewInvoice = () => {
         if (invoiceError) throw invoiceError;
 
         finalInvoiceId = insertedInvoice?.id;
-        const formattedInvCode = finalInvoiceId ? `INV-${String(finalInvoiceId).padStart(4, '0')}` : 'INV-Auto';
+        const formattedInvCode = values.invoiceNo;
 
         // ── AUTO-CREATE DELIVERY CHALLANS PER UNIQUE WAREHOUSE ──
         try {
@@ -364,13 +390,13 @@ const NewInvoice = () => {
 
             await supabase.from('delivery_challans').insert([{
               invoice_no: formattedInvCode,
-              customer_name: finalCustomerName,
-              challan_date: values.invoiceDate || new Date().toISOString().split('T')[0],
+              customer_name: customerFinalName,
+              challan_date: values.saleDate || new Date().toISOString().split('T')[0],
               dispatch_warehouse: whName,
               transport_name: values.transportType || 'By Road Transport',
               transportation: values.transportType || 'By Road Transport',
               po_no: values.clientPoNumber || '',
-              po_date: values.invoiceDate || null,
+              po_date: values.saleDate || null,
               vehicle_no: values.transportCharges ? `Pending Dispatch` : 'Counter Delivery',
               remarks: `Awaiting warehouse approval for ${formattedInvCode} (${whName})`,
               total_quantity: whQty,
@@ -408,10 +434,10 @@ const NewInvoice = () => {
       } else {
         navigate(`${tenantId ? `/${tenantId}` : ''}/sales/invoice/list`);
       }
-    } catch (err: any) { 
-      toast.error('Submission failure: ' + err.message); 
-    } finally { 
-      setLoading(false); 
+    } catch (err: any) {
+      toast.error('Submission failure: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -475,7 +501,7 @@ const NewInvoice = () => {
               <h2 className="text-lg font-bold text-black dark:text-white flex items-center gap-2"><FiUserCheck className="text-emerald-500" /> Checkout Customer</h2>
               <button onClick={() => setShowCustomerModal(false)}><FiX className="text-xl text-gray-400 hover:text-black dark:hover:text-white" /></button>
             </div>
-            
+
             <div className="flex gap-2 mb-6 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
               <button onClick={() => setCustomerModalType('walkin')} className={`flex-1 py-2 text-xs font-bold rounded-md transition ${customerModalType === 'walkin' ? 'bg-white dark:bg-boxdark shadow-sm text-primary' : 'text-gray-500'}`}>Walk-in Sale</button>
               <button onClick={() => setCustomerModalType('recorded')} className={`flex-1 py-2 text-xs font-bold rounded-md transition ${customerModalType === 'recorded' ? 'bg-white dark:bg-boxdark shadow-sm text-primary' : 'text-gray-500'}`}>Recorded Client</button>
@@ -496,10 +522,10 @@ const NewInvoice = () => {
                 {customersList.map(c => <option key={c.id} value={c.customerName}>{c.customerName}</option>)}
               </select>
             )}
-            
+
             <div className="mt-8 flex gap-3">
               <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2.5 rounded-lg border border-stroke font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-              <button onClick={handleFinalCustomerModalSubmit} className="flex-1 py-2.5 rounded-lg bg-primary text-white font-bold text-xs shadow-lg shadow-primary/20 flex items-center justify-center gap-2"><FiCheck /> Finalize & Log</button>
+              <button onClick={handleFinalCustomerModalSubmit} disabled={loading} className="flex-1 py-2.5 rounded-lg bg-primary text-white font-bold text-xs shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"><FiCheck /> {loading ? 'Processing...' : 'Finalize & Log'}</button>
             </div>
           </div>
         </div>
@@ -550,7 +576,13 @@ const NewInvoice = () => {
 
             return (
               <Form className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                  <div>
+                    <label className="block font-bold text-gray-500 mb-1">Invoice Number #: *</label>
+                    <input type="text" name="invoiceNo" placeholder="Enter Invoice #" value={values.invoiceNo} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.invoiceNo ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
+                    {hasAttempted && errors.invoiceNo && <p className="text-red-500 text-xs font-bold mt-1">{String(errors.invoiceNo)}</p>}
+                  </div>
+
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Billing Date: *</label>
                     <input type="date" name="saleDate" value={values.saleDate} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.saleDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
@@ -686,7 +718,7 @@ const NewInvoice = () => {
                                 return (
                                   <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${isCurrentActive || isCurrentProdNameActive ? 'relative z-30' : 'relative z-10'} ${hasItemError ? 'bg-red-50/5' : ''}`}>
                                     <td className="p-2 text-center font-sans text-gray-400">{idx + 1}</td>
-                                    
+
                                     {/* Code REALTIME SEARCH / TYPEABLE INPUT IDENTICAL TO OPENING STOCK */}
                                     <td className="p-2 relative sku-container">
                                       {(() => {
@@ -711,12 +743,12 @@ const NewInvoice = () => {
                                               onKeyDown={(e) => {
                                                 if (e.key === 'ArrowDown') {
                                                   e.preventDefault();
-                                                  setHighlightedSkuIndex((prev) => 
+                                                  setHighlightedSkuIndex((prev) =>
                                                     prev < filteredProds.length - 1 ? prev + 1 : 0
                                                   );
                                                 } else if (e.key === 'ArrowUp') {
                                                   e.preventDefault();
-                                                  setHighlightedSkuIndex((prev) => 
+                                                  setHighlightedSkuIndex((prev) =>
                                                     prev > 0 ? prev - 1 : filteredProds.length - 1
                                                   );
                                                 } else if (e.key === 'Enter') {
@@ -735,7 +767,7 @@ const NewInvoice = () => {
                                                 setFieldValue(`items.${idx}.skuCode`, typed);
                                                 setActiveSkuIndex(idx);
                                                 setHighlightedSkuIndex(0);
-                                                
+
                                                 // Only auto-fill if the user has typed the EXACT FULL Code (e.g. SKU-002)
                                                 const matched = productsList.find(
                                                   p => p.item_sr_no && p.item_sr_no.toLowerCase() === typed.trim().toLowerCase()
@@ -770,11 +802,10 @@ const NewInvoice = () => {
                                                         handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
                                                         setActiveSkuIndex(null);
                                                       }}
-                                                      className={`p-3 cursor-pointer transition flex items-center justify-between group ${
-                                                        isHighlighted 
-                                                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500' 
-                                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
-                                                      }`}
+                                                      className={`p-3 cursor-pointer transition flex items-center justify-between group ${isHighlighted
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                                                        }`}
                                                     >
                                                       <div className="flex flex-col gap-0.5 text-left">
                                                         <span className="font-mono font-bold text-xs text-primary group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
@@ -802,157 +833,225 @@ const NewInvoice = () => {
                                       })()}
                                     </td>
 
-                                     {/* Description & DESCRIPTION (SEARCHABLE TWO-WAY INPUT WITH RICH DROPDOWN) */}
-                                     <td className="p-2 relative prod-name-container min-w-[220px] max-w-[320px]">
-                                       {(() => {
-                                         const query = (item.itemName || '').toLowerCase().trim();
-                                         const filteredByName = productsList.filter(p => {
-                                           if (!query) return true;
-                                           const name = (p.product_name || '').toLowerCase();
-                                           const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                           const brand = (p.brand || '').toLowerCase();
-                                           const cat = (p.category || '').toLowerCase();
-                                           return name.includes(query) || sku.includes(query) || brand.includes(query) || cat.includes(query);
-                                         });
+                                    {/* Description & DESCRIPTION (SEARCHABLE TWO-WAY INPUT WITH RICH DROPDOWN) */}
+                                    <td className="p-2 relative prod-name-container min-w-[220px] max-w-[320px]">
+                                      {(() => {
+                                        const query = (item.itemName || '').toLowerCase().trim();
+                                        const filteredByName = productsList.filter(p => {
+                                          if (!query) return true;
+                                          const name = (p.product_name || '').toLowerCase();
+                                          const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
+                                          const brand = (p.brand || '').toLowerCase();
+                                          const cat = (p.category || '').toLowerCase();
+                                          return name.includes(query) || sku.includes(query) || brand.includes(query) || cat.includes(query);
+                                        });
 
-                                         return (
-                                           <div className="relative">
-                                             <input
-                                               type="text"
-                                               autoComplete="off"
-                                               value={item.itemName || ''}
-                                               onFocus={() => {
-                                                 setActiveProdNameIndex(idx);
-                                                 setActiveSkuIndex(null);
-                                                 setHighlightedProdNameIndex(0);
-                                               }}
-                                               onKeyDown={(e) => {
-                                                 if (e.key === 'ArrowDown') {
-                                                   e.preventDefault();
-                                                   setHighlightedProdNameIndex((prev) =>
-                                                     prev < filteredByName.length - 1 ? prev + 1 : 0
-                                                   );
-                                                 } else if (e.key === 'ArrowUp') {
-                                                   e.preventDefault();
-                                                   setHighlightedProdNameIndex((prev) =>
-                                                     prev > 0 ? prev - 1 : filteredByName.length - 1
-                                                   );
-                                                 } else if (e.key === 'Enter') {
-                                                   e.preventDefault();
-                                                   if (filteredByName.length > 0) {
-                                                     const selected = filteredByName[highlightedProdNameIndex] || filteredByName[0];
-                                                     handleProductSelectionWithWH(selected, idx, values.dispatchWarehouse, setFieldValue, item);
-                                                     setActiveProdNameIndex(null);
-                                                   }
-                                                 } else if (e.key === 'Tab' || e.key === 'Escape') {
-                                                   setActiveProdNameIndex(null);
-                                                 }
-                                               }}
-                                               onChange={(e) => {
-                                                 const typed = e.target.value;
-                                                 setFieldValue(`items.${idx}.itemName`, typed);
-                                                 setActiveProdNameIndex(idx);
-                                                 setHighlightedProdNameIndex(0);
+                                        return (
+                                          <div className="relative">
+                                            <input
+                                              type="text"
+                                              autoComplete="off"
+                                              value={item.itemName || ''}
+                                              onFocus={() => {
+                                                setActiveProdNameIndex(idx);
+                                                setActiveSkuIndex(null);
+                                                setHighlightedProdNameIndex(0);
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'ArrowDown') {
+                                                  e.preventDefault();
+                                                  setHighlightedProdNameIndex((prev) =>
+                                                    prev < filteredByName.length - 1 ? prev + 1 : 0
+                                                  );
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  setHighlightedProdNameIndex((prev) =>
+                                                    prev > 0 ? prev - 1 : filteredByName.length - 1
+                                                  );
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  if (filteredByName.length > 0) {
+                                                    const selected = filteredByName[highlightedProdNameIndex] || filteredByName[0];
+                                                    handleProductSelectionWithWH(selected, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                    setActiveProdNameIndex(null);
+                                                  }
+                                                } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                                  setActiveProdNameIndex(null);
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const typed = e.target.value;
+                                                setFieldValue(`items.${idx}.itemName`, typed);
+                                                setActiveProdNameIndex(idx);
+                                                setHighlightedProdNameIndex(0);
 
-                                                 // Exact Description match auto-sync
-                                                 const matched = productsList.find(
-                                                   p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
-                                                 );
-                                                 if (matched) {
-                                                   handleProductSelectionWithWH(matched, idx, values.dispatchWarehouse, setFieldValue, item);
-                                                 }
-                                               }}
-                                               placeholder="Search Description..."
-                                               className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
-                                             />
+                                                // Exact Description match auto-sync
+                                                const matched = productsList.find(
+                                                  p => p.product_name && p.product_name.toLowerCase() === typed.trim().toLowerCase()
+                                                );
+                                                if (matched) {
+                                                  handleProductSelectionWithWH(matched, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                }
+                                              }}
+                                              placeholder="Search Description..."
+                                              className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
+                                            />
 
-                                             {selectedProd?.brand && (
-                                               <div className="text-[10px] text-gray-500 dark:text-gray-400 font-sans mt-0.5 truncate">
-                                                 Brand: <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedProd.brand}</span> {selectedProd.category ? `• ${selectedProd.category}` : ''}
-                                               </div>
-                                             )}
+                                            {selectedProd?.brand && (
+                                              <div className="text-[10px] text-gray-500 dark:text-gray-400 font-sans mt-0.5 truncate">
+                                                Brand: <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedProd.brand}</span> {selectedProd.category ? `• ${selectedProd.category}` : ''}
+                                              </div>
+                                            )}
 
-                                             {/* SEARCHABLE PRODUCT DROPDOWN (UPPER LAYER ON Z-AXIS) */}
-                                             {isCurrentProdNameActive && (
-                                               <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
-                                                 {filteredByName.map((p, pIdx) => {
-                                                   const displaySku = p.item_sr_no || `SKU-${p.id}`;
-                                                   const isHighlighted = pIdx === highlightedProdNameIndex;
-                                                   return (
-                                                     <div
-                                                       key={p.id}
-                                                       onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
-                                                       onMouseDown={(e) => {
-                                                         e.preventDefault();
-                                                         e.stopPropagation();
-                                                         handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
-                                                         setActiveProdNameIndex(null);
-                                                       }}
-                                                       onClick={(e) => {
-                                                         e.preventDefault();
-                                                         e.stopPropagation();
-                                                         handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
-                                                         setActiveProdNameIndex(null);
-                                                       }}
-                                                       className={`p-3 cursor-pointer transition flex items-center justify-between group ${
-                                                         isHighlighted 
-                                                           ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500' 
-                                                           : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
-                                                       }`}
-                                                     >
-                                                       <div className="flex flex-col gap-0.5 text-left pr-2">
-                                                         <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 leading-tight">
-                                                           {p.product_name}
-                                                         </span>
-                                                         <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                                                           <span className="bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded font-bold text-primary">
-                                                             {displaySku}
-                                                           </span>
-                                                           {p.brand && <span>{p.brand}</span>}
-                                                           {p.category && <span>• {p.category}</span>}
-                                                         </div>
-                                                       </div>
-                                                       <div className="text-right font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
-                                                         Rs. {Number(p.retail_price || 0).toLocaleString()}
-                                                       </div>
-                                                     </div>
-                                                   );
-                                                 })}
-                                                 {filteredByName.length === 0 && (
-                                                   <div className="p-4 text-center text-xs text-slate-400 italic">
-                                                     No matching products found
-                                                   </div>
-                                                 )}
-                                               </div>
-                                             )}
-                                           </div>
-                                         );
-                                       })()}
-                                       {hasItemError && <p className="text-red-500 text-[9px] font-bold mt-0.5">Required Field</p>}
-                                      </td>
+                                            {/* SEARCHABLE PRODUCT DROPDOWN (UPPER LAYER ON Z-AXIS) */}
+                                            {isCurrentProdNameActive && (
+                                              <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                                                {filteredByName.map((p, pIdx) => {
+                                                  const displaySku = p.item_sr_no || `SKU-${p.id}`;
+                                                  const isHighlighted = pIdx === highlightedProdNameIndex;
+                                                  return (
+                                                    <div
+                                                      key={p.id}
+                                                      onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
+                                                      onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                        setActiveProdNameIndex(null);
+                                                      }}
+                                                      onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        handleProductSelectionWithWH(p, idx, values.dispatchWarehouse, setFieldValue, item);
+                                                        setActiveProdNameIndex(null);
+                                                      }}
+                                                      className={`p-3 cursor-pointer transition flex items-center justify-between group ${isHighlighted
+                                                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
+                                                        }`}
+                                                    >
+                                                      <div className="flex flex-col gap-0.5 text-left pr-2">
+                                                        <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 leading-tight">
+                                                          {p.product_name}
+                                                        </span>
+                                                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                                          <span className="bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded font-bold text-primary">
+                                                            {displaySku}
+                                                          </span>
+                                                          {p.brand && <span>{p.brand}</span>}
+                                                          {p.category && <span>• {p.category}</span>}
+                                                        </div>
+                                                      </div>
+                                                      <div className="text-right font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
+                                                        Rs. {Number(p.retail_price || 0).toLocaleString()}
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                                {filteredByName.length === 0 && (
+                                                  <div className="p-4 text-center text-xs text-slate-400 italic">
+                                                    No matching products found
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+                                      {hasItemError && <p className="text-red-500 text-[9px] font-bold mt-0.5">Required Field</p>}
+                                    </td>
 
-                                      {/* ROW-LEVEL WAREHOUSE ZONE SOURCE */}
-                                      <td className="p-2 w-44">
-                                        <select
-                                          value={item.warehouse || values.dispatchWarehouse || ''}
-                                          onChange={async (e) => {
-                                            const newWh = e.target.value;
-                                            setFieldValue(`items.${idx}.warehouse`, newWh);
-                                            if (item.itemName) {
-                                              const stock = await fetchStockForWarehouse(item.itemName, newWh);
-                                              setFieldValue(`items.${idx}.availableQty`, stock);
-                                            }
-                                          }}
-                                          className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-sm"
-                                        >
-                                          <option value="">Default ({values.dispatchWarehouse || 'None'})</option>
-                                          {warehousesList.map((wh) => (
-                                            <option key={wh} value={wh}>
-                                              {wh}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </td>
+                                    {/* ROW-LEVEL WAREHOUSE ZONE SOURCE */}
+                                    <td className="p-2 w-44 relative wh-container">
+                                      {(() => {
+                                        const isWhActive = activeWhIndex === idx;
+                                        const currentWh = item.warehouse || values.dispatchWarehouse || '';
+                                        const filteredWhs = warehousesList.filter(w =>
+                                          w.toLowerCase().includes(currentWh.toLowerCase().trim())
+                                        );
+
+                                        return (
+                                          <div className="relative">
+                                            <input
+                                              type="text"
+                                              autoComplete="off"
+                                              value={currentWh}
+                                              onFocus={() => {
+                                                setActiveWhIndex(idx);
+                                                setHighlightedWhIndex(0);
+                                              }}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'ArrowDown') {
+                                                  e.preventDefault();
+                                                  setHighlightedWhIndex(prev => prev < filteredWhs.length - 1 ? prev + 1 : 0);
+                                                } else if (e.key === 'ArrowUp') {
+                                                  e.preventDefault();
+                                                  setHighlightedWhIndex(prev => prev > 0 ? prev - 1 : filteredWhs.length - 1);
+                                                } else if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  if (filteredWhs[highlightedWhIndex]) {
+                                                    const selectedWh = filteredWhs[highlightedWhIndex];
+                                                    setFieldValue(`items.${idx}.warehouse`, selectedWh);
+                                                    if (item.itemName) {
+                                                      fetchStockForWarehouse(item.itemName, selectedWh).then(stock => setFieldValue(`items.${idx}.availableQty`, stock));
+                                                    }
+                                                    setActiveWhIndex(null);
+                                                  }
+                                                } else if (e.key === 'Escape' || e.key === 'Tab') {
+                                                  setActiveWhIndex(null);
+                                                }
+                                              }}
+                                              onChange={(e) => {
+                                                const typed = e.target.value;
+                                                setFieldValue(`items.${idx}.warehouse`, typed);
+                                                setActiveWhIndex(idx);
+                                                setHighlightedWhIndex(0);
+                                              }}
+                                              placeholder={`Default (${values.dispatchWarehouse || 'None'})`}
+                                              className="w-full bg-white dark:bg-boxdark border border-stroke dark:border-strokedark rounded p-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-primary shadow-sm"
+                                            />
+
+                                            {/* WAREHOUSE DROPDOWN */}
+                                            {isWhActive && filteredWhs.length > 0 && (
+                                              <div className="absolute left-0 right-0 top-full mt-1 z-[99999] max-h-[200px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300">
+                                                {filteredWhs.map((wh, wIdx) => {
+                                                  const isHighlighted = wIdx === highlightedWhIndex;
+                                                  return (
+                                                    <div
+                                                      key={wh}
+                                                      onMouseEnter={() => setHighlightedWhIndex(wIdx)}
+                                                      onMouseDown={async (e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setFieldValue(`items.${idx}.warehouse`, wh);
+                                                        if (item.itemName) {
+                                                          const stock = await fetchStockForWarehouse(item.itemName, wh);
+                                                          setFieldValue(`items.${idx}.availableQty`, stock);
+                                                        }
+                                                        setActiveWhIndex(null);
+                                                      }}
+                                                      onClick={async (e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setFieldValue(`items.${idx}.warehouse`, wh);
+                                                        if (item.itemName) {
+                                                          const stock = await fetchStockForWarehouse(item.itemName, wh);
+                                                          setFieldValue(`items.${idx}.availableQty`, stock);
+                                                        }
+                                                        setActiveWhIndex(null);
+                                                      }}
+                                                      className={`p-2 cursor-pointer transition text-xs font-bold ${isHighlighted ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-l-4 border-emerald-500' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80'}`}
+                                                    >
+                                                      {wh}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+                                    </td>
 
                                     {/* STOCK IN WAREHOUSE WITH LOOSE PIECES BREAKDOWN */}
                                     <td className="p-2 text-center bg-success/5 text-xs w-[140px]">
@@ -983,7 +1082,7 @@ const NewInvoice = () => {
                                           const desc = selectedProd?.product_description || '';
                                           const sku = selectedProd?.item_sr_no || '';
                                           const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*cm/i) ||
-                                                            sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+                                            sku.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
                                           if (sizeMatch) {
                                             tileHeightCm = Number(sizeMatch[1]) || 60;
                                             tileWidthCm = Number(sizeMatch[2]) || 60;
@@ -995,7 +1094,7 @@ const NewInvoice = () => {
                                           const boxes = Math.floor(currentQty);
                                           const loosePcs = Math.round((currentQty - boxes) * pcsPerBox);
                                           const totalLineSqm = (boxes * perBoxSqm) + (loosePcs * perPieceSqm);
-                                          
+
                                           const isOverStock = Boolean(item.itemName && currentQty > totalAvailStock);
 
                                           return (
@@ -1064,8 +1163,8 @@ const NewInvoice = () => {
                                                       const extraBoxes = Math.floor(enteredLoose / pcsPerBox);
                                                       const remLoose = enteredLoose % pcsPerBox;
                                                       const finalBoxes = currentBoxes + extraBoxes;
-                                                      const combinedQty = remLoose > 0 
-                                                        ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3)) 
+                                                      const combinedQty = remLoose > 0
+                                                        ? Number((finalBoxes + remLoose / pcsPerBox).toFixed(3))
                                                         : finalBoxes;
 
                                                       setFieldValue(`items.${idx}.qty`, combinedQty);
@@ -1085,7 +1184,7 @@ const NewInvoice = () => {
 
                                               {/* ── BOTTOM TOTAL SQ.MTR CALCULATION ── */}
                                               <div className="text-center font-mono text-[10px] font-bold text-teal-800 dark:text-teal-300 bg-teal-50/70 dark:bg-teal-950/30 rounded py-0.5 border border-teal-200/60 dark:border-teal-800/40">
-                                               Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
+                                                Total: <span className="text-xs font-black">{totalLineSqm.toFixed(2)}</span> sq.m
                                                 <span className="text-slate-400 font-sans font-normal ml-1">({boxes} Box{boxes !== 1 ? 'es' : ''}{loosePcs > 0 ? ` + ${loosePcs} Pcs` : ''})</span>
                                               </div>
                                             </div>
@@ -1143,112 +1242,112 @@ const NewInvoice = () => {
                                         })()
                                       )}
                                     </td>
-                                     <td className="p-2">
-                                       <input
-                                         type="number"
-                                         min="0"
-                                         onKeyDown={blockInvalidChar}
-                                         onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                         name={`items.${idx}.rp`}
-                                         value={item.rp}
-                                         onChange={(e) => {
-                                           const newRp = Math.max(0, Number(e.target.value) || 0);
-                                           setFieldValue(`items.${idx}.rp`, newRp);
-                                           const currentQty = Math.max(0, Number(item.qty) || 0);
-                                           const gross = newRp * currentQty;
-                                           const disPer = Math.max(0, Number(item.discountPer) || 0);
-                                           if (disPer > 0) {
-                                             setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
-                                           }
-                                         }}
-                                         className={`w-full bg-transparent text-right font-bold outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.rp || item.rp < 0) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
-                                       />
-                                     </td>
+                                    <td className="p-2">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        onKeyDown={blockInvalidChar}
+                                        onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                        name={`items.${idx}.rp`}
+                                        value={item.rp}
+                                        onChange={(e) => {
+                                          const newRp = Math.max(0, Number(e.target.value) || 0);
+                                          setFieldValue(`items.${idx}.rp`, newRp);
+                                          const currentQty = Math.max(0, Number(item.qty) || 0);
+                                          const gross = newRp * currentQty;
+                                          const disPer = Math.max(0, Number(item.discountPer) || 0);
+                                          if (disPer > 0) {
+                                            setFieldValue(`items.${idx}.discountAmt`, Number(((gross * disPer) / 100).toFixed(2)));
+                                          }
+                                        }}
+                                        className={`w-full bg-transparent text-right font-bold outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.rp || item.rp < 0) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
+                                      />
+                                    </td>
 
-                                     {showDiscount && (
-                                       <>
-                                         <td className="p-2">
-                                           <input
-                                             type="number"
-                                             min="0"
-                                             onKeyDown={blockInvalidChar}
-                                             onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                             name={`items.${idx}.discountPer`}
-                                             value={item.discountPer ?? 0}
-                                             onChange={(e) => {
-                                               const val = Math.max(0, Number(e.target.value) || 0);
-                                               setFieldValue(`items.${idx}.discountPer`, val);
-                                               const gross = Math.max(0, Number(item.qty) || 0) * Math.max(0, Number(item.rp) || 0);
-                                               const amt = (gross * val) / 100;
-                                               setFieldValue(`items.${idx}.discountAmt`, Number(amt.toFixed(2)));
-                                             }}
-                                             placeholder="0"
-                                             className="w-full bg-amber-50/40 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-center font-black outline-none border border-amber-300 dark:border-amber-700 rounded p-1 text-xs focus:border-amber-500"
-                                           />
-                                         </td>
-                                         <td className="p-2">
-                                           <input
-                                             type="number"
-                                             min="0"
-                                             onKeyDown={blockInvalidChar}
-                                             onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                             name={`items.${idx}.discountAmt`}
-                                             value={item.discountAmt ?? 0}
-                                             onChange={(e) => {
-                                               const val = Math.max(0, Number(e.target.value) || 0);
-                                               setFieldValue(`items.${idx}.discountAmt`, val);
-                                               const gross = Math.max(0, Number(item.qty) || 0) * Math.max(0, Number(item.rp) || 0);
-                                               const per = gross > 0 ? (val / gross) * 100 : 0;
-                                               setFieldValue(`items.${idx}.discountPer`, Number(per.toFixed(2)));
-                                             }}
-                                             placeholder="0"
-                                             className="w-full bg-amber-50/40 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-right font-black outline-none border border-amber-300 dark:border-amber-700 rounded p-1 text-xs focus:border-amber-500"
-                                           />
-                                         </td>
-                                       </>
-                                     )}
+                                    {showDiscount && (
+                                      <>
+                                        <td className="p-2">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            onKeyDown={blockInvalidChar}
+                                            onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                            name={`items.${idx}.discountPer`}
+                                            value={item.discountPer ?? 0}
+                                            onChange={(e) => {
+                                              const val = Math.max(0, Number(e.target.value) || 0);
+                                              setFieldValue(`items.${idx}.discountPer`, val);
+                                              const gross = Math.max(0, Number(item.qty) || 0) * Math.max(0, Number(item.rp) || 0);
+                                              const amt = (gross * val) / 100;
+                                              setFieldValue(`items.${idx}.discountAmt`, Number(amt.toFixed(2)));
+                                            }}
+                                            placeholder="0"
+                                            className="w-full bg-amber-50/40 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-center font-black outline-none border border-amber-300 dark:border-amber-700 rounded p-1 text-xs focus:border-amber-500"
+                                          />
+                                        </td>
+                                        <td className="p-2">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            onKeyDown={blockInvalidChar}
+                                            onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                            name={`items.${idx}.discountAmt`}
+                                            value={item.discountAmt ?? 0}
+                                            onChange={(e) => {
+                                              const val = Math.max(0, Number(e.target.value) || 0);
+                                              setFieldValue(`items.${idx}.discountAmt`, val);
+                                              const gross = Math.max(0, Number(item.qty) || 0) * Math.max(0, Number(item.rp) || 0);
+                                              const per = gross > 0 ? (val / gross) * 100 : 0;
+                                              setFieldValue(`items.${idx}.discountPer`, Number(per.toFixed(2)));
+                                            }}
+                                            placeholder="0"
+                                            className="w-full bg-amber-50/40 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-right font-black outline-none border border-amber-300 dark:border-amber-700 rounded p-1 text-xs focus:border-amber-500"
+                                          />
+                                        </td>
+                                      </>
+                                    )}
 
-                                      {values.applyFbrTax && (
-                                        <>
-                                          {values.taxScenario === 'Reduced Rate Sale' ? (
-                                            <>
-                                              <td className="p-2 w-20">
-                                                <input
-                                                  type="number"
-                                                  min="0"
-                                                  onKeyDown={blockInvalidChar}
-                                                  onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                                  name={`items.${idx}.gstRate`}
-                                                  value={item.gstRate ?? 0}
-                                                  onChange={(e) => setFieldValue(`items.${idx}.gstRate`, Math.max(0, Number(e.target.value) || 0))}
-                                                  placeholder="0"
-                                                  className="w-full bg-emerald-50/40 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-center font-black outline-none border border-emerald-300 dark:border-emerald-700 rounded p-1 text-xs focus:border-emerald-500"
-                                                />
-                                              </td>
-                                              <td className="p-2 w-20">
-                                                <input
-                                                  type="number"
-                                                  min="0"
-                                                  onKeyDown={blockInvalidChar}
-                                                  onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
-                                                  name={`items.${idx}.fTaxPer`}
-                                                  value={item.fTaxPer ?? 0}
-                                                  onChange={(e) => setFieldValue(`items.${idx}.fTaxPer`, Math.max(0, Number(e.target.value) || 0))}
-                                                  placeholder="0"
-                                                  className="w-full bg-emerald-50/40 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-center font-black outline-none border border-emerald-300 dark:border-emerald-700 rounded p-1 text-xs focus:border-emerald-500"
-                                                />
-                                              </td>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <td className="p-2 text-center text-gray-400 font-sans">{lineCalc.activeGstRate}%</td>
-                                              <td className="p-2 text-center text-gray-400 font-sans">{lineCalc.activeFTaxPer}%</td>
-                                            </>
-                                          )}
-                                          <td className="p-2 text-right pr-2 text-gray-400">Rs. {lineCalc.gstAmt.toFixed(2)}</td>
-                                          <td className="p-2 text-right pr-2 text-gray-400">Rs. {lineCalc.fTaxAmt.toFixed(2)}</td>
-                                        </>
-                                      )}
+                                    {values.applyFbrTax && (
+                                      <>
+                                        {values.taxScenario === 'Reduced Rate Sale' ? (
+                                          <>
+                                            <td className="p-2 w-20">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                onKeyDown={blockInvalidChar}
+                                                onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                                name={`items.${idx}.gstRate`}
+                                                value={item.gstRate ?? 0}
+                                                onChange={(e) => setFieldValue(`items.${idx}.gstRate`, Math.max(0, Number(e.target.value) || 0))}
+                                                placeholder="0"
+                                                className="w-full bg-emerald-50/40 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-center font-black outline-none border border-emerald-300 dark:border-emerald-700 rounded p-1 text-xs focus:border-emerald-500"
+                                              />
+                                            </td>
+                                            <td className="p-2 w-20">
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                onKeyDown={blockInvalidChar}
+                                                onInput={(e: any) => { if (Number(e.target.value) < 0) e.target.value = 0; }}
+                                                name={`items.${idx}.fTaxPer`}
+                                                value={item.fTaxPer ?? 0}
+                                                onChange={(e) => setFieldValue(`items.${idx}.fTaxPer`, Math.max(0, Number(e.target.value) || 0))}
+                                                placeholder="0"
+                                                className="w-full bg-emerald-50/40 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400 text-center font-black outline-none border border-emerald-300 dark:border-emerald-700 rounded p-1 text-xs focus:border-emerald-500"
+                                              />
+                                            </td>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <td className="p-2 text-center text-gray-400 font-sans">{lineCalc.activeGstRate}%</td>
+                                            <td className="p-2 text-center text-gray-400 font-sans">{lineCalc.activeFTaxPer}%</td>
+                                          </>
+                                        )}
+                                        <td className="p-2 text-right pr-2 text-gray-400">Rs. {lineCalc.gstAmt.toFixed(2)}</td>
+                                        <td className="p-2 text-right pr-2 text-gray-400">Rs. {lineCalc.fTaxAmt.toFixed(2)}</td>
+                                      </>
+                                    )}
                                     <td className="p-2 text-right pr-4 text-success font-black">Rs. {lineCalc.netTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                     <td className="p-1 w-8 text-center">{values.items.length > 1 && <button type="button" onClick={() => remove(idx)} className="text-gray-400 hover:text-danger cursor-pointer"><FiTrash2 size={14} /></button>}</td>
                                   </tr>
@@ -1379,8 +1478,8 @@ const NewInvoice = () => {
                     )}
 
                     {(() => {
-                      const totalPaidNow = values.settlementMode === 'Cash' 
-                        ? Number(values.cashAmountPaid || 0) 
+                      const totalPaidNow = values.settlementMode === 'Cash'
+                        ? Number(values.cashAmountPaid || 0)
                         : (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)));
                       const remBalance = Math.max(0, currentSubtotalValue - totalPaidNow);
                       return (

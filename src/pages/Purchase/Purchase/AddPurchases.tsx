@@ -98,6 +98,7 @@ const AddPurchases = () => {
   const validationSchema = Yup.object().shape({
     supplierName: Yup.string().required('Wholesale Vendor selection is required'),
     purchaseDate: Yup.string().required('Inbound Date is required'),
+    purchaseNo: Yup.string().required('Purchase Order Ref is required'),
     settlementMode: Yup.string().required('Payment Method is required'),
     selectedBankTitle: Yup.string().when('settlementMode', {
       is: (val: string) => val === 'Bank' || val === 'Split',
@@ -158,7 +159,7 @@ const AddPurchases = () => {
           : 'Cash';
 
       return {
-        grnId: editData.grn_id || null,
+        grnId: editData.metadata?.grn_id || editData.grn_id || null,
         purchaseNo: editData.purchase_no || '',
         supplierName: editData.supplier_name || '',
         targetWarehouse: editData.target_warehouse || '',
@@ -243,6 +244,20 @@ const AddPurchases = () => {
             try {
               setLoading(true);
 
+              if (values.purchaseNo) {
+                let query = supabase.from('supplier_purchases').select('id').eq('purchase_no', values.purchaseNo);
+                if (isEditMode && editData?.id) {
+                  query = query.neq('id', editData.id);
+                }
+                const { data: existingRecords, error: checkError } = await query;
+                if (checkError) throw checkError;
+                if (existingRecords && existingRecords.length > 0) {
+                  toast.error('Purchase Order Ref already exists!');
+                  setLoading(false);
+                  return;
+                }
+              }
+
               const totalBillAmount = values.items.reduce((acc: any, item: any) => {
                 return acc + calculatePurchaseLineTotals(item, values.applyTax).netTotal;
               }, 0);
@@ -257,11 +272,42 @@ const AddPurchases = () => {
               if (values.settlementMode === 'Bank') paymentTermLabel = 'By Bank';
               else if (values.settlementMode === 'Split') paymentTermLabel = 'Cash & Bank Combined';
 
+              let grnIdToUse = values.grnId || null;
+
+              if (!isEditMode && !grnIdToUse) {
+                // Auto-generate a Pending Inward GRN for direct purchases so it goes to the approval queue
+                const { data: grnData, error: grnError } = await supabase
+                  .from('grn_receipts')
+                  .insert([{
+                    grn_no: `GRN-${values.purchaseNo || Date.now()}`,
+                    vendor_name: values.supplierName,
+                    receipt_date: values.purchaseDate,
+                    status: 'Pending Inward',
+                    remarks: 'Auto-generated from Direct Purchase'
+                  }])
+                  .select('id')
+                  .single();
+
+                if (grnError) throw grnError;
+                grnIdToUse = grnData.id;
+
+                const itemsToInsert = values.items.map((item: any) => ({
+                  grn_id: grnIdToUse,
+                  product_name: item.itemName,
+                  warehouse_name: item.warehouse || values.targetWarehouse || locations[0]?.name || 'Main Warehouse',
+                  qty: Number(item.qty),
+                  uom: 'EACH' // Assuming standard, edit later if needed
+                }));
+
+                const { error: grnItemsError } = await supabase.from('grn_items').insert(itemsToInsert);
+                if (grnItemsError) throw grnItemsError;
+              }
+
               const databasePayload = {
                 purchase_no: values.purchaseNo,
                 supplier_name: values.supplierName,
                 vendor_name: values.supplierName,
-                target_warehouse: values.items[0]?.warehouse || locations[0]?.name || 'Main Warehouse',
+                target_warehouse: values.targetWarehouse || locations[0]?.name || 'Main Warehouse',
                 purchase_date: values.purchaseDate,
                 purchase_type: values.applyTax ? 'GST Standard Item' : 'No Tax',
                 payment_term: paymentTermLabel,
@@ -280,7 +326,7 @@ const AddPurchases = () => {
                   cashAmountPaid: values.cashAmountPaid,
                   bankAmountPaid: values.bankAmountPaid,
                   applyTax: values.applyTax,
-                  grn_id: values.grnId || null
+                  grn_id: grnIdToUse
                 }
               };
 
@@ -296,20 +342,9 @@ const AddPurchases = () => {
               } else {
                 const { data: insertedData, error } = await supabase.from('supplier_purchases').insert([databasePayload]).select('id').single();
                 if (error) throw error;
-
-                // Restock receiving warehouse inventory bins
-                if (!values.grnId) {
-                  for (const item of values.items) {
-                    const effectiveWarehouse = item.warehouse || values.targetWarehouse;
-                    if (!effectiveWarehouse || !item.itemName) continue;
-                    const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', effectiveWarehouse).maybeSingle();
-                    if (p) {
-                      await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) + Number(item.qty) }).eq('id', p.id);
-                    } else {
-                      await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: effectiveWarehouse, quantity: Number(item.qty) }]);
-                    }
-                  }
-                } else {
+                // If the purchase was imported from an existing GRN, mark that GRN as Billed.
+                // If it was auto-generated (values.grnId is null), we leave it as Pending Inward for approval.
+                if (values.grnId) {
                   await supabase.from('grn_receipts').update({ status: 'Billed' }).eq('id', values.grnId);
                 }
 
@@ -388,7 +423,13 @@ const AddPurchases = () => {
                             })));
                             setGrnSearchTerm('');
                             setIsGrnDropdownOpen(false);
-                            toast.success(`Loaded ${grn.grn_items.length} items from ${grn.grn_no}`);
+                            
+                            const rejectedItems = grn.grn_items.filter((it: any) => Number(it.rejected_qty) > 0);
+                            if (rejectedItems.length > 0) {
+                              toast.error(`Warning: This GRN has ${rejectedItems.length} item(s) with rejected quantities. The vendor bill will only auto-fill the accepted quantity. If the vendor billed for the full amount, manually adjust the qty to match the bill and raise a Purchase Return for the rejected stock.`);
+                            } else {
+                              toast.success(`Loaded ${grn.grn_items.length} items from ${grn.grn_no}`);
+                            }
                           } else if (e.key === 'Tab' || e.key === 'Escape') { setIsGrnDropdownOpen(false); }
                         }}
                         placeholder="Search Pending GRN..."
@@ -419,7 +460,13 @@ const AddPurchases = () => {
                                   })));
                                   setGrnSearchTerm('');
                                   setIsGrnDropdownOpen(false);
-                                  toast.success(`Loaded ${g.grn_items.length} items from ${g.grn_no}`);
+                                  
+                                  const rejectedItems = g.grn_items.filter((it: any) => Number(it.rejected_qty) > 0);
+                                  if (rejectedItems.length > 0) {
+                                    toast.error(`Warning: This GRN has ${rejectedItems.length} item(s) with rejected quantities. The vendor bill will only auto-fill the accepted quantity. If the vendor billed for the full amount, manually adjust the qty to match the bill and raise a Purchase Return for the rejected stock.`);
+                                  } else {
+                                    toast.success(`Loaded ${g.grn_items.length} items from ${g.grn_no}`);
+                                  }
                                 }}
                                 className={`p-2.5 cursor-pointer text-xs font-semibold text-black dark:text-white ${highlightedGrnIndex === gIdx ? 'bg-primary/10 text-primary' : 'hover:bg-gray-100 dark:hover:bg-meta-4/30'}`}
                               >
@@ -607,13 +654,15 @@ const AddPurchases = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-gray-500 font-bold whitespace-nowrap">Purchase Order Ref:</label>
+                    <label className={`text-[11px] font-bold whitespace-nowrap ${touched.purchaseNo && errors.purchaseNo ? 'text-red-500' : 'text-gray-500'}`}>Purchase Order Ref: *</label>
                     <input
                       type="text"
                       name="purchaseNo"
                       onChange={handleChange}
                       value={values.purchaseNo}
-                      className="w-32 rounded border border-stroke dark:border-strokedark bg-transparent p-1 text-xs font-bold font-mono text-primary outline-none focus:border-primary"
+                      className={`w-32 rounded border bg-transparent p-1 text-xs font-bold font-mono text-primary outline-none focus:border-primary ${
+                        touched.purchaseNo && errors.purchaseNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-stroke dark:border-strokedark'
+                      }`}
                     />
                   </div>
                 </div>

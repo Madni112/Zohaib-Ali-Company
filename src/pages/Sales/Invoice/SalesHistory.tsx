@@ -129,14 +129,13 @@ const SalesHistory = () => {
       setLoading(true);
       const { data: targetInvoice, error: fetchError } = await supabase
         .from('sales_invoices')
-        .select('items, dispatch_warehouse')
+        .select('items, dispatch_warehouse, invoice_no')
         .eq('id', id)
         .single();
 
       if (fetchError) throw fetchError;
 
       if (targetInvoice && targetInvoice.items) {
-        const sourceWarehousePartition = targetInvoice.dispatch_warehouse || '';
         for (const item of targetInvoice.items) {
           const itemQuantityToRestore = Number(item.qty) || 0;
           const { data: currentProduct } = await supabase.from('products').select('current_stock').eq('product_name', item.itemName).single();
@@ -146,16 +145,23 @@ const SalesHistory = () => {
             await supabase.from('products').update({ current_stock: restoredMasterStockCount }).eq('product_name', item.itemName);
           }
 
-          if (sourceWarehousePartition) {
-            const { data: localPartitionRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', sourceWarehousePartition).maybeSingle();
+          const actualRowWarehouse = item.warehouse || targetInvoice.dispatch_warehouse || '';
+          if (actualRowWarehouse) {
+            const { data: localPartitionRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', actualRowWarehouse.trim()).maybeSingle();
             if (localPartitionRow) {
               const restoredPartitionStockCount = (Number(localPartitionRow.quantity) || 0) + itemQuantityToRestore;
               await supabase.from('warehouse_inventory').update({ quantity: restoredPartitionStockCount }).eq('id', localPartitionRow.id);
             } else {
-              await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: sourceWarehousePartition, quantity: itemQuantityToRestore }]);
+              await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: actualRowWarehouse.trim(), quantity: itemQuantityToRestore }]);
             }
           }
         }
+      }
+
+      // Also delete any associated delivery challans
+      const invoiceIdentifier = targetInvoice?.invoice_no ? String(targetInvoice.invoice_no).trim() : `INV-${String(id).padStart(4, '0')}`;
+      if (invoiceIdentifier) {
+        await supabase.from('delivery_challans').delete().eq('invoice_no', invoiceIdentifier);
       }
 
       const { error: deleteError } = await supabase.from('sales_invoices').delete().eq('id', id);
@@ -482,13 +488,15 @@ const SalesHistory = () => {
                     ? (rawQuotationVal.toUpperCase().startsWith('QTN-') ? rawQuotationVal : `QTN-${rawQuotationVal.padStart(4, '0')}`)
                     : '-';
 
-                  const invoiceKey = `inv-${String(inv.id).padStart(4, '0')}`;
-                  const linkedDCs = deliveryChallansMap[invoiceKey] || deliveryChallansMap[`inv-${inv.id}`] || [];
+                  const paddedInvoiceIdString = String(inv.id).padStart(4, '0');
+                  const invoiceKey = `inv-${paddedInvoiceIdString}`;
+                  const customInvKey = String(inv.invoice_no || '').trim().toLowerCase();
+                  const linkedDCs = deliveryChallansMap[customInvKey] || deliveryChallansMap[invoiceKey] || deliveryChallansMap[`inv-${inv.id}`] || [];
 
                   return (
                     <tr key={inv.id} className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150">
                       <td className="py-3 px-4 text-slate-900 dark:text-white font-bold text-center font-mono">
-                        {`INV-${String(inv.id).padStart(4, '0')}`}
+                        {inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`}
                       </td>
                       <td className="py-3 px-4 text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold">{displayQuotationId}</td>
                       <td className="py-3 px-4 text-center font-mono">

@@ -7,7 +7,7 @@ import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
 import { FiCheckCircle, FiTruck, FiX, FiClock, FiPlusCircle, FiAlertCircle } from 'react-icons/fi';
 
-const DeliveryChallanHistory = () => {
+const ShopDispatchQueue = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
   const [challans, setChallans] = useState<any[]>([]);
@@ -49,7 +49,7 @@ const DeliveryChallanHistory = () => {
       const { data, error } = await supabase
         .from('delivery_challans')
         .select('*')
-        .neq('dispatch_warehouse', 'SHOP')
+        .ilike('dispatch_warehouse', 'SHOP')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -643,8 +643,8 @@ const DeliveryChallanHistory = () => {
       {/* Top Header Controls row */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex-1">
-          <h4 className="text-xl font-semibold text-black dark:text-white">Delivery Challan / Gate Pass Registry</h4>
-          <p className="text-xs text-gray-500 mt-0.5">Authorize, dispatch, and track warehouse goods gate-pass fulfillment</p>
+          <h2 className="text-xl font-black tracking-tight text-slate-800 dark:text-slate-100 uppercase mt-1">Shop Dispatch Queue (SDQ)</h2>
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mt-1">Manage shop counter handovers and pending deliveries</p>
         </div>
       </div>
 
@@ -898,4 +898,4 @@ const DeliveryChallanHistory = () => {
   );
 };
 
-export default DeliveryChallanHistory;
+export default ShopDispatchQueue;

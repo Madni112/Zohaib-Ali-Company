@@ -267,6 +267,20 @@ function AddPurchaseReceipt() {
         }
       });
 
+      // Extract overpayments (credits) from specifically overpaid POs and move them to the general unallocated pool
+      sortedVendorPurchases.forEach(p => {
+        const key = p.purchase_no;
+        const alloc = allocations[key];
+        if (alloc) {
+          const rawDue = alloc.gross - alloc.upfront - alloc.specificVouchers;
+          if (rawDue < 0) {
+            const overpayment = Math.abs(rawDue);
+            unallocatedGeneralVouchers += overpayment;
+            alloc.specificVouchers -= overpayment;
+          }
+        }
+      });
+
       // Allocate general unallocated vouchers across open POs (FIFO order)
       let generalRemaining = unallocatedGeneralVouchers;
       sortedVendorPurchases.forEach(p => {
@@ -280,13 +294,13 @@ function AddPurchaseReceipt() {
             generalRemaining -= toDistribute;
           }
           alloc.pastReceipts = alloc.specificVouchers + alloc.generalAllocated;
-          alloc.due = Math.max(0, alloc.gross - alloc.upfront - alloc.pastReceipts);
+          alloc.due = alloc.gross - alloc.upfront - alloc.pastReceipts;
         }
       });
 
       setPoAllocationsMap(allocations);
 
-      const netVendorLiability = Math.max(0, totalPurchasesGross - totalPurchasesUpfrontPaid - totalVouchersPaid);
+      const netVendorLiability = totalPurchasesGross - totalPurchasesUpfrontPaid - totalVouchersPaid;
       setVendorTotalOutstanding(netVendorLiability);
 
       // If a specific PO is selected
@@ -362,6 +376,7 @@ function AddPurchaseReceipt() {
   });
 
   const validationSchema = Yup.object().shape({
+    voucherNo: Yup.string().required('Receipt Voucher # is required'),
     voucherType: Yup.string().required('Payment method is required'),
     paymentDate: Yup.string().required('Payment date is required'),
     amount: Yup.number().when('voucherType', {
@@ -446,6 +461,22 @@ function AddPurchaseReceipt() {
           if (!selectedVendor) {
             toast.error('Validation Error: Please select a wholesale vendor first!');
             return;
+          }
+
+          if (values.voucherNo) {
+            let query = supabase.from('financial_vouchers').select('id').eq('voucher_no', values.voucherNo);
+            if (isEditMode && editData?.id) {
+              query = query.neq('id', editData.id);
+            }
+            const { data: existingRecords, error: checkError } = await query;
+            if (checkError) {
+              toast.error('Failed to validate voucher number.');
+              return;
+            }
+            if (existingRecords && existingRecords.length > 0) {
+              toast.error('Receipt Voucher # already exists!');
+              return;
+            }
           }
 
           let finalAmount = 0;
@@ -631,8 +662,8 @@ function AddPurchaseReceipt() {
                 {/* Row 1: Voucher # & Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                      Receipt Voucher #:
+                    <label className={`block font-bold uppercase text-[11px] mb-1 ${touched.voucherNo && errors.voucherNo ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`}>
+                      Receipt Voucher #: *
                     </label>
                     <input
                       type="text"
@@ -640,7 +671,9 @@ function AddPurchaseReceipt() {
                       onChange={handleChange}
                       value={values.voucherNo}
                       placeholder="e.g. PRC-12345"
-                      className="w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                      className={`w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 ${
+                        touched.voucherNo && errors.voucherNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700'
+                      }`}
                     />
                   </div>
 
@@ -984,7 +1017,8 @@ function AddPurchaseReceipt() {
                               onKeyDown={blockInvalidChar}
                               onChange={handleChange}
                               value={values.cashAmount}
-                              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-9 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-emerald-600"
+                              disabled={effectiveDueForThisReceipt <= 0}
+                              className={`w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-9 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-emerald-600 ${effectiveDueForThisReceipt <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                             />
                           </div>
                         </div>
@@ -1002,7 +1036,8 @@ function AddPurchaseReceipt() {
                               onKeyDown={blockInvalidChar}
                               onChange={handleChange}
                               value={values.bankAmount}
-                              className="w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-9 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-emerald-600"
+                              disabled={effectiveDueForThisReceipt <= 0}
+                              className={`w-full border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-9 pr-3 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-xs outline-none focus:border-emerald-600 ${effectiveDueForThisReceipt <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                             />
                           </div>
                         </div>
@@ -1042,9 +1077,10 @@ function AddPurchaseReceipt() {
                           onKeyDown={blockInvalidChar}
                           onChange={handleChange}
                           value={values.amount}
+                          disabled={effectiveDueForThisReceipt <= 0}
                           className={`w-full border rounded-xl py-3 pl-10 pr-4 bg-white dark:bg-slate-800 font-mono font-black text-slate-950 dark:text-white text-base outline-none ${
                             touched.amount && errors.amount ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20'
-                          }`}
+                          } ${effectiveDueForThisReceipt <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                       </div>
                     </div>

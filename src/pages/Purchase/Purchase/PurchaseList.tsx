@@ -149,10 +149,10 @@ const PurchaseList = () => {
             alloc.totalPaid = alloc.upfront + alloc.specificVouchers + alloc.specificReturns + alloc.generalAllocated;
             alloc.due = Math.max(0, alloc.gross - alloc.totalPaid);
 
-            allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due };
-            allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due };
+            allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns };
+            allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns };
             if (p.purchase_no) {
-              allocMap[p.purchase_no] = { totalPaid: alloc.totalPaid, due: alloc.due };
+              allocMap[p.purchase_no] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns };
             }
           }
         });
@@ -341,18 +341,30 @@ const PurchaseList = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right pr-6 font-mono text-xs whitespace-nowrap">
                         {dueAmt <= 0 ? (
-                          <span className="inline-block px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase whitespace-nowrap">
-                            Fully Paid
-                          </span>
+                          <div className="space-y-0.5 whitespace-nowrap flex flex-col items-end">
+                            {(alloc?.returned || 0) > 0 && (
+                              <span className="inline-block px-2 py-0.5 mb-1 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[9px] font-black uppercase whitespace-nowrap">
+                                {(alloc?.returned || 0) >= totalAmt ? 'Returned' : 'Partially Returned'}
+                              </span>
+                            )}
+                            <span className="inline-block px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase whitespace-nowrap">
+                              Fully Paid
+                            </span>
+                          </div>
                         ) : (
-                          <div className="space-y-0.5 whitespace-nowrap">
+                          <div className="space-y-0.5 whitespace-nowrap flex flex-col items-end">
+                            {(alloc?.returned || 0) > 0 && (
+                              <span className="inline-block px-2 py-0.5 mb-1 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[9px] font-black uppercase whitespace-nowrap">
+                                Partially Returned
+                              </span>
+                            )}
                             {paidAmt > 0 && (
                               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-semibold whitespace-nowrap">
                                 Paid: Rs. {formatMoney(paidAmt)}
                               </span>
                             )}
-                            <span className="text-[11px] text-rose-600 dark:text-rose-400 block font-black whitespace-nowrap">
-                              Due: Rs. {formatMoney(dueAmt)}
+                            <span className="inline-block px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[10px] font-black uppercase whitespace-nowrap mt-1">
+                              Pending Payment
                             </span>
                           </div>
                         )}

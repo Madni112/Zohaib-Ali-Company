@@ -380,6 +380,7 @@ const AddPurchaseReturnReceipt: React.FC = () => {
   });
 
   const validationSchema = Yup.object().shape({
+    receiptNo: Yup.string().required('Receipt Voucher # is required'),
     paymentMethod: Yup.string().required('Collection method is required'),
     paymentDate: Yup.string().required('Payment date is required'),
     amount: Yup.number().when('paymentMethod', {
@@ -464,6 +465,22 @@ const AddPurchaseReturnReceipt: React.FC = () => {
           if (!selectedVendor) {
             toast.error('Validation Error: Please select a wholesale vendor first!');
             return;
+          }
+
+          if (values.receiptNo) {
+            let query = supabase.from('purchase_return_receipts').select('id').eq('receipt_no', values.receiptNo);
+            if (isEditMode && editData?.id) {
+              query = query.neq('id', editData.id);
+            }
+            const { data: existingRecords, error: checkError } = await query;
+            if (checkError) {
+              toast.error('Failed to validate Receipt Voucher #.');
+              return;
+            }
+            if (existingRecords && existingRecords.length > 0) {
+              toast.error('Receipt Voucher # already exists!');
+              return;
+            }
           }
 
           let finalAmount = 0;
@@ -694,8 +711,8 @@ const AddPurchaseReturnReceipt: React.FC = () => {
                 {/* Row 1: Receipt # & Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                      Receipt Voucher #:
+                    <label className={`block font-bold uppercase text-[11px] mb-1 ${touched.receiptNo && errors.receiptNo ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`}>
+                      Receipt Voucher #: *
                     </label>
                     <input
                       type="text"
@@ -703,7 +720,9 @@ const AddPurchaseReturnReceipt: React.FC = () => {
                       onChange={handleChange}
                       value={values.receiptNo}
                       placeholder="e.g. PRR-12345"
-                      className="w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+                      className={`w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 ${
+                        touched.receiptNo && errors.receiptNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700'
+                      }`}
                     />
                   </div>
 

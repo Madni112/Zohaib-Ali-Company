@@ -9,7 +9,11 @@ import { useModal } from '../../../Context/Modal';
 import VerifyInward from './VerifyInward';
 import InwardChallanHistory from './InwardChallanHistory';
 
-const InwardChallanList = () => {
+interface InwardChallanListProps {
+  locationFilter?: 'SHOP' | 'WAREHOUSE' | 'ALL';
+}
+
+const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 'ALL' }) => {
   const [challans, setChallans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,19 +46,41 @@ const InwardChallanList = () => {
 
   useEffect(() => {
     fetchPendingInwards();
-  }, []);
+  }, [locationFilter]);
 
   const fetchPendingInwards = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('grn_receipts')
-        .select('*')
-        .eq('status', 'Pending Inward')
+        .select('*, grn_items(*)')
+        .in('status', ['Pending Inward', 'Partially Received'])
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setChallans(data || []);
+      
+      let filteredData = data || [];
+      if (locationFilter !== 'ALL') {
+        filteredData = filteredData.filter(grn => {
+          if (locationFilter === 'SHOP') {
+            // Include if there are any SHOP items that are NOT verified
+            return grn.grn_items?.some((item: any) => {
+              const isShop = String(item.warehouse_name).toUpperCase() === 'SHOP';
+              const isUnverified = (item.accepted_qty == null) || (item.accepted_qty === 0 && item.rejected_qty === 0 && item.qty > 0);
+              return isShop && isUnverified;
+            });
+          } else {
+            // Include if there are any NON-SHOP items that are NOT verified
+            return grn.grn_items?.some((item: any) => {
+              const isShop = String(item.warehouse_name).toUpperCase() === 'SHOP';
+              const isUnverified = (item.accepted_qty == null) || (item.accepted_qty === 0 && item.rejected_qty === 0 && item.qty > 0);
+              return !isShop && isUnverified;
+            });
+          }
+        });
+      }
+      
+      setChallans(filteredData);
     } catch (err: any) {
       toast.error('Failed to load pending inward challans.');
     } finally {
@@ -76,9 +102,9 @@ const InwardChallanList = () => {
         <div>
           <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
             <MdInbox size={24} className="text-primary" />
-            Inward Challans (QC & Receiving)
+            {locationFilter === 'SHOP' ? 'Shop Receiving Queue' : locationFilter === 'WAREHOUSE' ? 'Warehouse Inward Challans' : 'Receiving / QC Queue (Shop & Warehouse)'}
           </h2>
-          <p className="text-gray-400 mt-0.5">Warehouse verification queue for incoming goods</p>
+          <p className="text-gray-400 mt-0.5">Approve incoming goods and update physical inventory for your location</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
@@ -132,6 +158,7 @@ const InwardChallanList = () => {
                           showModal(
                             <VerifyInward 
                               inwardId={rec.id} 
+                              locationFilter={locationFilter}
                               onSuccess={() => {
                                 hideModal();
                                 fetchPendingInwards();

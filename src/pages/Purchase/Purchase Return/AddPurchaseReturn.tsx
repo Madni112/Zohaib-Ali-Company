@@ -300,6 +300,7 @@ const AddPurchaseReturn = () => {
   };
 
   const validationSchema = Yup.object().shape({
+    returnNo: Yup.string().required('Debit Note Return # is required'),
     vendorName: Yup.string().required('Wholesale Vendor selection is required'),
     returnDate: Yup.string().required('Return date is required'),
     paymentTerm: Yup.string().required('Reimbursement method is required'),
@@ -464,6 +465,24 @@ const AddPurchaseReturn = () => {
             try {
               setLoading(true);
 
+              if (values.returnNo) {
+                let query = supabase.from('purchase_returns').select('id').eq('return_no', values.returnNo);
+                if (isEditMode && editData?.id) {
+                  query = query.neq('id', editData.id);
+                }
+                const { data: existingRecords, error: checkError } = await query;
+                if (checkError) {
+                  toast.error('Failed to validate Debit Note Return #.');
+                  setLoading(false);
+                  return;
+                }
+                if (existingRecords && existingRecords.length > 0) {
+                  toast.error('Debit Note Return # already exists!');
+                  setLoading(false);
+                  return;
+                }
+              }
+
               // 1. Verify and check warehouse stock
               for (const item of values.items) {
                 const reqQty = Number(item.qty || 0);
@@ -494,12 +513,19 @@ const AddPurchaseReturn = () => {
                 .ilike('vendor_name', values.vendorName);
 
               // Sort vendor purchases strictly oldest to newest (FIFO)
-              const vendorPurchases = [...(vendorPurchasesRaw || [])].sort((a, b) => {
+              let vendorPurchases = [...(vendorPurchasesRaw || [])].sort((a, b) => {
                 const timeA = new Date(a.purchase_date || a.created_at || 0).getTime();
                 const timeB = new Date(b.purchase_date || b.created_at || 0).getTime();
                 if (timeA !== timeB) return timeA - timeB;
                 return (Number(a.id) || 0) - (Number(b.id) || 0);
               });
+
+              if (values.purchaseNo) {
+                vendorPurchases = vendorPurchases.filter((p: any) => 
+                  p.purchase_no === values.purchaseNo || 
+                  String(p.id) === String(values.purchaseNo).replace(/\D/g, '')
+                );
+              }
 
               const matchedInvoicesSummary: any[] = [];
               let primaryLinkedPo = values.purchaseNo || selectedPoNo || null;
@@ -557,6 +583,12 @@ const AddPurchaseReturn = () => {
                   }
 
                   remainingToMatch -= deductQty;
+                }
+
+                if (remainingToMatch > 0) {
+                  toast.error(`Validation Error: Cannot return ${reqQty} units of '${pName}'. You only have ${reqQty - remainingToMatch} units available in the ${values.purchaseNo ? 'selected invoice' : 'overall purchase history'} from this vendor.`);
+                  setLoading(false);
+                  return;
                 }
               }
 
@@ -736,8 +768,8 @@ const AddPurchaseReturn = () => {
 
                   {/* Return Memo ID */}
                   <div>
-                    <label className="block text-gray-500 dark:text-gray-400 font-bold mb-1">
-                      Debit Note Return #:
+                    <label className={`block font-bold mb-1 ${touched.returnNo && errors.returnNo ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                      Debit Note Return #: *
                     </label>
                     <input
                       type="text"
@@ -745,7 +777,9 @@ const AddPurchaseReturn = () => {
                       onChange={handleChange}
                       value={values.returnNo}
                       placeholder="e.g. RTN-12345"
-                      className="w-full rounded border border-stroke dark:border-strokedark p-2 font-bold font-mono text-primary outline-none focus:border-primary text-xs bg-transparent"
+                      className={`w-full rounded border p-2 font-bold font-mono text-primary outline-none focus:border-primary text-xs bg-transparent ${
+                        touched.returnNo && errors.returnNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-stroke dark:border-strokedark'
+                      }`}
                     />
                   </div>
 
