@@ -47,6 +47,8 @@ const SalesReturnReceiptAdd: React.FC = () => {
   const [selectedReturnNo, setSelectedReturnNo] = useState<string>('');
   const [selectedReturnObj, setSelectedReturnObj] = useState<any>(null);
 
+  const [generatedReceiptNo, setGeneratedReceiptNo] = useState('');
+
   // Balances
   const [customerTotalOutstandingReceivable, setCustomerTotalOutstandingReceivable] = useState<number>(0);
   const [returnGrossBill, setReturnGrossBill] = useState<number>(0);
@@ -181,6 +183,8 @@ const SalesReturnReceiptAdd: React.FC = () => {
           }
 
           calculateCustomerBalances(cName, rRef, rData || [], editData.id);
+        } else {
+          setGeneratedReceiptNo(`SRR-${Math.floor(100000 + Math.random() * 900000)}`);
         }
       } catch (err: any) {
         console.error(err.message);
@@ -487,7 +491,7 @@ const SalesReturnReceiptAdd: React.FC = () => {
           bankAmount: editData.metadata?.bankAmount || '',
           notes: editData.remarks || editData.notes || ''
         } : {
-          receiptNo: `SRR-${Date.now().toString().slice(-6)}`,
+          receiptNo: generatedReceiptNo,
           paymentMethod: 'By Cash',
           selectedBankId: '',
           paymentDate: new Date().toISOString().split('T')[0],
@@ -718,7 +722,7 @@ const SalesReturnReceiptAdd: React.FC = () => {
           }
         }}
       >
-        {({ handleChange, setFieldValue, values, errors, touched, handleSubmit }) => {
+        {({ handleChange, handleBlur, setFieldValue, values, errors, touched, handleSubmit }) => {
           const currentTotalAmt = values.paymentMethod === 'Split'
             ? (Number(values.cashAmount || 0) + Number(values.bankAmount || 0))
             : (Number(values.amount) || 0);
@@ -737,10 +741,18 @@ const SalesReturnReceiptAdd: React.FC = () => {
                     <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
                       Receipt Voucher #:
                     </label>
-                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
-                      <span>{values.receiptNo}</span>
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-sans uppercase font-bold">Auto</span>
-                    </div>
+                    <input
+                      type="text"
+                      name="receiptNo"
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      value={values.receiptNo}
+                      placeholder="Auto-generated"
+                      readOnly
+                      className={`w-full p-2.5 bg-gray-50 dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 cursor-not-allowed ${
+                        touched.receiptNo && errors.receiptNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700'
+                      }`}
+                    />
                   </div>
 
                   <div>

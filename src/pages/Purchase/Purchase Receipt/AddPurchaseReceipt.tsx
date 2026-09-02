@@ -49,6 +49,8 @@ function AddPurchaseReceipt() {
   const [selectedPurchaseNo, setSelectedPurchaseNo] = useState<string>('');
   const [selectedPurchaseObj, setSelectedPurchaseObj] = useState<any>(null);
 
+  const [generatedVoucherNo, setGeneratedVoucherNo] = useState('');
+
   // Balances
   const [vendorTotalOutstanding, setVendorTotalOutstanding] = useState<number>(0);
   const [poGrossBill, setPoGrossBill] = useState<number>(0);
@@ -137,6 +139,8 @@ function AddPurchaseReceipt() {
           }
 
           calculateVendorBalances(vName, poRef, purData || [], editData.id);
+        } else {
+          setGeneratedVoucherNo(`PR-${Math.floor(100000 + Math.random() * 900000)}`);
         }
       } catch (err: any) {
         console.error(err.message);
@@ -446,7 +450,7 @@ function AddPurchaseReceipt() {
           bankAmount: editData.metadata?.bankAmount || '',
           notes: editData.narration || ''
         } : {
-          voucherNo: '',
+          voucherNo: generatedVoucherNo,
           voucherType: 'By Cash',
           selectedBankId: '',
           paymentDate: new Date().toISOString().split('T')[0],
@@ -646,7 +650,7 @@ function AddPurchaseReceipt() {
           }
         }}
       >
-        {({ handleChange, setFieldValue, values, errors, touched }) => {
+        {({ handleChange, handleBlur, setFieldValue, values, errors, touched }) => {
           const currentTotalAmt = values.voucherType === 'Split'
             ? (Number(values.cashAmount || 0) + Number(values.bankAmount || 0))
             : (Number(values.amount) || 0);
@@ -661,21 +665,25 @@ function AddPurchaseReceipt() {
                 
                 {/* Row 1: Voucher # & Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block font-bold uppercase text-[11px] mb-1 ${touched.voucherNo && errors.voucherNo ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`}>
-                      Receipt Voucher #: *
-                    </label>
-                    <input
-                      type="text"
-                      name="voucherNo"
-                      onChange={handleChange}
-                      value={values.voucherNo}
-                      placeholder="e.g. PRC-12345"
-                      className={`w-full p-2.5 bg-white dark:bg-slate-800 rounded-xl font-mono font-black text-emerald-700 dark:text-emerald-400 border text-xs outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 ${
-                        touched.voucherNo && errors.voucherNo ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-200 dark:border-slate-700'
-                      }`}
-                    />
-                  </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              Receipt Voucher # <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              name="voucherNo"
+                              value={values.voucherNo}
+                              onChange={handleChange}
+                              onBlur={handleBlur}
+                              className={`w-full rounded-lg border px-3 py-2 text-xs font-semibold bg-gray-50 dark:bg-slate-800 text-black dark:text-white outline-none focus:border-primary cursor-not-allowed ${
+                                touched.voucherNo && errors.voucherNo ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/20' : 'border-slate-200 dark:border-slate-700'
+                              }`}
+                              placeholder="Auto-generated"
+                              readOnly
+                            />
+                            {touched.voucherNo && errors.voucherNo && (
+                              <div className="text-[10px] font-bold text-rose-500 mt-0.5 px-1">{errors.voucherNo as string}</div>
+                            )}
+                          </div>
 
                   <div>
                     <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">

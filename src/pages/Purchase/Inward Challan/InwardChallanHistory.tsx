@@ -19,14 +19,19 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView }) =
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('grn_receipts')
-        .select('*')
-        .neq('status', 'Pending Inward')
-        .order('created_at', { ascending: false });
+      const [ { data: grns, error }, { data: purchases } ] = await Promise.all([
+        supabase.from('grn_receipts').select('*').neq('status', 'Pending Inward').order('created_at', { ascending: false }),
+        supabase.from('supplier_purchases').select('purchase_no, metadata')
+      ]);
       
       if (error) throw error;
-      setChallans(data || []);
+
+      const mapped = (grns || []).map(g => {
+        const pur = (purchases || []).find(p => p.metadata?.grn_id === g.id);
+        return { ...g, purchase_no: pur?.purchase_no || '' };
+      });
+
+      setChallans(mapped);
     } catch (err: any) {
       console.error('Failed to load history:', err);
     } finally {
@@ -36,7 +41,8 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView }) =
 
   const filtered = challans.filter(c =>
     String(c.grn_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    String(c.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    String(c.vendor_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    String(c.purchase_no || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -44,7 +50,7 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView }) =
       <div className="mb-4">
         <input
           type="text"
-          placeholder="Search vendor, GRN #..."
+          placeholder="Search vendor, Purchase No..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full sm:w-80 rounded-lg border border-stroke bg-white px-4 py-2 outline-none focus:border-primary dark:border-strokedark dark:bg-boxdark font-bold shadow-sm"
@@ -56,7 +62,7 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView }) =
           <table className="w-full table-auto border-collapse text-left">
             <thead className="sticky top-0 bg-slate-100 dark:bg-meta-4 z-10 shadow-sm">
               <tr className="text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
-                <th className="py-3 px-4 whitespace-nowrap">Challan / GRN #</th>
+                <th className="py-3 px-4 whitespace-nowrap">Purchase No</th>
                 <th className="py-3 px-4 whitespace-nowrap">Receipt Date</th>
                 <th className="py-3 px-4 whitespace-nowrap">Vendor Name</th>
                 <th className="py-3 px-4 whitespace-nowrap text-center">Status</th>
@@ -71,7 +77,15 @@ const InwardChallanHistory: React.FC<InwardChallanHistoryProps> = ({ onView }) =
               ) : (
                 filtered.map((rec) => (
                   <tr key={rec.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
-                    <td className="py-3 px-4 font-bold font-mono text-primary whitespace-nowrap">{rec.grn_no}</td>
+                    <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
+                      {rec.purchase_no ? (
+                        <div className="flex flex-col">
+                          <span className="text-primary">PUR-{rec.purchase_no}</span>
+                        </div>
+                      ) : (
+                        <span className="text-primary">{rec.grn_no}</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{rec.receipt_date}</td>
                     <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{rec.vendor_name}</td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">

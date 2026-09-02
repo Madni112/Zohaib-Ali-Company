@@ -149,10 +149,10 @@ const PurchaseList = () => {
             alloc.totalPaid = alloc.upfront + alloc.specificVouchers + alloc.specificReturns + alloc.generalAllocated;
             alloc.due = Math.max(0, alloc.gross - alloc.totalPaid);
 
-            allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns };
-            allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns };
+            allocMap[key] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns, generalAllocated: alloc.generalAllocated, specificVouchers: alloc.specificVouchers };
+            allocMap[String(p.id)] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns, generalAllocated: alloc.generalAllocated, specificVouchers: alloc.specificVouchers };
             if (p.purchase_no) {
-              allocMap[p.purchase_no] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns };
+              allocMap[p.purchase_no] = { totalPaid: alloc.totalPaid, due: alloc.due, returned: alloc.specificReturns, generalAllocated: alloc.generalAllocated, specificVouchers: alloc.specificVouchers };
             }
           }
         });
@@ -178,42 +178,160 @@ const PurchaseList = () => {
       const { data: targetRecord } = await supabase.from('supplier_purchases').select('items, target_warehouse, metadata').eq('id', id).single();
       
       // PRE-DELETION STOCK VALIDATION
+      // Rule: Allow deletion ONLY if current breakdown EXACTLY matches the purchase bill.
+      // Uses dynamic stock calculation (same as ProductList) instead of static warehouse_inventory table.
       if (targetRecord?.items) {
         let grnItems: any[] = [];
         if (targetRecord.metadata?.grn_id) {
-           const { data: gi } = await supabase.from('grn_items').select('*').eq('grn_id', targetRecord.metadata.grn_id);
-           grnItems = gi || [];
+          const { data: gi } = await supabase.from('grn_items').select('*').eq('grn_id', targetRecord.metadata.grn_id);
+          grnItems = gi || [];
         }
+
+        // Helper: format qty with UOM label
+        const fmtQty = (qty: number, uom: string): string => {
+          let u = (uom || 'unit').toUpperCase();
+          if (qty !== 1) {
+            if (u === 'BOX') u = 'BOXES';
+            else if (u === 'EACH') u = 'UNITS';
+            else if (!u.endsWith('S')) u += 'S';
+          }
+          return `${qty} ${u}`;
+        };
+
+        // Helper: dynamically calculate available stock for a product (product-level, not warehouse-specific)
+        // Returns { available, uom } based on ALL transactions for that product name
+        const getDynamicStock = async (productName: string): Promise<{ available: number; uom: string }> => {
+          const pNameLower = productName.trim().toLowerCase();
+
+          // Fetch product UOM
+          const { data: prodData } = await supabase.from('products').select('uom').ilike('product_name', productName).maybeSingle();
+          const uom = prodData?.uom || 'unit';
+
+          // 1. Opening stock (product-level)
+          const { data: openStocks } = await supabase.from('opening_stocks').select('*');
+          let opening = 0;
+          (openStocks || []).forEach((os: any) => {
+            const osName = String(os.product_name || os.item_name || '').trim().toLowerCase();
+            if (osName === pNameLower || osName.includes(pNameLower)) {
+              opening += Number(os.quantity || os.qty || 0);
+            }
+          });
+
+          // 2. All GRN accepted qty INCLUDING this purchase's GRN
+          const { data: allGrnItems } = await supabase.from('grn_items').select('*, grn_receipts(status)');
+          let totalPurchased = 0;
+          (allGrnItems || []).forEach((gi: any) => {
+            const grnStatus = gi.grn_receipts?.status || '';
+            if (!['Confirm', 'Partially Received', 'Billed'].includes(grnStatus)) return;
+            const giName = String(gi.product_name || '').trim().toLowerCase();
+            if (giName === pNameLower || giName.includes(pNameLower)) {
+              totalPurchased += Number(gi.accepted_qty ?? gi.qty ?? 0);
+            }
+          });
+
+          // 3. Total sales (product-level, not warehouse-specific)
+          const { data: sales } = await supabase.from('sales_invoices').select('items, sale_status');
+          let totalSold = 0;
+          (sales || []).forEach((s: any) => {
+            if (['cancel', 'deleted'].includes(String(s.sale_status || '').toLowerCase())) return;
+            const itemsArr = Array.isArray(s.items) ? s.items : [];
+            itemsArr.forEach((si: any) => {
+              const siName = String(si.product_name || si.itemName || '').trim().toLowerCase();
+              if (siName === pNameLower || siName.includes(pNameLower)) {
+                totalSold += Number(si.qty || si.quantity || 0);
+              }
+            });
+          });
+
+          // 4. Sales returns
+          const { data: sReturns } = await supabase.from('sales_returns').select('items, status');
+          let totalSalesReturned = 0;
+          (sReturns || []).forEach((sr: any) => {
+            if (String(sr.status || '').toLowerCase() === 'cancel') return;
+            const itemsArr = Array.isArray(sr.items) ? sr.items : [];
+            itemsArr.forEach((si: any) => {
+              const siName = String(si.product_name || si.itemName || '').trim().toLowerCase();
+              if (siName === pNameLower || siName.includes(pNameLower)) {
+                totalSalesReturned += Number(si.qty || si.quantity || 0);
+              }
+            });
+          });
+
+          // 5. Purchase returns
+          const { data: pReturns } = await supabase.from('purchase_returns').select('items, status');
+          let totalPurchaseReturned = 0;
+          (pReturns || []).forEach((pr: any) => {
+            if (['cancel', 'deleted'].includes(String(pr.status || '').toLowerCase())) return;
+            const itemsArr = Array.isArray(pr.items) ? pr.items : [];
+            itemsArr.forEach((pi: any) => {
+              const piName = String(pi.product_name || pi.itemName || '').trim().toLowerCase();
+              if (piName === pNameLower || piName.includes(pNameLower)) {
+                totalPurchaseReturned += Number(pi.qty || pi.quantity || 0);
+              }
+            });
+          });
+
+          const available = (opening + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned;
+          return { available, uom };
+        };
 
         for (const item of targetRecord.items) {
           const pName = item.itemName || item.product_name;
           if (!pName) continue;
-          
-          let qtyToReverse = Number(item.qty || item.quantity || 0);
-          
-          // If linked to GRN, the actual stock added was the accepted_qty
-          if (targetRecord.metadata?.grn_id) {
-             const gItem = grnItems.find(g => String(g.product_name || '').toLowerCase() === String(pName).toLowerCase());
-             if (gItem) {
-                qtyToReverse = Number(gItem.accepted_qty ?? 0);
-             } else {
-                qtyToReverse = 0;
-             }
-          }
 
-          if (qtyToReverse > 0) {
-             const { data: p } = await supabase.from('warehouse_inventory')
-               .select('quantity')
-               .ilike('product_name', pName)
-               .ilike('warehouse_name', targetRecord.target_warehouse)
-               .maybeSingle();
-               
-             const currentStock = Number(p?.quantity || 0);
-             
-             if (currentStock < qtyToReverse) {
-                toast.error(`Cannot Delete Purchase.\nInsufficient stock for: ${pName} in ${targetRecord.target_warehouse}.\nRequired to reverse: ${qtyToReverse}\nCurrently Available: ${currentStock}`, { duration: 5000 });
-                return; // Halt deletion
-             }
+          if (targetRecord.metadata?.grn_id) {
+            const gItem = grnItems.find(g =>
+              String(g.product_name || '').toLowerCase() === String(pName).toLowerCase()
+            );
+
+            if (gItem) {
+              const acceptedQty = Number(gItem.accepted_qty ?? 0);
+              const grnRejected = Number(gItem.rejected_qty ?? 0);
+              const billQty     = Number(item.qty || item.quantity || 0);
+              const expectedRej = billQty - acceptedQty;
+
+              // Check 1: Dynamically calculate current available stock and verify >= accepted_qty
+              if (acceptedQty > 0) {
+                const stockData = await getDynamicStock(pName);
+                const currentAvailable = stockData.available;
+                const formattedStock = fmtQty(currentAvailable, stockData.uom);
+                const formattedReq = fmtQty(acceptedQty, stockData.uom);
+
+                if (currentAvailable < acceptedQty) {
+                  toast.error(
+                    `Cannot Delete Purchase\n\nDeletion blocked because some units have already been sold or transferred.`,
+                    { duration: 6000 }
+                  );
+                  return;
+                }
+              }
+
+              // Check 2: GRN rejected qty must exactly match expected rejection from bill
+              if (expectedRej > 0 && grnRejected !== expectedRej) {
+                toast.error(
+                  `Cannot Delete Purchase\n\nProduct: "${pName}"\nExpected QC Rejection: ${expectedRej}\nActual GRN Rejection: ${grnRejected}\n\nThe current physical breakdown doesn't match the original purchase bill.`,
+                  { duration: 6000 }
+                );
+                return;
+              }
+            }
+          } else {
+            // Non-GRN: dynamically check full qty
+            const qtyToReverse  = Number(item.qty || item.quantity || 0);
+            if (qtyToReverse > 0) {
+              const stockData = await getDynamicStock(pName);
+              const currentAvailable = stockData.available;
+              const formattedStock = fmtQty(currentAvailable, stockData.uom);
+              const formattedReq = fmtQty(qtyToReverse, stockData.uom);
+
+              if (currentAvailable < qtyToReverse) {
+                toast.error(
+                  `Cannot Delete Purchase\n\nDeletion blocked because some units have already been sold or transferred.`,
+                  { duration: 6000 }
+                );
+                return;
+              }
+            }
           }
         }
       }
@@ -372,7 +490,24 @@ const PurchaseList = () => {
                       <td className="py-3.5 px-4 text-gray-400 whitespace-nowrap">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-mono font-black text-primary whitespace-nowrap">{pur.purchase_no}</td>
                       <td className="py-3.5 px-4 flex items-center gap-1.5 whitespace-nowrap"><MdPerson className="text-gray-400 shrink-0" size={16} />{vendorName}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap"><span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1 whitespace-nowrap"><MdStore size={12} className="shrink-0" />{pur.target_warehouse}</span></td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-col gap-1">
+                          {(() => {
+                            const itemsArr = Array.isArray(pur.items) ? pur.items : [];
+                            const warehouses = [...new Set(
+                              itemsArr
+                                .map((it: any) => it.warehouse || pur.target_warehouse)
+                                .filter(Boolean)
+                            )] as string[];
+                            const locations = warehouses.length > 0 ? warehouses : [pur.target_warehouse].filter(Boolean);
+                            return locations.map((wh: string) => (
+                              <span key={wh} className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wide inline-flex items-center gap-1 whitespace-nowrap w-fit">
+                                <MdStore size={12} className="shrink-0" />{wh}
+                              </span>
+                            ));
+                          })()}
+                        </div>
+                      </td>
                       <td className="py-3.5 px-4 text-center text-gray-500 whitespace-nowrap"><span className="inline-flex items-center gap-1 text-[11px] whitespace-nowrap"><MdEvent size={13} className="shrink-0" />{pur.purchase_date}</span></td>
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
                         <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${term === 'On Credit' ? 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300' : term === 'By Cash' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-teal-50 text-teal-700 border-teal-200/80 dark:bg-teal-950/40 dark:text-teal-300'}`}>
@@ -382,20 +517,20 @@ const PurchaseList = () => {
                       <td className="py-3.5 px-4 text-right font-mono font-black text-slate-900 dark:text-white pr-4 whitespace-nowrap">
                         Rs. {formatMoney(totalAmt)}
                       </td>
-                      <td className="py-3.5 px-4 text-right pr-6 font-mono text-xs whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-right pr-6 font-mono text-xs min-w-[140px]">
                         {dueAmt <= 0 ? (
-                          <div className="space-y-0.5 whitespace-nowrap flex flex-col items-end">
+                          <div className="space-y-0.5 flex flex-col items-end">
                             {(alloc?.returned || 0) > 0 && (
                               <span className="inline-block px-2 py-0.5 mb-1 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[9px] font-black uppercase whitespace-nowrap">
                                 {(alloc?.returned || 0) >= totalAmt ? 'Returned' : 'Partially Returned'}
                               </span>
                             )}
-                            <span className="inline-block px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase whitespace-nowrap">
-                              Fully Paid
+                            <span className="inline-block px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase text-center max-w-[120px] leading-tight">
+                              {alloc && (alloc.generalAllocated > 0 || alloc.specificVouchers > 0) ? 'Full Payment Adjusted from Old Ledger Amount' : 'Fully Paid'}
                             </span>
                           </div>
                         ) : (
-                          <div className="space-y-0.5 whitespace-nowrap flex flex-col items-end">
+                          <div className="space-y-0.5 flex flex-col items-end">
                             {(alloc?.returned || 0) > 0 && (
                               <span className="inline-block px-2 py-0.5 mb-1 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[9px] font-black uppercase whitespace-nowrap">
                                 Partially Returned
@@ -403,7 +538,7 @@ const PurchaseList = () => {
                             )}
                             {paidAmt > 0 && (
                               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-semibold whitespace-nowrap">
-                                Paid: Rs. {formatMoney(paidAmt)}
+                                {alloc && (alloc.generalAllocated > 0 || alloc.specificVouchers > 0) ? 'Ledger Adjusted' : 'Paid'}: Rs. {formatMoney(paidAmt)}
                               </span>
                             )}
                             <span className="inline-block px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[10px] font-black uppercase whitespace-nowrap mt-1">

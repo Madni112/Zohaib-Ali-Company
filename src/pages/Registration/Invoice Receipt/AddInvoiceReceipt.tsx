@@ -48,6 +48,8 @@ function AddInvoiceReceipt() {
   const [selectedInvoiceNo, setSelectedInvoiceNo] = useState<string>('');
   const [selectedInvoiceObj, setSelectedInvoiceObj] = useState<any>(null);
 
+  const [generatedVoucherNo, setGeneratedVoucherNo] = useState('');
+
   // Balances
   const [customerTotalOutstanding, setCustomerTotalOutstanding] = useState<number>(0);
   const [invGrossBill, setInvGrossBill] = useState<number>(0);
@@ -141,6 +143,8 @@ function AddInvoiceReceipt() {
           }
 
           calculateCustomerBalances(cName, invRef, invData || [], editData.id);
+        } else {
+          setGeneratedVoucherNo(`CR-${Math.floor(100000 + Math.random() * 900000)}`);
         }
       } catch (err: any) {
         console.error(err.message);
@@ -447,7 +451,7 @@ function AddInvoiceReceipt() {
           bankAmount: editData.metadata?.bankAmount || '',
           notes: editData.narration || ''
         } : {
-          voucherNo: `RCP-${Date.now().toString().slice(-6)}`,
+          voucherNo: generatedVoucherNo,
           voucherType: 'By Cash',
           selectedBankId: '',
           paymentDate: new Date().toISOString().split('T')[0],
@@ -617,7 +621,7 @@ function AddInvoiceReceipt() {
           }
         }}
       >
-        {({ handleChange, setFieldValue, values, errors, touched }) => {
+        {({ handleChange, handleBlur, setFieldValue, values, errors, touched }) => {
           const currentTotalAmt = values.voucherType === 'Split'
             ? (Number(values.cashAmount || 0) + Number(values.bankAmount || 0))
             : (Number(values.amount) || 0);
@@ -632,13 +636,24 @@ function AddInvoiceReceipt() {
                 
                 {/* Row 1: Voucher # & Date */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
-                      Receipt Voucher #:
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Receipt Voucher # <span className="text-rose-500">*</span>
                     </label>
-                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl font-mono font-black text-primary border border-slate-200 dark:border-slate-700 text-xs">
-                      {values.voucherNo}
-                    </div>
+                    <input
+                      name="voucherNo"
+                      value={values.voucherNo}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={`w-full rounded-lg border px-3 py-2 text-xs font-semibold bg-gray-50 dark:bg-slate-800 text-black dark:text-white outline-none focus:border-primary cursor-not-allowed ${
+                        touched.voucherNo && errors.voucherNo ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/20' : 'border-slate-200 dark:border-slate-700'
+                      }`}
+                      placeholder="Auto-generated"
+                      readOnly
+                    />
+                    {touched.voucherNo && errors.voucherNo && (
+                      <div className="text-[10px] font-bold text-rose-500 mt-0.5 px-1">{errors.voucherNo as string}</div>
+                    )}
                   </div>
 
                   <div>

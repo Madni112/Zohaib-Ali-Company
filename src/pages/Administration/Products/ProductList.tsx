@@ -109,16 +109,16 @@ const ProductList = () => {
               (grn.grn_items || []).forEach((item: any) => {
                 const pName = String(item.product_name || '').trim().toLowerCase();
                 if (pName === name || pName.includes(name)) {
-                  // Only add stock if there's an accepted_qty (from QC) 
-                  // If it's a legacy confirmed GRN without accepted_qty, fallback to qty
-                  const qty = Number(item.accepted_qty ?? (grn.status === 'Partially Received' ? 0 : item.qty) ?? 0);
+                  const accepted = Number(item.accepted_qty ?? (grn.status === 'Partially Received' ? 0 : item.qty) ?? 0);
                   const rejected = Number(item.rejected_qty ?? 0);
+                  // Show FULL original purchase qty (accepted + rejected) in breakdown
+                  const fullQty = accepted + rejected;
                   
-                  totalPurchased += qty;
+                  totalPurchased += fullQty;
                   totalRejected += rejected;
                   
                   const warehouse = item.warehouse_name || grn.target_warehouse || grn.warehouse || 'Global / Unassigned';
-                  getWh(warehouse).purchased += qty;
+                  getWh(warehouse).purchased += fullQty;
                   getWh(warehouse).rejected += rejected;
                 }
               });
@@ -200,7 +200,8 @@ const ProductList = () => {
           });
 
           // The mathematically accurate formula matching reports
-          const trueRemainingStock = (liveStock + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned;
+          // Rejected items are excluded from physical/available stock
+          const trueRemainingStock = (liveStock + totalPurchased + totalSalesReturned) - totalSold - totalPurchaseReturned - totalRejected;
 
           const onHandStock = trueRemainingStock + totalHold;
 
@@ -208,7 +209,7 @@ const ProductList = () => {
           const finalWhBreakdowns: Record<string, any> = {};
           Object.keys(whBreakdowns).forEach(key => {
             const w = whBreakdowns[key];
-            const wAvailable = (w.opening + w.purchased + w.salesReturned) - w.sold - w.purchaseReturned;
+            const wAvailable = (w.opening + w.purchased + w.salesReturned) - w.sold - w.purchaseReturned - (w.rejected || 0);
             const wOnHand = wAvailable + w.hold;
             finalWhBreakdowns[key] = {
               ...w,
@@ -606,10 +607,7 @@ const ProductList = () => {
                       <span className="text-xs font-bold text-amber-700 dark:text-amber-500">Committed (Hold)</span>
                       <div className="text-amber-700 dark:text-amber-500">{formatVal(bData.hold || 0)}</div>
                     </div>
-                    <div className="flex justify-between items-center py-2 mt-1 bg-emerald-50 dark:bg-emerald-900/20 px-3 -mx-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50 shadow-sm">
-                      <span className="text-sm font-black tracking-tight text-emerald-800 dark:text-emerald-400">Physical Stock <span className="text-[10px] font-bold opacity-70">(On Hand)</span></span>
-                      <div className="text-emerald-700 dark:text-emerald-400">{formatVal(bData.onHand || 0)}</div>
-                    </div>
+
                     <div className="flex justify-between items-center py-2 mt-1 bg-blue-50 dark:bg-blue-900/20 px-3 -mx-3 rounded-xl border border-blue-100 dark:border-blue-800/50 shadow-sm">
                       <span className="text-sm font-black tracking-tight text-blue-800 dark:text-blue-400">Available Stock <span className="text-[10px] font-bold opacity-70">(To Sell)</span></span>
                       <div className="text-blue-700 dark:text-blue-400">{formatVal(bData.available || 0)}</div>
