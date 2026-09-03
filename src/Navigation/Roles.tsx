@@ -128,12 +128,6 @@ export const adminRoutes = [
         component: <ProductList />,
       },
       {
-        path: '/Administration/Products/Bulk-Upload',
-        component: <BulkProductUpload />,
-        label: 'Bulk Product Upload',
-        icon: MdDashboard,
-      },
-      {
         path: '/Administration/Locations/List',
         component: <LocationList />,
         label: 'Locations',
@@ -607,19 +601,19 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
-        path: '/Purchase/GRN/Add',
-        component: <AddGRN />,
-        hideFromSidebar: true
+    path: '/Purchase/GRN/Add',
+    component: <AddGRN />,
+    hideFromSidebar: true
   },
   {
-        path: '/Purchase/GRN/Edit/:id',
-        component: <AddGRN />,
-        hideFromSidebar: true
+    path: '/Purchase/GRN/Edit/:id',
+    component: <AddGRN />,
+    hideFromSidebar: true
   },
   {
-        path: '/Purchase/Inward-Challan/Verify/:id',
-        component: <VerifyInward />,
-        hideFromSidebar: true
+    path: '/Purchase/Inward-Challan/Verify/:id',
+    component: <VerifyInward />,
+    hideFromSidebar: true
   },
   {
     path: '/Purchase/Purchases/Print/:id',

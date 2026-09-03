@@ -70,7 +70,6 @@ const BulkProductUpload = () => {
       uom: String(row['UOM'] || 'PCS').trim(),
       min_stock_alert: Number(row['Minimum']) || 0,
       category: 'General',
-      brand: 'General',
       pieces_per_box: 1,
       pcs_per_box: 1,
       pieces_per_packing: 1,
