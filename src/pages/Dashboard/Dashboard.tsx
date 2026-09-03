@@ -639,10 +639,10 @@ const Dashboard: React.FC = () => {
 
       {/* --- TOP ACTION TILES GRID --- */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5">
-        <ActionCard title="Add Sale" subtitle="New Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/add')} />
-        <ActionCard title="Add Purchase" subtitle="Stock Procurement" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-amber-600 to-amber-800" onClick={() => navigate('/Purchase/Purchases/Add')} />
-        <ActionCard title="Add Product" subtitle="Catalog Item" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/Add')} />
-        <ActionCard title="Stock Transfer" subtitle="Bin to Warehouse" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Administration/StockTransfer/Add')} />
+        <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
+        <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-amber-600 to-amber-800" onClick={() => navigate('/Purchase/Purchases/list')} />
+        <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
+        <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/sales/return')} />
         <ActionCard title="Stock Report" subtitle="Inventory Audit" Icon={MdAssessment} bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900" onClick={() => navigate('/Reports/Stock-Report')} />
         <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
         <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
@@ -827,63 +827,6 @@ const Dashboard: React.FC = () => {
         </div>
 
       </div>
-
-      {/* ========================================================================= */}
-      {/* SECTION 2: CHARTS (SALES VS PURCHASES & CUSTOMER SALES WITH DAILY/MONTHLY)*/}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* CHART 1: SALES VS PROCUREMENT */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
-          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Sales Volume vs Procurement
-              </h3>
-              <p className="text-[11px] text-slate-400">Monthly comparative velocity & margins</p>
-            </div>
-            <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Live Sync</span>
-          </div>
-          <ReactApexChart options={salesVsPurchasesOptions} series={salesVsPurchasesSeries} type="area" height={300} />
-        </div>
-
-        {/* CHART 2: CUSTOMER SALES VOLUME GRAPH (TABS: DAILY / MONTHLY) */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
-          <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Customer Sales Volume Trajectory
-              </h3>
-              <p className="text-[11px] text-slate-400">Interactive timeframe aggregation</p>
-            </div>
-            {/* Tab Switcher: Daily vs Monthly */}
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs">
-              <button
-                onClick={() => setChartViewTab('daily')}
-                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'daily'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                  }`}
-              >
-                📅 Daily (Last 14d)
-              </button>
-              <button
-                onClick={() => setChartViewTab('monthly')}
-                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'monthly'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
-                  }`}
-              >
-                📆 Monthly
-              </button>
-            </div>
-          </div>
-          <ReactApexChart options={customerSalesChartOptions} series={customerSalesChartSeries} type="bar" height={300} />
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* SECTION 3: HOLDING INVENTORY DUAL-TAB & LOW STOCK LIMIT ALERTS            */}
-      {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* WIDGET 3: INTERACTIVE HOLDING INVENTORY (7 COLS) */}
         <div className="lg:col-span-7 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 flex flex-col justify-between">
@@ -1079,6 +1022,14 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
+      {/* SECTION 2: CHARTS (SALES VS PURCHASES & CUSTOMER SALES WITH DAILY/MONTHLY)*/}
+      {/* ========================================================================= */}
+
+      {/* ========================================================================= */}
+      {/* SECTION 3: HOLDING INVENTORY DUAL-TAB & LOW STOCK LIMIT ALERTS            */}
+      {/* ========================================================================= */}
+
+      {/* ========================================================================= */}
       {/* SECTION 4: LIQUIDITY CENTER (BANK ACCOUNTS & CASH DRAWER DUAL TABS)       */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1246,6 +1197,55 @@ const Dashboard: React.FC = () => {
               <span>→</span>
             </button>
           </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* CHART 1: SALES VS PROCUREMENT */}
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+                Sales Volume vs Procurement
+              </h3>
+              <p className="text-[11px] text-slate-400">Monthly comparative velocity & margins</p>
+            </div>
+            <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-bold font-mono">Live Sync</span>
+          </div>
+          <ReactApexChart options={salesVsPurchasesOptions} series={salesVsPurchasesSeries} type="area" height={300} />
+        </div>
+
+        {/* CHART 2: CUSTOMER SALES VOLUME GRAPH (TABS: DAILY / MONTHLY) */}
+        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#111827] shadow-sm p-5 sm:p-6">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+                Customer Sales Volume Trajectory
+              </h3>
+              <p className="text-[11px] text-slate-400">Interactive timeframe aggregation</p>
+            </div>
+            {/* Tab Switcher: Daily vs Monthly */}
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl font-bold text-xs">
+              <button
+                onClick={() => setChartViewTab('daily')}
+                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'daily'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                  }`}
+              >
+                📅 Daily (Last 14d)
+              </button>
+              <button
+                onClick={() => setChartViewTab('monthly')}
+                className={`px-3 py-1 rounded-lg transition-all ${chartViewTab === 'monthly'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400'
+                  }`}
+              >
+                📆 Monthly
+              </button>
+            </div>
+          </div>
+          <ReactApexChart options={customerSalesChartOptions} series={customerSalesChartSeries} type="bar" height={300} />
         </div>
       </div>
     </div >
