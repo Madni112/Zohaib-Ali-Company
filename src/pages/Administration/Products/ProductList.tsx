@@ -81,13 +81,13 @@ const ProductList = () => {
             // Safely parse metadata
             const metadata = typeof p.metadata === 'string' ? JSON.parse(p.metadata || '{}') : (p.metadata || {});
             // Skip purchases that have a linked GRN to prevent double-counting
-            const hasGrn = metadata?.grn_id || 
-                           (Array.isArray(metadata?.grn_ids) && metadata.grn_ids.length > 0) ||
-                           (grnReceipts || []).some((g: any) => 
-                             (p.purchase_no && g.grn_no?.includes(p.purchase_no)) ||
-                             (p.id && g.metadata?.linkedPurchaseId === p.id)
-                           );
-            
+            const hasGrn = metadata?.grn_id ||
+              (Array.isArray(metadata?.grn_ids) && metadata.grn_ids.length > 0) ||
+              (grnReceipts || []).some((g: any) =>
+                (p.purchase_no && g.grn_no?.includes(p.purchase_no)) ||
+                (p.id && g.metadata?.linkedPurchaseId === p.id)
+              );
+
             if (termClean !== 'cancel' && termClean !== 'deleted' && termClean !== 'draft' && !hasGrn) {
               const itemsArray = Array.isArray(p.items) ? p.items : JSON.parse(p.items || '[]');
               itemsArray.forEach((item: any) => {
@@ -113,10 +113,10 @@ const ProductList = () => {
                   const rejected = Number(item.rejected_qty ?? 0);
                   // Show FULL original purchase qty (accepted + rejected) in breakdown
                   const fullQty = accepted + rejected;
-                  
+
                   totalPurchased += fullQty;
                   totalRejected += rejected;
-                  
+
                   const warehouse = item.warehouse_name || grn.target_warehouse || grn.warehouse || 'Global / Unassigned';
                   getWh(warehouse).purchased += fullQty;
                   getWh(warehouse).rejected += rejected;
@@ -263,7 +263,8 @@ const ProductList = () => {
   const filteredProducts = products.filter(p =>
     p.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.brand?.toLowerCase().includes(searchTerm.toLowerCase())
+    p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.product_description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
 
@@ -330,7 +331,7 @@ const ProductList = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search product, category, brand..."
+              placeholder="Search product, category, code, bin..."
               className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-800 dark:text-white transition"
             />
           </div>
@@ -341,9 +342,10 @@ const ProductList = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 w-16">S#</th>
+                <th className="py-3.5 px-4">Code</th>
                 <th className="py-3.5 px-4">Description</th>
                 <th className="py-3.5 px-4">Category</th>
-                <th className="py-3.5 px-4">Brand</th>
+                <th className="py-3.5 px-4">Bin</th>
                 <th className="py-3.5 px-4 w-24 text-center">UOM</th>
                 <th className="py-3.5 px-4 text-right">Purchase Price</th>
                 <th className="py-3.5 px-4 text-right">Sale Price</th>
@@ -374,9 +376,12 @@ const ProductList = () => {
                       className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 text-xs"
                     >
                       <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 font-mono">{serialNumber}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{product.item_sr_no || '-'}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{product.product_name}</td>
                       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.category || 'General'}</td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.brand || 'Local'}</td>
+                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
+                        {product.bin || 'General'}
+                      </td>
                       <td className="py-3.5 px-4 text-center">
                         <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                           {product.uom}
@@ -411,8 +416,8 @@ const ProductList = () => {
                                 <div className="flex items-center gap-1.5">
                                   <span
                                     className={`font-extrabold text-xs px-2.5 py-0.5 rounded-md border ${isLowStock
-                                        ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800'
-                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                      ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                                       }`}
                                   >
                                     {wholeBoxes.toLocaleString()} Boxes
@@ -439,8 +444,8 @@ const ProductList = () => {
                               <div className="flex items-center gap-1.5">
                                 <span
                                   className={`font-black text-xs px-2.5 py-0.5 rounded-full ${isLowStock
-                                      ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400'
-                                      : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
+                                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400'
+                                    : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
                                     }`}
                                 >
                                   {totalStock.toLocaleString()} {product.uom || 'PCS'}
@@ -474,25 +479,25 @@ const ProductList = () => {
             <span className="font-semibold text-slate-800 dark:text-slate-200">{endIndex}</span> of{' '}
             <span className="font-semibold text-slate-800 dark:text-slate-200">{totalEntries}</span> entries
           </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Previous
-              </button>
-              <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-              >
-                Next
-              </button>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+            >
+              Previous
+            </button>
+            <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 

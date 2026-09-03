@@ -89,10 +89,25 @@ const SurfaceFinish = () => {
       // Try database upsert first
       try {
         if (editingId) {
+          const oldBin = finishes.find(f => f.id === editingId);
+          const oldBinName = oldBin?.name;
+
           await supabase
             .from('inventory_surface_finishes')
             .update({ name: cleanName })
             .eq('id', editingId);
+
+          if (oldBinName && oldBinName !== cleanName) {
+            const { error: cascadeError } = await supabase
+              .from('products')
+              .update({ bin: cleanName })
+              .eq('bin', oldBinName);
+            
+            if (cascadeError) {
+              console.error('Failed to cascade bin name update to products:', cascadeError);
+              toast.error('Bin updated, but failed to link existing products.');
+            }
+          }
         } else {
           await supabase
             .from('inventory_surface_finishes')

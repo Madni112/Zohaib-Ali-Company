@@ -77,6 +77,10 @@ const Categories = () => {
             }
 
             if (editingId) {
+                // Find old category name before we update it
+                const oldCategory = categories.find(c => c.id === editingId);
+                const oldCategoryName = oldCategory?.name;
+
                 // Path A: Edit Mode triggers a PostgREST SQL Update call
                 const { error } = await supabase
                     .from('inventory_categories')
@@ -84,6 +88,20 @@ const Categories = () => {
                     .eq('id', editingId);
 
                 if (error) throw error;
+
+                // Cascade update to products if the name changed
+                if (oldCategoryName && oldCategoryName !== cleanName) {
+                    const { error: productUpdateError } = await supabase
+                        .from('products')
+                        .update({ category: cleanName })
+                        .eq('category', oldCategoryName);
+                    
+                    if (productUpdateError) {
+                        console.error('Failed to update product categories:', productUpdateError);
+                        toast.error('Category updated, but failed to link existing products.');
+                    }
+                }
+
                 toast.success('Category modified successfully!');
                 setEditingId(null);
             } else {

@@ -63,7 +63,7 @@ const BulkProductUpload = () => {
     const payload = uniqueData.map(row => ({
       product_name: row['DESCRIPTION'],
       item_sr_no: row['CODE'],
-      product_description: String(row['Bin'] ? 'Bin: ' + row['Bin'] : '').trim(),
+      bin: String(row['Bin'] || '').trim(),
       purchase_price: Number(row['Purchase Price']) || 0,
       retail_price: Number(row['Sales Price']) || 0,
       mrp: Number(row['Sales Price']) || 0,

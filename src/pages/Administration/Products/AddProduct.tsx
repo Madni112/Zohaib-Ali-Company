@@ -166,7 +166,7 @@ const AddProduct = () => {
               if (match && Number(match[1]) > 0) return Number(match[1]);
               return raw > 0 ? raw : 4;
             })(),
-            finishType: '',
+            finishType: editData.bin || '',
             weightPerBox: 28,
           } : {
             productName: '',
@@ -227,6 +227,7 @@ const AddProduct = () => {
               category: values.category,
               brand: values.brand,
               uom: finalUom || 'PCS',
+              bin: values.finishType?.trim() || '',
               product_description: finalDescription,
               profit: computedProfit,
               purchase_price: Number(values.purchasePrice) || 0,
