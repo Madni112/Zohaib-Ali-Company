@@ -20,18 +20,18 @@ const SalesReport = () => {
     const [transports, setTransportFleet] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
     const [uoms, setUoms] = useState<any[]>([]);
-    const [brands, setBrands] = useState<any[]>([]);
+
     const [bins, setBins] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
     const [locations, setLocations] = useState<any[]>([]);
     const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
 
-    const [criteria, setCriteria] = useState(() => ({
+    const [criteria, setCriteria] = useState(() => location.state?.criteria || ({
         customer: location.state?.customer || location.state?.criteria?.customer || 'All',
         salesman: location.state?.salesman || location.state?.criteria?.salesman || 'All',
         transport: location.state?.transport || location.state?.criteria?.transport || 'All',
         category: location.state?.category || location.state?.criteria?.category || 'All',
-        uom: 'All', brand: 'All', bin: 'All', product: 'All', location: 'All',
+        uom: 'All', bin: 'All', product: 'All', location: 'All',
         saleType: 'All', saleMethod: 'All', invoiceNo: 'All',
         withLedgerSummary: false,
         dateFrom: location.state?.dateFrom || location.state?.criteria?.dateFrom || new Date().toISOString().split('T')[0],
@@ -39,15 +39,18 @@ const SalesReport = () => {
     }));
 
     useEffect(() => {
+        navigate('.', { replace: true, state: { ...location.state, reportType, criteria } });
+    }, [reportType, criteria, navigate]);
+
+    useEffect(() => {
         const fetchCriteriaLookups = async () => {
             try {
                 setLoading(true);
-                const [custRes, smRes, transRes, catRes, brndRes, binRes, prodRes, locRes, invRes, uomRes] = await Promise.all([
+                const [custRes, smRes, transRes, catRes, binRes, prodRes, locRes, invRes, uomRes] = await Promise.all([
                     supabase.from('customers').select('id, customerName'),
                     supabase.from('salesmen').select('id, name'),
                     supabase.from('logistics_transportation').select('id, name'),
                     supabase.from('inventory_categories').select('id, name'),
-                    supabase.from('inventory_brands').select('id, name'),
                     supabase.from('inventory_surface_finishes').select('id, name'),
                     supabase.from('products').select('id, product_name'),
                     supabase.from('inventory_locations').select('id, name'),
@@ -59,7 +62,6 @@ const SalesReport = () => {
                 if (smRes.data) setSalesmen(smRes.data);
                 if (transRes.data) setTransportFleet(transRes.data);
                 if (catRes.data) setCategories(catRes.data);
-                if (brndRes.data) setBrands(brndRes.data);
                 if (binRes.data) setBins(binRes.data);
                 if (prodRes.data) setProducts(prodRes.data);
                 if (locRes.data) setLocations(locRes.data);
@@ -85,12 +87,27 @@ const SalesReport = () => {
         setCriteria(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleTabChange = (type: 'sale' | 'return' | 'invoice') => {
+        setReportType(type);
+        setCriteria(prev => ({
+            customer: 'All',
+            salesman: 'All',
+            transport: 'All',
+            category: 'All',
+            uom: 'All', bin: 'All', product: 'All', location: 'All',
+            saleType: 'All', saleMethod: 'All', invoiceNo: 'All',
+            withLedgerSummary: false,
+            dateFrom: prev.dateFrom,
+            dateTo: prev.dateTo
+        }));
+    };
+
     const customerOptions = useMemo(() => customers.map(c => c.customerName).filter(Boolean), [customers]);
     const salesmanOptions = useMemo(() => salesmen.map(s => s.name).filter(Boolean), [salesmen]);
     const transportOptions = useMemo(() => transports.map(t => t.name).filter(Boolean), [transports]);
     const categoryOptions = useMemo(() => categories.map(c => c.name).filter(Boolean), [categories]);
     const uomOptions = useMemo(() => uoms.map(u => u.name).filter(Boolean), [uoms]);
-    const brandOptions = useMemo(() => brands.map(b => b.name).filter(Boolean), [brands]);
+
     const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
     const productOptions = useMemo(() => products.map(p => p.product_name).filter(Boolean), [products]);
     const locationOptions = useMemo(() => locations.map(l => l.name).filter(Boolean), [locations]);
@@ -106,9 +123,9 @@ const SalesReport = () => {
             </div>
 
             <div className="flex border-b border-stroke dark:border-strokedark gap-2 bg-white dark:bg-boxdark font-black tracking-wider text-[11px] uppercase text-gray-500">
-                <button type="button" onClick={() => { setReportType('sale'); handleInputChange('invoiceNo', 'All'); }} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'sale' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Report</button>
-                <button type="button" onClick={() => { setReportType('return'); handleInputChange('invoiceNo', 'All'); }} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'return' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Return Report</button>
-                <button type="button" onClick={() => { setReportType('invoice'); handleInputChange('invoiceNo', 'All'); }} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'invoice' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Invoice Report</button>
+                <button type="button" onClick={() => handleTabChange('sale')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'sale' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Report</button>
+                <button type="button" onClick={() => handleTabChange('return')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'return' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Return Report</button>
+                <button type="button" onClick={() => handleTabChange('invoice')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${reportType === 'invoice' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black cursor-pointer'}`}>Sale Invoice Report</button>
             </div>
 
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -121,7 +138,7 @@ const SalesReport = () => {
                             <SearchableDropdown label="Logistics Fleet:" placeholder="Fleet" options={transportOptions} value={criteria.transport} onChange={(val) => handleInputChange('transport', val)} />
                             <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
                             <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-                            <SearchableDropdown label="Brands Allocation:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+
                             <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
                             <SearchableDropdown label="Target Products:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
                             <SearchableDropdown label="Inventory Locations:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
@@ -149,7 +166,7 @@ const SalesReport = () => {
                             <SearchableDropdown label="Customer Group:" placeholder="Customer" options={customerOptions} value={criteria.customer} onChange={(val) => handleInputChange('customer', val)} />
                             <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
                             <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-                            <SearchableDropdown label="Brands Allocation:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+
                             <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
                             <SearchableDropdown label="Target Products:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
                             <SearchableDropdown label="Inventory Locations:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
@@ -179,8 +196,8 @@ const SalesReport = () => {
 
                     {reportType !== 'invoice' && (
                         <>
-                            <div><label className="block font-bold text-gray-500 mb-1">Date From (Start):</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateFrom', today); else handleInputChange('dateFrom', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
-                            <div><label className="block font-bold text-gray-500 mb-1">Date To (End Date):</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateTo', today); else handleInputChange('dateTo', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
+                            <div><label className="block font-bold text-gray-500 mb-1">Date From (Start):</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; let newDateFrom = e.target.value; if (newDateFrom > today) newDateFrom = today; handleInputChange('dateFrom', newDateFrom); if (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') { const dFrom = new Date(newDateFrom); const dTo = new Date(criteria.dateTo); const diffDays = Math.ceil(Math.abs(dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24)); if (dTo < dFrom || diffDays > 90) { const maxAllowed = new Date(dFrom.setDate(dFrom.getDate() + 90)).toISOString().split('T')[0]; handleInputChange('dateTo', maxAllowed < today ? maxAllowed : today); } } }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
+                            <div><label className="block font-bold text-gray-500 mb-1">Date To (End Date):</label><input type="date" min={criteria.dateFrom} max={criteria.dateFrom && (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], new Date().toISOString().split('T')[0]].sort()[0] : new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; const maxAllowed = criteria.dateFrom && (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], today].sort()[0] : today; let newDateTo = e.target.value; if (newDateTo > maxAllowed) newDateTo = maxAllowed; if (newDateTo < criteria.dateFrom) newDateTo = criteria.dateFrom; handleInputChange('dateTo', newDateTo); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
                             <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Quick Dates:</span>
                                 <button type="button" onClick={() => { const t = new Date().toISOString().split('T')[0]; handleInputChange('dateFrom', t); handleInputChange('dateTo', t); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Today</button>
@@ -196,7 +213,21 @@ const SalesReport = () => {
                 <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex justify-end">
                     <button
                         type="button"
-                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report/Print`, { state: { type: reportType, filters: criteria } })}
+                        onClick={() => {
+                            if (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') {
+                                if (criteria.dateFrom && criteria.dateTo) {
+                                    const start = new Date(criteria.dateFrom);
+                                    const end = new Date(criteria.dateTo);
+                                    const diffTime = Math.abs(end.getTime() - start.getTime());
+                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                    if (diffDays > 93) {
+                                        toast.error("Please select a date range of 3 months or less for detailed reports.");
+                                        return;
+                                    }
+                                }
+                            }
+                            navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report/Print`, { state: { type: reportType, filters: criteria } });
+                        }}
                         className="rounded bg-primary py-2.5 px-12 font-bold text-white hover:bg-opacity-90 transition text-xs shadow-sm h-9 cursor-pointer"
                     >
                         Generate Statement

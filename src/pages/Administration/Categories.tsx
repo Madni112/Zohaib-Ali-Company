@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import TableActions from '../../ui/TableActions';
-import { MdDelete, MdAdd, MdEdit, MdClose, MdCategory } from 'react-icons/md';
-
+import { MdDelete, MdAdd, MdCategory, MdClose, MdChevronRight, MdFolder } from 'react-icons/md';
+import SearchableDropdown from '../../components/SearchableDropdown';
 import { useAuth } from '../../Context/Auth';
 
 const Categories = () => {
@@ -12,13 +12,18 @@ const Categories = () => {
     const [categories, setCategories] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Inline inputs form state hooks
+    // Form states
+    const [selectedParentId, setSelectedParentId] = useState<string | number>('');
+    const [selectedSubId, setSelectedSubId] = useState<string | number>('');
     const [categoryName, setCategoryName] = useState('');
-    const [categoryCode, setCategoryCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    // FIXED: Added inline modification tracker states
-    const [editingId, setEditingId] = useState<number | string | null>(null);
+    // Modal states
+    const [isParentModalOpen, setIsParentModalOpen] = useState(false);
+    const [newParentName, setNewParentName] = useState('');
+    const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+    const [newSubName, setNewSubName] = useState('');
+    const [modalSubmitting, setModalSubmitting] = useState(false);
 
     // Pagination and Lookup filters control parameters
     const [searchTerm, setSearchTerm] = useState('');
@@ -42,7 +47,6 @@ const Categories = () => {
             }
 
             const { data, error } = await query;
-
             if (error) throw error;
             setCategories(data || []);
         } catch (err: any) {
@@ -52,76 +56,101 @@ const Categories = () => {
         }
     };
 
-    // HANDLES BOTH SAVE AND LIVE UPDATE DISPATCH OPERATIONS
-    const handleFormSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const cleanName = categoryName.trim();
-        const cleanCode = categoryCode.trim();
+    // --- Computed Hierarchies ---
+    const parentCategories = useMemo(() => categories.filter(c => c.parent_id === null), [categories]);
 
-        if (!cleanCode) {
-            toast.error('Category code is required');
-            return;
+    const subCategories = useMemo(() => {
+        if (!selectedParentId) return [];
+        return categories.filter(c => c.parent_id === Number(selectedParentId));
+    }, [categories, selectedParentId]);
+
+    const bottomCategories = useMemo(() => {
+        // A bottom category is one whose parent is a subCategory
+        const subCatIds = new Set(categories.filter(c => c.parent_id && categories.find(p => p.id === c.parent_id)?.parent_id === null).map(c => c.id));
+        return categories.filter(c => c.parent_id && subCatIds.has(c.parent_id));
+    }, [categories]);
+
+    // Handle cascading resets
+    useEffect(() => {
+        setSelectedSubId('');
+    }, [selectedParentId]);
+
+
+    // --- Actions ---
+    const handleCreateParent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newParentName.trim()) return toast.error('Name is required');
+
+        try {
+            setModalSubmitting(true);
+            const isDuplicate = categories.some(c => c.name?.toLowerCase() === newParentName.trim().toLowerCase() && c.parent_id === null);
+            if (isDuplicate) return toast.error('Parent category already exists');
+
+            const payload: any = { name: newParentName.trim(), parent_id: null };
+            if (tenantId) payload.tenant_id = tenantId;
+
+            const { data, error } = await supabase.from('inventory_categories').insert([payload]).select();
+            if (error) throw error;
+
+            toast.success('Parent Category created!');
+            setNewParentName('');
+            setIsParentModalOpen(false);
+            await fetchCategories();
+            if (data && data.length > 0) setSelectedParentId(data[0].id);
+        } catch (err: any) {
+            toast.error(err.message);
+        } finally {
+            setModalSubmitting(false);
         }
+    };
+
+    const handleCreateSub = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newSubName.trim()) return toast.error('Name is required');
+        if (!selectedParentId) return toast.error('Please select a Parent Category first');
+
+        try {
+            setModalSubmitting(true);
+            const isDuplicate = subCategories.some(c => c.name?.toLowerCase() === newSubName.trim().toLowerCase());
+            if (isDuplicate) return toast.error('Sub category already exists under this parent');
+
+            const payload: any = { name: newSubName.trim(), parent_id: selectedParentId };
+            if (tenantId) payload.tenant_id = tenantId;
+
+            const { data, error } = await supabase.from('inventory_categories').insert([payload]).select();
+            if (error) throw error;
+
+            toast.success('Sub Category created!');
+            setNewSubName('');
+            setIsSubModalOpen(false);
+            await fetchCategories();
+            if (data && data.length > 0) setSelectedSubId(data[0].id);
+        } catch (err: any) {
+            toast.error(err.message);
+        } finally {
+            setModalSubmitting(false);
+        }
+    };
+
+    const handleCreateCategory = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!categoryName.trim()) return toast.error('Category Name is required');
+        if (!selectedSubId) return toast.error('Please select a Sub Category');
 
         try {
             setSubmitting(true);
+            const isDuplicate = categories.filter(c => c.parent_id === Number(selectedSubId)).some(c => c.name?.toLowerCase() === categoryName.trim().toLowerCase());
+            if (isDuplicate) return toast.error('Category already exists under this sub category');
 
-            // Verify duplication against other registered entries
-            const isDuplicate = categories.some(
-                (c) => c.code?.toLowerCase() === cleanCode.toLowerCase() && c.id !== editingId
-            );
-            if (isDuplicate) {
-                toast.error('This category code is already registered');
-                setSubmitting(false);
-                return;
-            }
+            const payload: any = { name: categoryName.trim(), parent_id: selectedSubId };
+            if (tenantId) payload.tenant_id = tenantId;
 
-            if (editingId) {
-                // Find old category name before we update it
-                const oldCategory = categories.find(c => c.id === editingId);
-                const oldCategoryName = oldCategory?.name;
+            const { error } = await supabase.from('inventory_categories').insert([payload]);
+            if (error) throw error;
 
-                // Path A: Edit Mode triggers a PostgREST SQL Update call
-                const { error } = await supabase
-                    .from('inventory_categories')
-                    .update({ name: cleanName, code: cleanCode })
-                    .eq('id', editingId);
-
-                if (error) throw error;
-
-                // Cascade update to products if the name changed
-                if (oldCategoryName && oldCategoryName !== cleanName) {
-                    const { error: productUpdateError } = await supabase
-                        .from('products')
-                        .update({ category: cleanName })
-                        .eq('category', oldCategoryName);
-                    
-                    if (productUpdateError) {
-                        console.error('Failed to update product categories:', productUpdateError);
-                        toast.error('Category updated, but failed to link existing products.');
-                    }
-                }
-
-                toast.success('Category modified successfully!');
-                setEditingId(null);
-            } else {
-                // Path B: Standard insertion saves a fresh entry row with tenant_id
-                const insertPayload: any = { name: cleanName, code: cleanCode };
-                if (tenantId) {
-                    insertPayload.tenant_id = tenantId;
-                }
-
-                const { error } = await supabase
-                    .from('inventory_categories')
-                    .insert([insertPayload]);
-
-                if (error) throw error;
-                toast.success('Category registered successfully!');
-            }
-
+            toast.success('Category created successfully!');
             setCategoryName('');
-            setCategoryCode('');
-            fetchCategories(); // Instantly reload table list data parameters
+            fetchCategories();
         } catch (err: any) {
             toast.error(err.message);
         } finally {
@@ -129,42 +158,26 @@ const Categories = () => {
         }
     };
 
-
-    // TRIGGERED WHEN USER CLICKS COMPONENT INLINE MDEDIT TARGET CELL BUTTON
-    const handleTriggerEdit = (cat: any) => {
-        setEditingId(cat.id);
-        setCategoryName(cat.name || ''); 
-        setCategoryCode(cat.code || '');
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Smooth scrolls up to top inputs bar
-    };
-
-    const handleCancelEdit = () => {
-        setEditingId(null);
-        setCategoryName('');
-        setCategoryCode('');
-    };
-
-    const handleDeleteCategory = async (id: number | string) => {
-        if (!window.confirm('Are you certain you want to permanently remove this category item?')) return;
+    const handleDelete = async (id: string | number, type: 'Parent' | 'Sub' | 'Category') => {
+        if (!window.confirm(`Are you sure you want to delete this ${type} Category? This may affect items tied to it.`)) return;
 
         try {
-            const { error } = await supabase
-                .from('inventory_categories')
-                .delete()
-                .eq('id', id);
-
+            const { error } = await supabase.from('inventory_categories').delete().eq('id', id);
             if (error) throw error;
-            toast.success('Category removed cleanly.');
-            if (editingId === id) handleCancelEdit();
+            toast.success(`${type} Category deleted cleanly.`);
+
+            if (type === 'Parent' && id == selectedParentId) setSelectedParentId('');
+            if (type === 'Sub' && id == selectedSubId) setSelectedSubId('');
+
             fetchCategories();
         } catch (err: any) {
-            toast.error(err.message);
+            toast.error('Could not delete: ' + err.message);
         }
     };
 
-    const filteredCategories = categories.filter((c) =>
-        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.code?.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filter only bottom categories for the table
+    const filteredCategories = bottomCategories.filter((c) =>
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const totalEntries = filteredCategories.length;
@@ -179,83 +192,112 @@ const Categories = () => {
 
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-6 relative">
-
-            {/* SCREEN ROUTE TITLE HEADER */}
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
                     Categories
                 </h2>
             </div>
 
-            <div className={`rounded-xl border shadow-xs p-5 transition duration-150
-        ${editingId ? 'border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-slate-200/80 bg-white dark:border-slate-800 dark:bg-boxdark'}`}>
+            {/* CREATION FORM */}
+            <div className="rounded-xl border shadow-xs p-5 transition duration-150 border-slate-200/80 bg-white dark:border-slate-800 dark:bg-boxdark">
                 <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
                         <MdCategory className="text-emerald-600 text-lg" />
-                        <span>{editingId ? 'Modify Selected Category' : 'Register New Category'}</span>
+                        <span>Register New Category Structure</span>
                     </div>
-                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
-                        {categories.length} Categories Registered
-                    </span>
                 </div>
-                <form onSubmit={handleFormSubmit} className="flex flex-col md:flex-row items-end gap-4 text-xs">
-                    <div className="flex-1 w-full flex flex-col md:flex-row gap-4">
-                        <div className="flex-1">
-                            <label className="block text-gray-500 mb-1.5 font-medium">
-                                Category Code: *
-                            </label>
-                            <input
-                                type="text"
-                                value={categoryCode}
-                                onChange={(e) => setCategoryCode(e.target.value)}
-                                className="w-full border border-stroke rounded p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-primary text-black dark:text-white font-bold text-xs h-[38px]"
-                                placeholder="Enter category code (e.g. GC-01)"
-                                required
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+
+                    {/* Parent Category */}
+                    <div>
+                        <label className="block text-gray-500 mb-1.5 text-xs font-bold">
+                            Parent Category (e.g. Tiles)
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <SearchableDropdown
+                                value={parentCategories.find(c => c.id.toString() === selectedParentId.toString())?.name || ''}
+                                onChange={(val) => {
+                                    const cat = parentCategories.find(c => c.name === val);
+                                    setSelectedParentId(cat ? cat.id.toString() : '');
+                                }}
+                                options={parentCategories.map(c => c.name)}
+                                placeholder="Parent Category"
+                                allowAll={false}
+                                className="flex-1"
                             />
+                            {selectedParentId ? (
+                                <button type="button" onClick={() => handleDelete(selectedParentId, 'Parent')} className="h-[42px] w-[42px] flex shrink-0 items-center justify-center bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 text-rose-500 rounded-lg transition" title="Delete Parent Category">
+                                    <MdDelete size={20} />
+                                </button>
+                            ) : (
+                                <button type="button" onClick={() => setIsParentModalOpen(true)} className="h-[42px] w-[42px] flex shrink-0 items-center justify-center bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 rounded-lg transition" title="Create New Parent Category">
+                                    <MdAdd size={24} />
+                                </button>
+                            )}
                         </div>
+                    </div>
+
+                    {/* Sub Category */}
+                    <div>
+                        <label className="block text-gray-500 mb-1.5 text-xs font-bold">
+                            Sub Category
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <SearchableDropdown
+                                value={subCategories.find(c => c.id.toString() === selectedSubId.toString())?.name || ''}
+                                onChange={(val) => {
+                                    const cat = subCategories.find(c => c.name === val);
+                                    setSelectedSubId(cat ? cat.id.toString() : '');
+                                }}
+                                options={subCategories.map(c => c.name)}
+                                placeholder="Sub Category"
+                                allowAll={false}
+                                disabled={!selectedParentId}
+                                className="flex-1"
+                            />
+                            {selectedSubId ? (
+                                <button type="button" onClick={() => handleDelete(selectedSubId, 'Sub')} className="h-[42px] w-[42px] flex shrink-0 items-center justify-center bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 text-rose-500 rounded-lg transition" title="Delete Sub Category">
+                                    <MdDelete size={20} />
+                                </button>
+                            ) : (
+                                <button type="button" disabled={!selectedParentId} onClick={() => setIsSubModalOpen(true)} className="h-[42px] w-[42px] flex shrink-0 items-center justify-center bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed" title="Create New Sub Category">
+                                    <MdAdd size={24} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Category (Bottom Level) */}
+                    <form onSubmit={handleCreateCategory} className="flex items-center gap-2">
                         <div className="flex-1">
-                            <label className="block text-gray-500 mb-1.5 font-medium">
-                                Category Name: (Optional)
+                            <label className="block text-gray-500 mb-1.5 text-xs font-bold">
+                                Category *
                             </label>
                             <input
                                 type="text"
                                 value={categoryName}
                                 onChange={(e) => setCategoryName(e.target.value)}
-                                className="w-full border border-stroke rounded p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-primary text-black dark:text-white font-bold text-xs h-[38px]"
-                                placeholder="Enter category name text description"
+                                disabled={!selectedSubId}
+                                className="w-full border border-stroke rounded-lg p-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-black dark:text-white font-bold text-xs h-[42px] disabled:opacity-50"
+                                placeholder="Enter category..."
+                                required
                             />
                         </div>
-                    </div>
-                    <div className="flex gap-2 w-full md:w-auto shrink-0">
-                        {editingId && (
-                            <button
-                                type="button"
-                                onClick={handleCancelEdit}
-                                className="flex items-center justify-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2.5 px-5 font-bold text-slate-700 dark:text-slate-300 transition shadow-sm text-xs cursor-pointer h-[38px]"
-                            >
-                                <MdClose size={16} /> Cancel
-                            </button>
-                        )}
                         <button
                             type="submit"
-                            disabled={submitting}
-                            className="w-full md:w-auto flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2.5 px-8 font-bold text-white transition shadow-md text-xs cursor-pointer h-[38px] disabled:opacity-50"
+                            disabled={!selectedSubId || submitting}
+                            className="h-[42px] px-6 mt-[22px] flex shrink-0 items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm gap-2"
                         >
-                            {submitting ? (
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            ) : editingId ? (
-                                <><MdEdit size={16} /> Update Category</>
-                            ) : (
-                                <><MdAdd size={16} /> Save Category</>
-                            )}
+                            {submitting ? <Spinner /> : <><MdSave size={16} /> Save</>}
                         </button>
-                    </div>
-                </form>
+                    </form>
+
+                </div>
             </div>
 
-            {/* FULL WIDTH MASTER DISPLAY DATATABLE ELEMENT GRID SECTION */}
+            {/* TABLE */}
             <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
-
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                         <span>Show</span>
@@ -270,14 +312,13 @@ const Categories = () => {
                         </select>
                         <span>entries</span>
                     </div>
-
                     <div className="flex items-center gap-2 text-xs w-full sm:w-auto text-gray-500 dark:text-gray-400">
                         <span>Search:</span>
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Search categories catalog records..."
+                            placeholder="Search categories..."
                             className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs text-black dark:text-white"
                         />
                     </div>
@@ -286,45 +327,47 @@ const Categories = () => {
                 <div className="max-w-full overflow-x-auto">
                     <table className="w-full table-auto border-collapse">
                         <thead>
-                            <tr className={`bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke  dark:border-snakedark`}>
+                            <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-snakedark">
                                 <th className="py-4 px-4 font-semibold text-xs w-20">S#</th>
-                                <th className="py-4 px-4 font-semibold text-xs w-48">Code</th>
-                                <th className="py-4 px-4 font-semibold text-xs">Category Department Name</th>
+                                <th className="py-4 px-4 font-semibold text-xs">Category (Bottom)</th>
+                                <th className="py-4 px-4 font-semibold text-xs">Sub Category (Middle)</th>
+                                <th className="py-4 px-4 font-semibold text-xs">Parent Category (Top)</th>
                                 <th className="py-4 px-4 font-semibold text-xs w-32 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
                                 <tr>
-                                    <td colSpan={3} className="text-center py-12 text-xs">
+                                    <td colSpan={5} className="text-center py-12 text-xs">
                                         <div className="flex justify-center items-center"><Spinner /></div>
                                     </td>
                                 </tr>
                             ) : paginatedCategories.length === 0 ? (
                                 <tr>
-                                    <td colSpan={3} className="text-center py-10 text-xs text-gray-500 dark:text-gray-400">
-                                        No data available in table
+                                    <td colSpan={5} className="text-center py-10 text-xs text-gray-500 dark:text-gray-400">
+                                        No categories found.
                                     </td>
                                 </tr>
                             ) : (
                                 paginatedCategories.map((cat, idx) => {
                                     const serialNumber = startIndex + idx + 1;
-                                    const isCurrentRowEditing = editingId === cat.id;
+                                    const subCat = categories.find(c => c.id === cat.parent_id);
+                                    const parentCat = subCat ? categories.find(c => c.id === subCat.parent_id) : null;
 
                                     return (
-                                        <tr key={cat.id} className={`border-b duration-150 text-xs
-                      ${isCurrentRowEditing ? 'font-bold border-primary bg-meta-4/80' : 'border-stroke dark:border-strokedark'}`}>
+                                        <tr key={cat.id} className="border-b border-stroke dark:border-strokedark duration-150 text-xs hover:bg-gray-50 dark:hover:bg-meta-4/30">
                                             <td className="py-3.5 px-4 text-black dark:text-white font-medium">{serialNumber}</td>
-                                            <td className="py-3.5 px-4 text-black dark:text-white font-bold tracking-wider uppercase">{cat.code || '-'}</td>
-                                            <td className="py-3.5 px-4 text-black dark:text-white uppercase tracking-tight">{cat.name || '-'}</td>
-
+                                            <td className="py-3.5 px-4 text-black dark:text-white font-bold uppercase tracking-tight">{cat.name || '-'}</td>
+                                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300 uppercase tracking-tight">{subCat?.name || '-'}</td>
+                                            <td className="py-3.5 px-4 text-gray-500 dark:text-gray-400 uppercase tracking-tight">{parentCat?.name || '-'}</td>
                                             <td className="py-3.5 px-4 text-center">
-                                                <TableActions
-                                                    onEdit={() => handleTriggerEdit(cat)}
-                                                    onDelete={() => handleDeleteCategory(cat.id)}
-                                                    editTitle="Edit Category"
-                                                    deleteTitle="Delete Category"
-                                                />
+                                                <button
+                                                    onClick={() => handleDelete(cat.id, 'Category')}
+                                                    className="inline-flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-500 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 p-1.5 rounded transition"
+                                                    title="Delete Category"
+                                                >
+                                                    <MdDelete size={16} />
+                                                </button>
                                             </td>
                                         </tr>
                                     );
@@ -334,12 +377,10 @@ const Categories = () => {
                     </table>
                 </div>
 
-                {/* BOTTOM METRIC SUMMARY FLOORS FOOTER */}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                         Showing {startIndex + 1} to {endIndex} of {totalEntries} entries
                     </div>
-
                     <div className="flex items-center gap-1.5">
                         <button
                             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -360,8 +401,95 @@ const Categories = () => {
                         </button>
                     </div>
                 </div>
-
             </div>
+
+            {/* MODALS */}
+
+            {/* Create Parent Category Modal */}
+            {isParentModalOpen && (
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                    <div className="bg-white dark:bg-boxdark w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-sm">
+                                <MdAdd className="text-emerald-600 text-lg" /> Create Parent Category
+                            </h3>
+                            <button onClick={() => setIsParentModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition">
+                                <MdClose size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateParent} className="p-5">
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                                Parent Name (e.g. Tiles)
+                            </label>
+                            <input
+                                type="text"
+                                autoFocus
+                                value={newParentName}
+                                onChange={(e) => setNewParentName(e.target.value)}
+                                className="w-full border border-stroke rounded-lg p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-emerald-500 text-black dark:text-white font-bold text-sm mb-6"
+                                placeholder="Enter parent category name..."
+                                required
+                            />
+                            <div className="flex gap-3 justify-end">
+                                <button type="button" onClick={() => setIsParentModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={modalSubmitting} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition flex items-center gap-2 disabled:opacity-50">
+                                    {modalSubmitting ? <Spinner /> : 'Save Parent'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Sub Category Modal */}
+            {isSubModalOpen && (
+                <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                    <div className="bg-white dark:bg-boxdark w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-sm">
+                                <MdAdd className="text-emerald-600 text-lg" /> Create Sub Category
+                            </h3>
+                            <button onClick={() => setIsSubModalOpen(false)} className="text-slate-400 hover:text-rose-500 transition">
+                                <MdClose size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleCreateSub} className="p-5">
+                            <div className="mb-4">
+                                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
+                                    Under Parent
+                                </label>
+                                <div className="text-sm font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-lg border border-emerald-100 dark:border-emerald-800/50">
+                                    {parentCategories.find(c => c.id === Number(selectedParentId))?.name || 'Unknown'}
+                                </div>
+                            </div>
+
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                                Sub Category Name (e.g. Ceramic Tiles)
+                            </label>
+                            <input
+                                type="text"
+                                autoFocus
+                                value={newSubName}
+                                onChange={(e) => setNewSubName(e.target.value)}
+                                className="w-full border border-stroke rounded-lg p-2.5 bg-transparent dark:border-strokedark outline-none focus:border-emerald-500 text-black dark:text-white font-bold text-sm mb-6"
+                                placeholder="Enter sub category name..."
+                                required
+                            />
+                            <div className="flex gap-3 justify-end">
+                                <button type="button" onClick={() => setIsSubModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 dark:text-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg transition">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={modalSubmitting} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition flex items-center gap-2 disabled:opacity-50">
+                                    {modalSubmitting ? <Spinner /> : 'Save Sub Category'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 };

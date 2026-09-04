@@ -35,7 +35,7 @@ const AccountReport = () => {
     return new Date().toISOString().split('T')[0];
   };
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState(location.state?.filters || {
     categoryCode: 'All',
     controlCode: 'All',
     chartOfAccountCode: 'All',
@@ -48,6 +48,10 @@ const AccountReport = () => {
     dateFrom: getPastWeekDateString(),
     dateTo: getTodayDateString()
   });
+
+  useEffect(() => {
+    navigate('.', { replace: true, state: { ...location.state, activeTab, filters } });
+  }, [activeTab, filters, navigate]);
 
   useEffect(() => {
     const fetchAccountCriteriaLookups = async () => {
@@ -124,7 +128,37 @@ const AccountReport = () => {
   const companyOptions = useMemo(() => companies.map(c => c.name).filter(Boolean), [companies]);
   const salesmanOptions = useMemo(() => salesmen.map(s => s.name).filter(Boolean), [salesmen]);
 
+  const handleTabChange = (tab: number) => {
+    setActiveTab(tab);
+    setFilters(prev => ({
+      categoryCode: 'All',
+      controlCode: 'All',
+      chartOfAccountCode: 'All',
+      customer: 'All',
+      vendor: 'All',
+      company: 'All',
+      voucherType: 'All',
+      saleType: 'Sale',
+      salesman: 'All',
+      dateFrom: prev.dateFrom,
+      dateTo: prev.dateTo
+    }));
+  };
+
   const handleDispatchReportView = () => {
+    if (activeTab === 1 || activeTab === 8) {
+      if (filters.dateFrom && filters.dateTo) {
+        const start = new Date(filters.dateFrom);
+        const end = new Date(filters.dateTo);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 93) {
+          toast.error("Please select a date range of 3 months or less for detailed reports.");
+          return;
+        }
+      }
+    }
+
     navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report/Print`, {
       state: { tab: activeTab, criteria: filters }
     });
@@ -140,18 +174,18 @@ const AccountReport = () => {
       </div>
 
       <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
-        <button type="button" onClick={() => setActiveTab(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>General Ledger</button>
-        <button type="button" onClick={() => setActiveTab(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Summary</button>
-        <button type="button" onClick={() => setActiveTab(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Summary</button>
-        <button type="button" onClick={() => setActiveTab(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Income Statement</button>
-        <button type="button" onClick={() => setActiveTab(5)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Chart of Accounts</button>
-        <button type="button" onClick={() => setActiveTab(6)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Outstanding</button>
-        <button type="button" onClick={() => setActiveTab(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Recovery</button>
-        <button type="button" onClick={() => setActiveTab(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Voucher Report</button>
-        <button type="button" onClick={() => setActiveTab(9)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 9 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Daily Activity</button>
-        <button type="button" onClick={() => setActiveTab(10)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 10 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Salesman Statement</button>
-        <button type="button" onClick={() => setActiveTab(11)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 11 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Trial Balance</button>
-        <button type="button" onClick={() => setActiveTab(12)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 12 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Aging Report</button>
+        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>General Ledger</button>
+        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Summary</button>
+        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Summary</button>
+        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Income Statement</button>
+        <button type="button" onClick={() => handleTabChange(5)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Chart of Accounts</button>
+        <button type="button" onClick={() => handleTabChange(6)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Vendor Outstanding</button>
+        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Customer Recovery</button>
+        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Voucher Report</button>
+        <button type="button" onClick={() => handleTabChange(9)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 9 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Daily Activity</button>
+        <button type="button" onClick={() => handleTabChange(10)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 10 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Salesman Statement</button>
+        <button type="button" onClick={() => handleTabChange(11)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 11 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Trial Balance</button>
+        <button type="button" onClick={() => handleTabChange(12)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 12 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Aging Report</button>
       </div>
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -241,8 +275,8 @@ const AccountReport = () => {
 
           {activeTab !== 5 && activeTab !== 11 && activeTab !== 12 && (
             <>
-              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket From:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={filters.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateFrom', today); else handleInputChange('dateFrom', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
-              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket To:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={filters.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateTo', today); else handleInputChange('dateTo', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
+              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket From:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={filters.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; let newDateFrom = e.target.value; if (newDateFrom > today) newDateFrom = today; handleInputChange('dateFrom', newDateFrom); if (activeTab === 1 || activeTab === 8) { const dFrom = new Date(newDateFrom); const dTo = new Date(filters.dateTo); const diffDays = Math.ceil(Math.abs(dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24)); if (dTo < dFrom || diffDays > 90) { const maxAllowed = new Date(dFrom.setDate(dFrom.getDate() + 90)).toISOString().split('T')[0]; handleInputChange('dateTo', maxAllowed < today ? maxAllowed : today); } } }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
+              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket To:</label><input type="date" min={filters.dateFrom} max={filters.dateFrom && (activeTab === 1 || activeTab === 8) ? [new Date(new Date(filters.dateFrom).setDate(new Date(filters.dateFrom).getDate() + 90)).toISOString().split('T')[0], new Date().toISOString().split('T')[0]].sort()[0] : new Date().toISOString().split('T')[0]} value={filters.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; const maxAllowed = filters.dateFrom && (activeTab === 1 || activeTab === 8) ? [new Date(new Date(filters.dateFrom).setDate(new Date(filters.dateFrom).getDate() + 90)).toISOString().split('T')[0], today].sort()[0] : today; let newDateTo = e.target.value; if (newDateTo > maxAllowed) newDateTo = maxAllowed; if (newDateTo < filters.dateFrom) newDateTo = filters.dateFrom; handleInputChange('dateTo', newDateTo); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
               <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Quick Dates:</span>
                 <button type="button" onClick={() => { const t = new Date().toISOString().split('T')[0]; handleInputChange('dateFrom', t); handleInputChange('dateTo', t); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Today</button>

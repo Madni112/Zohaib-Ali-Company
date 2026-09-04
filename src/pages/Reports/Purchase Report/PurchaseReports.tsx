@@ -18,7 +18,8 @@ const PurchaseReport = () => {
   const [vendors, setVendors] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [uoms, setUoms] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
+  const [bins, setBins] = useState<any[]>([]);
+
   const [products, setProducts] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
@@ -33,33 +34,37 @@ const PurchaseReport = () => {
     return new Date().toISOString().split('T')[0];
   };
 
-  const [criteria, setCriteria] = useState(() => ({
+  const [criteria, setCriteria] = useState(() => location.state?.criteria || ({
     vendor: location.state?.vendor || location.state?.criteria?.vendor || 'All',
     category: location.state?.category || location.state?.criteria?.category || 'All',
-    uom: 'All', brand: 'All', product: 'All', location: 'All', purchaseType: 'All', invoiceNo: 'All',
+    uom: 'All', bin: 'All', product: 'All', location: 'All', purchaseType: 'All', invoiceNo: 'All',
     dateFrom: location.state?.dateFrom || location.state?.criteria?.dateFrom || getPastWeekDateString(),
     dateTo: location.state?.dateTo || location.state?.criteria?.dateTo || getTodayDateString()
   }));
 
   useEffect(() => {
+    navigate('.', { replace: true, state: { ...location.state, activeTab, criteria } });
+  }, [activeTab, criteria, navigate]);
+
+  useEffect(() => {
     const fetchPurchaseCriteriaLookups = async () => {
       try {
         setLoading(true);
-        const [vendRes, catRes, brndRes, prodRes, locRes, purInvRes, uomRes] = await Promise.all([
+        const [vendRes, catRes, prodRes, locRes, purInvRes, uomRes, binRes] = await Promise.all([
           supabase.from('vendors').select('id, vendor_name'),
           supabase.from('inventory_categories').select('id, name'),
-          supabase.from('inventory_brands').select('id, name'),
-          supabase.from('products').select('id, product_name, category, brand, uom'),
+          supabase.from('products').select('id, product_name, category, bin, uom'),
           supabase.from('inventory_locations').select('id, name'),
           supabase.from('supplier_purchases').select('id, total_amount, supplier_name, purchase_no').order('id', { ascending: false }),
-          supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true)
+          supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true),
+          supabase.from('inventory_surface_finishes').select('id, name')
         ]);
 
         if (vendRes.data) setVendors(vendRes.data);
         if (catRes.data) setCategories(catRes.data);
-        if (brndRes.data) setBrands(brndRes.data);
         if (prodRes.data) setProducts(prodRes.data);
         if (locRes.data) setLocations(locRes.data);
+        if (binRes.data) setBins(binRes.data);
         if (purInvRes.data) setAvailableInvoices(purInvRes.data);
 
         if (uomRes.data) {
@@ -81,24 +86,36 @@ const PurchaseReport = () => {
   const handleInputChange = (field: string, value: any) => {
     setCriteria(prev => {
       const updated = { ...prev, [field]: value };
-      if (field === 'brand') updated.product = 'All';
+      if (field === 'bin') updated.product = 'All';
       return updated;
     });
   };
 
   const getContextualProductSelectionPool = () => {
-    const selectedBrandClean = String(criteria.brand || '').trim().toLowerCase();
-    if (!selectedBrandClean || selectedBrandClean === 'all' || selectedBrandClean === 'all brands') {
+    const selectedBin = String(criteria.bin || '').trim().toLowerCase();
+    if (!selectedBin || selectedBin === 'all') {
       return products;
     }
-    return products.filter(p => String(p.brand || '').trim().toLowerCase() === selectedBrandClean);
+    return products.filter(p => String(p.bin || '').trim().toLowerCase() === selectedBin);
   };
 
   const vendorOptions = useMemo(() => vendors.map(v => v.vendor_name).filter(Boolean), [vendors]);
   const categoryOptions = useMemo(() => categories.map(c => c.name).filter(Boolean), [categories]);
   const uomOptions = useMemo(() => uoms.map(u => u.name).filter(Boolean), [uoms]);
-  const brandOptions = useMemo(() => brands.map(b => b.name).filter(Boolean), [brands]);
-  const productOptions = useMemo(() => getContextualProductSelectionPool().map(p => p.product_name).filter(Boolean), [products, criteria.brand]);
+  const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
+
+  const handleTabChange = (tab: 'purchase' | 'return' | 'invoice') => {
+    setActiveTab(tab);
+    setCriteria(prev => ({
+      vendor: 'All',
+      category: 'All',
+      uom: 'All', bin: 'All', product: 'All', location: 'All', purchaseType: 'All', invoiceNo: 'All',
+      dateFrom: prev.dateFrom,
+      dateTo: prev.dateTo
+    }));
+  };
+
+  const productOptions = useMemo(() => getContextualProductSelectionPool().map(p => p.product_name).filter(Boolean), [products, criteria.bin]);
   const locationOptions = useMemo(() => locations.map(l => l.name).filter(Boolean), [locations]);
   const invoiceOptions = useMemo(() => availableInvoices.map(i => i.purchase_no || `PUR-${String(i.id).padStart(4, '0')}`), [availableInvoices]);
 
@@ -106,6 +123,18 @@ const PurchaseReport = () => {
     if (activeTab === 'invoice' && criteria.invoiceNo === 'All') {
       toast.error('Please isolate or choose a target document profile reference ID');
       return;
+    }
+    if (activeTab === 'purchase' || activeTab === 'return') {
+      if (criteria.dateFrom && criteria.dateTo) {
+        const start = new Date(criteria.dateFrom);
+        const end = new Date(criteria.dateTo);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 93) {
+          toast.error("Please select a date range of 3 months or less for detailed reports.");
+          return;
+        }
+      }
     }
     navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Purchase-Report/Print`, { state: { type: activeTab, filters: criteria } });
   };
@@ -120,9 +149,9 @@ const PurchaseReport = () => {
       </div>
 
       <div className="flex border-b border-stroke dark:border-strokedark gap-2 bg-white dark:bg-boxdark font-black tracking-wider text-[11px] uppercase text-gray-500">
-        <button type="button" onClick={() => { setActiveTab('purchase'); handleInputChange('invoiceNo', 'All'); }} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${activeTab === 'purchase' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>General Purchase Detail</button>
-        <button type="button" onClick={() => { setActiveTab('return'); handleInputChange('invoiceNo', 'All'); }} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${activeTab === 'return' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Purchase Return</button>
-        <button type="button" onClick={() => { setActiveTab('invoice'); handleInputChange('invoiceNo', 'All'); }} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${activeTab === 'invoice' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Purchase Invoice Detail</button>
+        <button type="button" onClick={() => handleTabChange('purchase')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${activeTab === 'purchase' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>General Purchase Detail</button>
+        <button type="button" onClick={() => handleTabChange('return')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${activeTab === 'return' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Purchase Return</button>
+        <button type="button" onClick={() => handleTabChange('invoice')} className={`py-2.5 px-6 font-bold uppercase transition tracking-wide text-xs border-b-2 cursor-pointer ${activeTab === 'invoice' ? 'border-primary text-primary font-black' : 'border-transparent text-gray-400 hover:text-black dark:hover:text-white'}`}>Purchase Invoice Detail</button>
       </div>
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -134,7 +163,7 @@ const PurchaseReport = () => {
               <SearchableDropdown label="Procurement Vendor:" placeholder="Vendor" options={vendorOptions} value={criteria.vendor} onChange={(val) => handleInputChange('vendor', val)} />
               <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
               <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-              <SearchableDropdown label="Brands Allocation:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
               <SearchableDropdown label="Target Stock Assets:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               <SearchableDropdown label="Receiving Warehouses:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
               
@@ -154,7 +183,7 @@ const PurchaseReport = () => {
               <SearchableDropdown label="Procurement Vendor:" placeholder="Vendor" options={vendorOptions} value={criteria.vendor} onChange={(val) => handleInputChange('vendor', val)} />
               <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
               <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-              <SearchableDropdown label="Brands Allocation:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
               <SearchableDropdown label="Target Stock Assets:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               <SearchableDropdown label="Receiving Warehouses:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
             </>
@@ -176,11 +205,11 @@ const PurchaseReport = () => {
 
           <div>
             <label className="block font-bold text-gray-500 mb-1">Date Bracket From:</label>
-            <input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateFrom', today); else handleInputChange('dateFrom', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" />
+            <input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; let newDateFrom = e.target.value; if (newDateFrom > today) newDateFrom = today; handleInputChange('dateFrom', newDateFrom); if (activeTab === 'purchase' || activeTab === 'return') { const dFrom = new Date(newDateFrom); const dTo = new Date(criteria.dateTo); const diffDays = Math.ceil(Math.abs(dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24)); if (dTo < dFrom || diffDays > 90) { const maxAllowed = new Date(dFrom.setDate(dFrom.getDate() + 90)).toISOString().split('T')[0]; handleInputChange('dateTo', maxAllowed < today ? maxAllowed : today); } } }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" />
           </div>
           <div>
             <label className="block font-bold text-gray-500 mb-1">Date Bracket To:</label>
-            <input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateTo', today); else handleInputChange('dateTo', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" />
+            <input type="date" min={criteria.dateFrom} max={criteria.dateFrom && (activeTab === 'purchase' || activeTab === 'return') ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], new Date().toISOString().split('T')[0]].sort()[0] : new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; const maxAllowed = criteria.dateFrom && (activeTab === 'purchase' || activeTab === 'return') ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], today].sort()[0] : today; let newDateTo = e.target.value; if (newDateTo > maxAllowed) newDateTo = maxAllowed; if (newDateTo < criteria.dateFrom) newDateTo = criteria.dateFrom; handleInputChange('dateTo', newDateTo); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" />
           </div>
 
           <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">

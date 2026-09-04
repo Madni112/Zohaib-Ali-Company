@@ -274,3 +274,39 @@ span.flatpickr-weekday,
 .animate-flyout {
   animation: flyoutFadeIn 0.18s ease-out forwards !important;
 }
+
+/* Global Print Styles to Prevent Layout Breaks */
+@media print {
+  /* Prevent rows from splitting across pages */
+  tr, .no-break, img, svg {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Make sure table headers repeat on new pages */
+  thead {
+    display: table-header-group;
+  }
+  
+  /* Make sure table footers repeat on new pages */
+  tfoot {
+    display: table-footer-group;
+  }
+  
+  /* Standardize margins and hide backgrounds/shadows to save ink & keep it clean */
+  @page {
+    margin: 1cm;
+  }
+  
+  body, .erp-card, .glass-header {
+    background: white !important;
+    box-shadow: none !important;
+    border-color: #000 !important;
+  }
+
+  /* Keep headings from sitting alone at the bottom of a page */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+}

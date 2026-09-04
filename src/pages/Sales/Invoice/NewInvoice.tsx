@@ -44,7 +44,7 @@ const NewInvoice = () => {
       try {
         setInitialLoading(true);
         const { data: cust } = await supabase.from('customers').select('id, customerName, primaryPhone');
-        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, item_sr_no, brand, category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description');
+        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, item_sr_no, category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin');
         const { data: sm } = await supabase.from('salesmen').select('id, name');
         const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
         const { data: locMaster } = await supabase.from('inventory_locations').select('name');
@@ -841,9 +841,8 @@ const NewInvoice = () => {
                                           if (!query) return true;
                                           const name = (p.product_name || '').toLowerCase();
                                           const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                          const brand = (p.brand || '').toLowerCase();
                                           const cat = (p.category || '').toLowerCase();
-                                          return name.includes(query) || sku.includes(query) || brand.includes(query) || cat.includes(query);
+                                          return name.includes(query) || sku.includes(query) || cat.includes(query);
                                         });
 
                                         return (
@@ -897,9 +896,9 @@ const NewInvoice = () => {
                                               className="w-full bg-white dark:bg-boxdark font-bold border border-stroke dark:border-strokedark rounded p-2 outline-none text-xs text-black dark:text-white focus:border-primary shadow-sm"
                                             />
 
-                                            {selectedProd?.brand && (
+                                            {selectedProd?.bin && (
                                               <div className="text-[10px] text-gray-500 dark:text-gray-400 font-sans mt-0.5 truncate">
-                                                Brand: <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedProd.brand}</span> {selectedProd.category ? `• ${selectedProd.category}` : ''}
+                                                BIN Location: <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedProd.bin || 'N/A'}</span> {selectedProd.category ? `• ${selectedProd.category}` : ''}
                                               </div>
                                             )}
 
@@ -938,7 +937,7 @@ const NewInvoice = () => {
                                                           <span className="bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded font-bold text-primary">
                                                             {displaySku}
                                                           </span>
-                                                          {p.brand && <span>{p.brand}</span>}
+
                                                           {p.category && <span>• {p.category}</span>}
                                                         </div>
                                                       </div>

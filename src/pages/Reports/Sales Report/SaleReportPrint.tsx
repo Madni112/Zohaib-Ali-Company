@@ -30,6 +30,21 @@ const SaleReportPrint = () => {
           if (filters.transport && filters.transport !== 'All') query = query.eq('transport_name', filters.transport);
           if (filters.location && filters.location !== 'All') query = query.eq('dispatch_warehouse', filters.location);
 
+          if (filters.saleType && filters.saleType !== 'All') {
+            if (filters.saleType === 'Cash') query = query.eq('payment_term', 'Cash');
+            else query = query.neq('payment_term', 'Cash');
+          }
+          if (filters.saleMethod && filters.saleMethod !== 'All') {
+             // In Supabase, if it's Direct, dc_no is null or empty. If Challan, dc_no is not null.
+             if (filters.saleMethod === 'Direct') query = query.or('dc_no.is.null,dc_no.eq.""');
+             else query = query.neq('dc_no', '');
+          }
+          if (filters.dateFrom && filters.dateTo) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            const endStr = String(filters.dateTo).split('T')[0];
+            query = query.gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59.999Z`);
+          }
+
           const { data: invData, error: invError } = await query;
           if (invError) throw invError;
 
@@ -55,6 +70,7 @@ const SaleReportPrint = () => {
             return !isReturnedItem;
           });
 
+          // Perform accurate date filtering matching old logic just in case sale_date diverges
           if (filters.dateFrom && filters.dateTo) {
             const startStr = String(filters.dateFrom).split('T')[0];
             const endStr = String(filters.dateTo).split('T')[0];
@@ -64,23 +80,23 @@ const SaleReportPrint = () => {
             });
           }
 
-          if (filters.saleType && filters.saleType !== 'All') {
-            pool = pool.filter(i => filters.saleType === 'Cash' ? i.payment_term === 'Cash' : i.payment_term !== 'Cash');
-          }
-          if (filters.saleMethod && filters.saleMethod !== 'All') {
-            pool = pool.filter(i => filters.saleMethod === 'Direct' ? !i.dc_no : !!i.dc_no);
-          }
           setReportRows(pool);
         }
 
         else if (rType === 'return') {
           let query = supabase.from('sales_returns').select('*');
           if (filters.customer && filters.customer !== 'All') query = query.eq('customer_name', filters.customer);
+          if (filters.dateFrom && filters.dateTo) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            const endStr = String(filters.dateTo).split('T')[0];
+            query = query.gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59.999Z`);
+          }
 
           const { data, error } = await query;
           if (error) throw error;
 
           let pool = data || [];
+          // Perform accurate date filtering matching old logic just in case sale_date diverges
           if (filters.dateFrom && filters.dateTo) {
             const startStr = String(filters.dateFrom).split('T')[0];
             const endStr = String(filters.dateTo).split('T')[0];

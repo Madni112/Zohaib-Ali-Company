@@ -104,7 +104,7 @@ export const adminRoutes = [
       {
         path: '/Administration/Surface-Finish',
         component: <SurfaceFinish />,
-        label: 'Bin',
+        label: 'Brand',
         icon: MdTexture
       },
       {

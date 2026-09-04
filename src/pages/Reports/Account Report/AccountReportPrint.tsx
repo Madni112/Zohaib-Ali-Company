@@ -25,92 +25,22 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 1: MASTER RECONCILED GENERAL LEDGER TWO-LINE TIMELINE ---
                 if (activeTab === 1) {
-                    const { data: sales } = await supabase.from('sales_invoices').select('*');
-                    const { data: purchases } = await supabase.from('supplier_purchases').select('*');
-                    const { data: rawVouchers } = await supabase.from('financial_vouchers').select('*');
-                    const { data: salesReturns } = await supabase.from('sales_returns').select('*');
-                    const { data: returnReceipts } = await supabase.from('sales_return_receipts').select('*');
-
-                    const unifiedLedgerEntries: any[] = [];
-
-                    const parseDateString = (dateInput: any) => {
-                        if (!dateInput) return '';
-                        const str = String(dateInput).trim();
-                        if (str.includes('T')) return str.split('T')[0];
-                        if (str.includes(' ')) return str.split(' ')[0];
-                        return str;
-                    };
-
-                    (sales || []).forEach(s => {
-                        if (String(s.sale_status).trim().toLowerCase() !== 'cancel') {
-                            unifiedLedgerEntries.push({
-                                voucher_no: s.id ? `INV-${String(s.id).padStart(4, '0')}` : 'N/A',
-                                description: `Commercial Sale Invoice - Customer Account: ${s.customer_name}`,
-                                debit: 0,
-                                credit: Number(s.total_amount || 0),
-                                raw_date: parseDateString(s.sale_date || s.created_at)
-                            });
-                        }
+                    const { data: ledgerData, error: ledgerErr } = await supabase.rpc('get_general_ledger', {
+                        p_customer: String(filters.customer || 'All'),
+                        p_start_date: filters.dateFrom || null,
+                        p_end_date: filters.dateTo || null
                     });
 
-                    (purchases || []).forEach(p => {
-                        unifiedLedgerEntries.push({
-                            voucher_no: p.purchase_no || `PUR-00${p.id}`,
-                            description: `Procurement Stock Acquisition - Vendor: ${p.supplier_name}`,
-                            debit: Number(p.total_amount || 0),
-                            credit: 0,
-                            raw_date: parseDateString(p.purchase_date || p.created_at)
-                        });
-                    });
-
-                    // C. Map Standalone Vouchers
-                    (rawVouchers || []).forEach(v => {
-                        const vType = String(v.voucherType || '').trim().toLowerCase();
-                        const isReceipt = vType.includes('receipt') || vType.endsWith('rv');
-                        const amt = Number(v.amountReceived || 0);
-
-                        unifiedLedgerEntries.push({
-                            voucher_no: v.voucherNo || `VCH-${v.id}`,
-                            description: v.remarks || `Voucher entry - Account: ${v.customerName || 'General'}`,
-                            debit: !isReceipt ? amt : 0,
-                            credit: isReceipt ? amt : 0,
-                            raw_date: parseDateString(v.voucherDate || v.created_at)
-                        });
-                    });
-
-                    (salesReturns || []).forEach(rtn => {
-                        const trueReturnedValue = Number(rtn.payout_amount_paid || rtn.total_amount || rtn.total_net_amount || 0);
-
-                        unifiedLedgerEntries.push({
-                            voucher_no: rtn.id ? `RTN-${String(rtn.id).padStart(4, '0')}` : 'N/A',
-                            description: `Sales Return Invoice (Orig INV: ${rtn.original_invoice_no}) - Customer: ${rtn.customer_name}`,
-                            debit: trueReturnedValue, // ✅ Fixed: Now accurately injects the true returned amounts (10,000 & 7,200) into Debits column
-                            credit: 0,
-                            raw_date: parseDateString(rtn.return_date || rtn.created_at)
-                        });
-                    });
-
-                    // E. Map Sales Return Cash Receipts (Debits - Formatted as REC-)
-                    (returnReceipts || []).forEach(rec => {
-                        unifiedLedgerEntries.push({
-                            voucher_no: rec.id ? `REC-${String(rec.id).padStart(4, '0')}` : 'N/A',
-                            description: `Sales Return Cash Receipt Payout (Orig INV: ${rec.original_invoice_no}) - Customer: ${rec.customer_name}`,
-                            debit: Number(rec.amount_paid || 0),
-                            credit: 0,
-                            raw_date: parseDateString(rec.processing_date || rec.created_at)
-                        });
-                    });
-
-                    let filteredPool = unifiedLedgerEntries.filter(entry => entry.raw_date);
-                    if (filters.dateFrom && filters.dateTo) {
-                        filteredPool = filteredPool.filter(e => e.raw_date >= filters.dateFrom && e.raw_date <= filters.dateTo);
+                    if (ledgerErr) {
+                        console.error("RPC Error:", ledgerErr);
+                        toast.error("Failed to compile ledger data.");
+                        setReportRows([]);
+                        return;
                     }
 
-                    filteredPool.sort((a, b) => a.raw_date.localeCompare(b.raw_date));
-
                     let cumulativeBalance = 0;
-                    const finalPayload = filteredPool.map(e => {
-                        cumulativeBalance += (e.credit - e.debit);
+                    const finalPayload = (ledgerData || []).map((e: any) => {
+                        cumulativeBalance += (Number(e.credit || 0) - Number(e.debit || 0));
                         return { ...e, balance: cumulativeBalance };
                     });
 
@@ -126,7 +56,7 @@ const AccountReportPrint = () => {
 
                     const { data: returns, error: retErr } = await supabase
                         .from('sales_returns')
-                        .select('original_invoice_no, total_amount, total_net_amount');
+                        .select('original_invoice_no, total_amount');
 
                     if (invErr) throw invErr;
                     if (retErr) throw retErr;
@@ -155,7 +85,7 @@ const AccountReportPrint = () => {
                             return cleanRef === String(inv.id).trim();
                         });
 
-                        const totalReturnedValue = matchingReturns.reduce((sum, r) => sum + Number(r.total_amount || r.total_net_amount || 0), 0);
+                        const totalReturnedValue = matchingReturns.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
 
                         const finalAdjustedInvoiceValue = Math.max(0, Number(inv.total_amount || 0) - totalReturnedValue);
 

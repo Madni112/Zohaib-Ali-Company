@@ -28,6 +28,14 @@ const PurchaseReportPrint = () => {
           if (filters.vendor && filters.vendor !== 'All') query = query.eq('supplier_name', filters.vendor);
           if (filters.location && filters.location !== 'All') query = query.eq('target_warehouse', filters.location);
 
+          if (filters.purchaseType && filters.purchaseType !== 'All') {
+            if (filters.purchaseType === 'Cash') query = query.eq('payment_term', 'Cash');
+            else query = query.neq('payment_term', 'Cash');
+          }
+          if (filters.dateFrom && filters.dateTo) {
+            query = query.gte('created_at', `${filters.dateFrom}T00:00:00`).lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
+          }
+
           const { data: purData, error: purError } = await query;
           if (purError) throw purError;
 
@@ -39,9 +47,6 @@ const PurchaseReportPrint = () => {
               return databaseDateStr >= filters.dateFrom && databaseDateStr <= filters.dateTo;
             });
           }
-          if (filters.purchaseType && filters.purchaseType !== 'All') {
-            pool = pool.filter(p => filters.purchaseType === 'Cash' ? p.payment_term === 'Cash' : p.payment_term !== 'Cash');
-          }
           setReportRows(pool);
         }
 
@@ -50,6 +55,9 @@ const PurchaseReportPrint = () => {
           let query = supabase.from('purchase_returns').select('*');
           if (filters.vendor && filters.vendor !== 'All') query = query.eq('vendor_name', filters.vendor);
           if (filters.location && filters.location !== 'All') query = query.eq('source_warehouse', filters.location);
+          if (filters.dateFrom && filters.dateTo) {
+            query = query.gte('created_at', `${filters.dateFrom}T00:00:00`).lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
+          }
 
           const { data, error } = await query;
           if (error) throw error;

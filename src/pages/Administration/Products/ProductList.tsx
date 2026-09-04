@@ -1,20 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdSearch, MdAdd, MdWarning, MdClose, MdInfoOutline } from 'react-icons/md';
 import TableActions from '../../../ui/TableActions';
+import SearchableDropdown from '../../../components/SearchableDropdown';
 
 const ProductList = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStockBreakdown, setSelectedStockBreakdown] = useState<any | null>(null);
+  const [selectedQuickViewProduct, setSelectedQuickViewProduct] = useState<any | null>(null);
   const [selectedModalWarehouse, setSelectedModalWarehouse] = useState<string>('ALL');
   const [masterLocations, setMasterLocations] = useState<string[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+  
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -260,16 +264,33 @@ const ProductList = () => {
     }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.product_description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  let filteredProducts = products.filter(p => {
+    return p.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           p.product_description?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
+  if (sortConfig !== null) {
+    filteredProducts.sort((a, b) => {
+      let aVal = a[sortConfig.key];
+      let bVal = b[sortConfig.key];
+      
+      // Handle numeric values
+      if (['purchase_price', 'retail_price', 'mrp', 'current_stock'].includes(sortConfig.key)) {
+        aVal = Number(aVal || 0);
+        bVal = Number(bVal || 0);
+      } else {
+        // String handling
+        aVal = String(aVal || '').toLowerCase();
+        bVal = String(bVal || '').toLowerCase();
+      }
 
-
-  const totalEntries = filteredProducts.length;
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }  const totalEntries = filteredProducts.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
@@ -277,7 +298,15 @@ const ProductList = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, pageSize]);
+  }, [searchTerm, pageSize, sortConfig]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-slate-800 dark:text-slate-100">
@@ -309,6 +338,7 @@ const ProductList = () => {
           </span>
         </div>
 
+
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-5">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
             <span>Show</span>
@@ -331,7 +361,7 @@ const ProductList = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search product, category, code, bin..."
+              placeholder="Search product, category, code, brand..."
               className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-800 dark:text-white transition"
             />
           </div>
@@ -341,16 +371,16 @@ const ProductList = () => {
           <table className="w-full table-auto border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
-                <th className="py-3.5 px-4 w-16">S#</th>
-                <th className="py-3.5 px-4">Code</th>
-                <th className="py-3.5 px-4">Description</th>
-                <th className="py-3.5 px-4">Category</th>
-                <th className="py-3.5 px-4">Bin</th>
-                <th className="py-3.5 px-4 w-24 text-center">UOM</th>
-                <th className="py-3.5 px-4 text-right">Purchase Price</th>
-                <th className="py-3.5 px-4 text-right">Sale Price</th>
-                <th className="py-3.5 px-4 text-center w-36">Available Stock</th>
-                <th className="py-3.5 px-4 w-24 text-center">Actions</th>
+                <th className="py-3.5 px-4 w-16 whitespace-nowrap">S#</th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('item_sr_no')}>Code <span className={sortConfig?.key === 'item_sr_no' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'item_sr_no' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('product_name')}>Description <span className={sortConfig?.key === 'product_name' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'product_name' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('category')}>Category <span className={sortConfig?.key === 'category' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'category' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('bin')}>Brand <span className={sortConfig?.key === 'bin' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'bin' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 w-24 text-center cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('uom')}>UOM <span className={sortConfig?.key === 'uom' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'uom' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-right cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('purchase_price')}>Purchase Price <span className={sortConfig?.key === 'purchase_price' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'purchase_price' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-right cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('retail_price')}>Sale Price <span className={sortConfig?.key === 'retail_price' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'retail_price' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-center w-36 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('current_stock')}>Available Stock <span className={sortConfig?.key === 'current_stock' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'current_stock' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 w-24 text-center whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -377,8 +407,17 @@ const ProductList = () => {
                     >
                       <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 font-mono">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{product.item_sr_no || '-'}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{product.product_name}</td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.category || 'General'}</td>
+                      <td 
+                        className="py-3.5 px-4 font-bold text-primary dark:text-blue-400 cursor-pointer hover:underline"
+                        onClick={() => setSelectedQuickViewProduct(product)}
+                      >
+                        {product.product_name}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">
+                        {product.category || 'General'}
+                        {product.sub_category && <span className="opacity-70 text-[10px] ml-1 block text-emerald-600 dark:text-emerald-400">↳ {product.sub_category}</span>}
+                        {product.sub_sub_category && <span className="opacity-50 text-[10px] ml-2 block text-teal-600 dark:text-teal-400">↳ {product.sub_sub_category}</span>}
+                      </td>
                       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
                         {product.bin || 'General'}
                       </td>
@@ -625,6 +664,87 @@ const ProductList = () => {
             <div className="p-4 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex justify-end">
               <button
                 onClick={() => setSelectedStockBreakdown(null)}
+                className="px-4 py-2 bg-white dark:bg-boxdark border border-slate-200 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-lg transition shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick View Modal */}
+      {selectedQuickViewProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-boxdark rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 dark:border-strokedark flex flex-col max-h-[90vh]">
+            <div className="p-5 flex justify-between items-center bg-slate-50 dark:bg-meta-4/30 border-b border-slate-100 dark:border-strokedark">
+              <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                <MdInfoOutline className="text-primary text-xl" />
+                Product Details
+              </h3>
+              <button
+                onClick={() => setSelectedQuickViewProduct(null)}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-meta-4 rounded-full transition-colors text-slate-500"
+              >
+                <MdClose size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto">
+              <div className="mb-4">
+                <h4 className="text-xl font-black text-slate-900 dark:text-white leading-tight">{selectedQuickViewProduct.product_name}</h4>
+                <div className="flex gap-2 mt-2 font-mono text-[10px] uppercase font-bold text-slate-500">
+                  <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">SKU: {selectedQuickViewProduct.item_sr_no || 'N/A'}</span>
+                  <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">Category: {selectedQuickViewProduct.category || 'General'}</span>
+                  <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">UOM: {selectedQuickViewProduct.uom || 'PCS'}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cost Price</div>
+                  <div className="text-lg font-black text-slate-700 dark:text-slate-200 font-mono">Rs. {Number(selectedQuickViewProduct.purchase_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sale Price (MRP)</div>
+                  <div className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono">Rs. {Number(selectedQuickViewProduct.retail_price || selectedQuickViewProduct.mrp || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
+                  <span className="text-xs font-semibold text-slate-500">Brand Allocation</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedQuickViewProduct.bin || 'Unassigned'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
+                  <span className="text-xs font-semibold text-slate-500">Dimensions</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedQuickViewProduct.dimensions || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-800/50">
+                  <span className="text-xs font-semibold text-slate-500">Weight</span>
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedQuickViewProduct.weight || 'N/A'}</span>
+                </div>
+                <div className="py-2">
+                  <span className="text-xs font-semibold text-slate-500 block mb-1">Description</span>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg whitespace-pre-wrap">
+                    {selectedQuickViewProduct.product_description || selectedQuickViewProduct.product_name || 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setSelectedQuickViewProduct(null);
+                  navigate('/Administration/Products/Add', { state: { product: selectedQuickViewProduct } });
+                }}
+                className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-lg transition"
+              >
+                Edit Product
+              </button>
+              <button
+                onClick={() => setSelectedQuickViewProduct(null)}
                 className="px-4 py-2 bg-white dark:bg-boxdark border border-slate-200 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-lg transition shadow-sm"
               >
                 Close

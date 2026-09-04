@@ -5,16 +5,7 @@ import Spinner from '../../ui/Spinner';
 import TableActions from '../../ui/TableActions';
 import { MdAdd, MdClose, MdTexture, MdCheckCircle } from 'react-icons/md';
 
-const DEFAULT_FINISHES = [
-  { id: '1', name: 'Glazed Polished (High Gloss)' },
-  { id: '2', name: 'Super White Matte' },
-  { id: '3', name: 'Carving / Sugar Finish' },
-  { id: '4', name: 'Rustic Anti-Slip' },
-  { id: '5', name: 'Wooden Planks Grain' },
-  { id: '6', name: 'Full Body Porcelain' },
-  { id: '7', name: 'Satin / Silk Finish' },
-  { id: '8', name: 'Lappato / Semi-Polished' },
-];
+
 
 const SurfaceFinish = () => {
   const [finishes, setFinishes] = useState<any[]>([]);
@@ -43,23 +34,15 @@ const SurfaceFinish = () => {
         .order('name', { ascending: true });
 
       if (error) {
-        // Fallback to local storage or defaults if table not yet created
-        const local = localStorage.getItem('zac_surface_finishes');
-        if (local) {
-          setFinishes(JSON.parse(local));
-        } else {
-          setFinishes(DEFAULT_FINISHES);
-          localStorage.setItem('zac_surface_finishes', JSON.stringify(DEFAULT_FINISHES));
-        }
-      } else if (data && data.length > 0) {
+        console.error('Error fetching finishes:', error);
+        toast.error('Failed to load Brands');
+        setFinishes([]);
+      } else if (data) {
         setFinishes(data);
-      } else {
-        setFinishes(DEFAULT_FINISHES);
       }
     } catch (err: any) {
-      console.warn('Fallback to default finishes:', err.message);
-      const local = localStorage.getItem('zac_surface_finishes');
-      setFinishes(local ? JSON.parse(local) : DEFAULT_FINISHES);
+      console.error('Error fetching finishes:', err);
+      toast.error('Failed to load Brands');
     } finally {
       setLoading(false);
     }
@@ -70,7 +53,7 @@ const SurfaceFinish = () => {
     const cleanName = finishName.trim();
 
     if (!cleanName) {
-      toast.error('Bin name cannot be empty');
+      toast.error('Brand name cannot be empty');
       return;
     }
 
@@ -81,7 +64,7 @@ const SurfaceFinish = () => {
         (f) => f.name.toLowerCase() === cleanName.toLowerCase() && f.id !== editingId
       );
       if (isDuplicate) {
-        toast.error('This Bin is already registered');
+        toast.error('This Brand is already registered');
         setSubmitting(false);
         return;
       }
@@ -89,23 +72,23 @@ const SurfaceFinish = () => {
       // Try database upsert first
       try {
         if (editingId) {
-          const oldBin = finishes.find(f => f.id === editingId);
-          const oldBinName = oldBin?.name;
+          const oldBrand = finishes.find(f => f.id === editingId);
+          const oldBrandName = oldBrand?.name;
 
           await supabase
             .from('inventory_surface_finishes')
             .update({ name: cleanName })
             .eq('id', editingId);
 
-          if (oldBinName && oldBinName !== cleanName) {
+          if (oldBrandName && oldBrandName !== cleanName) {
             const { error: cascadeError } = await supabase
               .from('products')
-              .update({ bin: cleanName })
-              .eq('bin', oldBinName);
-            
+              .update({ Brand: cleanName })
+              .eq('Brand', oldBrandName);
+
             if (cascadeError) {
-              console.error('Failed to cascade bin name update to products:', cascadeError);
-              toast.error('Bin updated, but failed to link existing products.');
+              console.error('Failed to cascade Brand name update to products:', cascadeError);
+              toast.error('Brand updated, but failed to link existing products.');
             }
           }
         } else {
@@ -117,24 +100,9 @@ const SurfaceFinish = () => {
         console.warn('Database save note:', dbErr);
       }
 
-      // Update local state and storage
-      let updated: any[] = [];
-      if (editingId) {
-        updated = finishes.map((f) =>
-          f.id === editingId ? { ...f, name: cleanName } : f
-        );
-        toast.success('Bin updated successfully!');
-      } else {
-        const newEntry = {
-          id: String(Date.now()),
-          name: cleanName,
-        };
-        updated = [newEntry, ...finishes];
-        toast.success('New Bin added successfully!');
-      }
-
-      setFinishes(updated);
-      localStorage.setItem('zac_surface_finishes', JSON.stringify(updated));
+      // Update local state directly to match Supabase response instead of manual ID generation
+      fetchFinishes();
+      
       setFinishName('');
       setEditingId(null);
     } catch (err: any) {
@@ -156,17 +124,16 @@ const SurfaceFinish = () => {
   };
 
   const handleDeleteFinish = async (id: number | string) => {
-    if (!window.confirm('Are you sure you want to delete this Bin?')) return;
+    if (!window.confirm('Are you sure you want to delete this Brand?')) return;
     try {
-      try {
-        await supabase.from('inventory_surface_finishes').delete().eq('id', id);
-      } catch (e) {
-        console.warn(e);
+      const { error } = await supabase.from('inventory_surface_finishes').delete().eq('id', id);
+      if (error) {
+        toast.error('Deletion failed: ' + error.message);
+        return;
       }
-      const updated = finishes.filter((f) => f.id !== id);
-      setFinishes(updated);
-      localStorage.setItem('zac_surface_finishes', JSON.stringify(updated));
-      toast.success('Bin deleted');
+      
+      toast.success('Brand deleted');
+      fetchFinishes(); // Refresh the list
     } catch (err: any) {
       toast.error('Deletion failed: ' + err.message);
     }
@@ -186,11 +153,11 @@ const SurfaceFinish = () => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-slate-800 dark:text-slate-100 font-sans">
-      
+
       {/* SCREEN ROUTE TITLE HEADER */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
-          Bines
+          Brands
         </h2>
       </div>
 
@@ -199,7 +166,7 @@ const SurfaceFinish = () => {
         <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
             <MdTexture className="text-teal-600 text-lg" />
-            <span>{editingId ? 'Edit Tile Bin' : 'Register New Tile Bin'}</span>
+            <span>{editingId ? 'Edit Tile Brand' : 'Register New Tile Brand'}</span>
           </div>
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
             {finishes.length} Finishes Registered
@@ -209,7 +176,7 @@ const SurfaceFinish = () => {
         <form onSubmit={handleFormSubmit} className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="flex-1 w-full">
             <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1.5">
-              Bin Name *
+              Brand Name *
             </label>
             <input
               type="text"
@@ -228,7 +195,7 @@ const SurfaceFinish = () => {
               className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 px-6 text-xs font-bold text-white transition shadow-sm cursor-pointer disabled:opacity-50"
             >
               {submitting ? <Spinner /> : editingId ? <MdCheckCircle /> : <MdAdd />}
-              <span>{editingId ? 'Update Finish' : 'Add Bin'}</span>
+              <span>{editingId ? 'Update Finish' : 'Add Brand'}</span>
             </button>
             {editingId && (
               <button
@@ -268,7 +235,7 @@ const SurfaceFinish = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search Bines..."
+              placeholder="Search Brandes..."
               className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20 text-xs text-slate-800 dark:text-white transition"
             />
           </div>
@@ -279,7 +246,7 @@ const SurfaceFinish = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 w-16 text-center">S#</th>
-                <th className="py-3.5 px-4">Bin Name</th>
+                <th className="py-3.5 px-4">Brand Name</th>
                 <th className="py-3.5 px-4 w-28 text-center">Actions</th>
               </tr>
             </thead>
@@ -293,7 +260,7 @@ const SurfaceFinish = () => {
               ) : paginatedFinishes.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="text-center py-12 text-xs text-slate-400 italic">
-                    No Bines found.
+                    No Brandes found.
                   </td>
                 </tr>
               ) : (

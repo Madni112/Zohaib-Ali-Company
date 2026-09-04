@@ -12,6 +12,7 @@ import {
   MdCheckCircle,
   MdSquareFoot,
 } from 'react-icons/md';
+import SearchableDropdown from '../../../components/SearchableDropdown';
 
 interface UomItem {
   id: number;
@@ -34,13 +35,15 @@ const AddTileProduct: React.FC = () => {
 
   // Master lists
   const [categories, setCategories] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
+
   const [groupedUoms, setGroupedUoms] = useState<{ [key: string]: UomItem[] }>({});
 
   // Standard Product Form State
   const [productName, setProductName] = useState(editData?.product_name || '');
   const [category, setCategory] = useState(editData?.category || '');
-  const [brand, setBrand] = useState(editData?.brand || '');
+  const [subCategory, setSubCategory] = useState(editData?.sub_category || '');
+  const [subSubCategory, setSubSubCategory] = useState(editData?.sub_sub_category || '');
+
   const [uom, setUom] = useState(editData?.uom || 'BOX');
   const [itemSrNo, setItemSrNo] = useState(editData?.item_sr_no || '');
   const [sroScheduleNo, setSroScheduleNo] = useState(editData?.sro_schedule_no || '');
@@ -75,12 +78,7 @@ const AddTileProduct: React.FC = () => {
 
         const { data: catData } = await supabase
           .from('inventory_categories')
-          .select('id, name')
-          .order('name', { ascending: true });
-
-        const { data: brandData } = await supabase
-          .from('inventory_brands')
-          .select('id, name')
+          .select('id, name, parent_id')
           .order('name', { ascending: true });
 
         const { data: uomData } = await supabase
@@ -93,12 +91,12 @@ const AddTileProduct: React.FC = () => {
 
         if (catData) {
           setCategories(catData);
-          if (!category) {
-            const tileCat = catData.find((c: any) => c.name.toLowerCase().includes('tile'));
-            if (tileCat) setCategory(tileCat.name);
+          if (!subSubCategory) {
+            const tileCat = catData.find((c: any) => c.name.toLowerCase().includes('tile') && c.parent_id === null);
+            if (tileCat) setSubSubCategory(tileCat.name);
           }
         }
-        if (brandData) setBrands(brandData);
+
 
         if (uomData) {
           const groups = uomData.reduce((acc: { [key: string]: UomItem[] }, curr: UomItem) => {
@@ -141,10 +139,8 @@ const AddTileProduct: React.FC = () => {
   // Auto-generate Description if empty
   useEffect(() => {
     if (!isEditMode && (!productName || productName.startsWith('Tile '))) {
-      const brandPrefix = brand ? `${brand} ` : '';
-      setProductName(`${brandPrefix}Tile ${tileSizeFormatted} (${finishType})`);
-    }
-  }, [brand, tileSizeFormatted, finishType, isEditMode]);
+      setProductName(`Tile ${tileSizeFormatted} (${finishType})`);
+  }, [tileSizeFormatted, finishType, isEditMode]);
 
   // Rates breakdown calculations
   const numSale = Number(salePrice) || 0;
@@ -186,8 +182,10 @@ const AddTileProduct: React.FC = () => {
 
       const databasePayload: any = {
         product_name: productName.trim(),
-        category: category || 'Tiles',
-        brand: brand || 'Standard',
+        category: category,
+        sub_category: subCategory,
+        sub_sub_category: subSubCategory,
+
         uom: uom || 'BOX',
         product_description: tileDetailsSummary,
         profit: Number(profitPerBox.toFixed(2)),
@@ -382,10 +380,10 @@ const AddTileProduct: React.FC = () => {
               />
             </div>
 
-            {/* Bin */}
+            {/* Brand */}
             <div>
               <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
-                Bin
+                Brand
               </label>
               <select
                 value={finishType}
@@ -458,58 +456,68 @@ const AddTileProduct: React.FC = () => {
               />
             </div>
 
-            {/* Category */}
+            {/* 1. Parent Category (Top Level) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
+                Parent Category
+              </label>
+              <SearchableDropdown
+                value={subSubCategory}
+                onChange={val => {
+                  setSubSubCategory(val);
+                  setSubCategory('');
+                  setCategory('');
+                }}
+                options={categories.filter(c => c.parent_id === null).map(c => c.name)}
+                placeholder="Parent Category"
+                allowAll={false}
+              />
+            </div>
+
+            {/* 1.1 Sub Category (Middle Level) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
+                Sub Category
+              </label>
+              <SearchableDropdown
+                value={subCategory}
+                onChange={val => {
+                  setSubCategory(val);
+                  setCategory('');
+                }}
+                options={(() => {
+                  const parent = categories.find(c => c.name === subSubCategory && c.parent_id === null);
+                  if (!parent) return [];
+                  return categories.filter(c => c.parent_id === parent.id).map(c => c.name);
+                })()}
+                placeholder="Sub Category"
+                allowAll={false}
+                disabled={!subSubCategory}
+              />
+            </div>
+
+            {/* 1.2 Category (Bottom Level) */}
             <div>
               <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
                 Category *
               </label>
-              <select
+              <SearchableDropdown
                 value={category}
-                onChange={e => setCategory(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50/50 dark:bg-slate-800/80 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
-              >
-                <option value="">Select Category</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-                {!categories.some(c => c.name.toLowerCase() === 'tiles') && (
-                  <option value="Tiles">Tiles</option>
-                )}
-              </select>
+                onChange={val => setCategory(val)}
+                options={(() => {
+                  const parent = categories.find(c => c.name === subSubCategory && c.parent_id === null);
+                  if (!parent) return [];
+                  const sub = categories.find(c => c.name === subCategory && c.parent_id === parent.id);
+                  if (!sub) return [];
+                  return categories.filter(c => c.parent_id === sub.id).map(c => c.name);
+                })()}
+                placeholder="Category"
+                allowAll={false}
+                disabled={!subCategory}
+              />
             </div>
 
-            {/* Brand */}
-            <div>
-              <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
-                Brand / Manufacturer *
-              </label>
-              <select
-                value={brand}
-                onChange={e => setBrand(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-slate-50/50 dark:bg-slate-800/80 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
-              >
-                <option value="">Select Brand</option>
-                {brands.map(b => (
-                  <option key={b.id} value={b.name}>
-                    {b.name}
-                  </option>
-                ))}
-                {!brands.some(b => b.name === 'Master Tiles') && (
-                  <option value="Master Tiles">Master Tiles</option>
-                )}
-                {!brands.some(b => b.name === 'Karam Ceramics') && (
-                  <option value="Karam Ceramics">Karam Ceramics</option>
-                )}
-                {!brands.some(b => b.name === 'Sonex') && (
-                  <option value="Sonex">Sonex</option>
-                )}
-                {!brands.some(b => b.name === 'Imported Porcelain') && (
-                  <option value="Imported Porcelain">Imported Porcelain</option>
-                )}
-              </select>
-            </div>
+
 
             {/* Base UOM */}
             <div>

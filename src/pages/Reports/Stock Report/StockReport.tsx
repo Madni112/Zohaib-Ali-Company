@@ -17,14 +17,15 @@ const StockReport = () => {
 
   const [categories, setCategories] = useState<any[]>([]);
   const [uoms, setUoms] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
+  const [bins, setBins] = useState<any[]>([]);
+
   const [products, setProducts] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
 
-  const [criteria, setCriteria] = useState(() => ({
+  const [criteria, setCriteria] = useState(() => location.state?.criteria || ({
     uom: location.state?.uom || location.state?.criteria?.uom || 'All',
-    brand: location.state?.brand || location.state?.criteria?.brand || 'All',
+    bin: location.state?.bin || location.state?.criteria?.bin || 'All',
     product: location.state?.product || location.state?.criteria?.product || 'All',
     location: location.state?.location || location.state?.criteria?.location || 'All',
     employee: 'All', category: 'All', stockValueTier: 'All',
@@ -38,23 +39,27 @@ const StockReport = () => {
   }));
 
   useEffect(() => {
+    navigate('.', { replace: true, state: { ...location.state, activeTab, criteria } });
+  }, [activeTab, criteria, navigate]);
+
+  useEffect(() => {
     const fetchStockCriteriaLookups = async () => {
       try {
         setLoading(true);
-        const [catRes, brndRes, prodRes, locRes, empRes, uomRes] = await Promise.all([
+        const [catRes, prodRes, locRes, empRes, uomRes, binRes] = await Promise.all([
           supabase.from('inventory_categories').select('id, name'),
-          supabase.from('inventory_brands').select('id, name'),
-          supabase.from('products').select('id, product_name, category, brand, uom'),
+          supabase.from('products').select('id, product_name, category, bin, uom'),
           supabase.from('inventory_locations').select('id, name'),
           supabase.from('salesmen').select('id, name'),
-          supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true)
+          supabase.from('inventory_uom').select('id, short_code, full_name').eq('tenant_id', tenantId || 'bashir').eq('is_active', true),
+          supabase.from('inventory_surface_finishes').select('id, name')
         ]);
 
         if (catRes.data) setCategories(catRes.data);
-        if (brndRes.data) setBrands(brndRes.data);
         if (prodRes.data) setProducts(prodRes.data);
         if (locRes.data) setLocations(locRes.data);
         if (empRes.data) setEmployees(empRes.data);
+        if (binRes.data) setBins(binRes.data);
 
         if (uomRes.data) {
           const normalizedUoms = uomRes.data.map((u: any) => ({
@@ -75,25 +80,55 @@ const StockReport = () => {
   const handleInputChange = (field: string, value: any) => {
     setCriteria(prev => {
       const updated = { ...prev, [field]: value };
-      if (field === 'brand') updated.product = 'All';
+      if (field === 'bin') updated.product = 'All';
       return updated;
     });
   };
 
   const getContextualProductSelectionPool = () => {
-    const selectedBrandClean = String(criteria.brand || '').trim().toLowerCase();
-    if (!selectedBrandClean || selectedBrandClean === 'all') return products;
-    return products.filter(p => String(p.brand || '').trim().toLowerCase() === selectedBrandClean);
+    const selectedBin = String(criteria.bin || '').trim().toLowerCase();
+    if (!selectedBin || selectedBin === 'all') return products;
+    return products.filter(p => String(p.bin || '').trim().toLowerCase() === selectedBin);
   };
 
   const uomOptions = useMemo(() => uoms.map(u => u.name).filter(Boolean), [uoms]);
-  const brandOptions = useMemo(() => brands.map(b => b.name).filter(Boolean), [brands]);
-  const productOptions = useMemo(() => getContextualProductSelectionPool().map(p => p.product_name).filter(Boolean), [products, criteria.brand]);
+  const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
+  const productOptions = useMemo(() => getContextualProductSelectionPool().map(p => p.product_name).filter(Boolean), [products, criteria.bin]);
   const locationOptions = useMemo(() => locations.map(l => l.name).filter(Boolean), [locations]);
   const categoryOptions = useMemo(() => categories.map(c => c.name).filter(Boolean), [categories]);
   const employeeOptions = useMemo(() => employees.map(e => e.name).filter(Boolean), [employees]);
 
+  const handleTabChange = (tab: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) => {
+    setActiveTab(tab);
+    setCriteria(prev => ({
+      uom: 'All',
+      bin: 'All',
+      product: 'All',
+      location: 'All',
+      employee: 'All', category: 'All', stockValueTier: 'All',
+      dateFrom: prev.dateFrom,
+      dateTo: prev.dateTo,
+      asOfDate: prev.asOfDate,
+      showSalePrice: true,
+      showPurchasePrice: true,
+      showFinalPrice: true,
+      showSpecifications: true
+    }));
+  };
+
   const handleDispatchReportView = () => {
+    if (activeTab === 1 || activeTab === 2 || activeTab === 3) {
+      if (criteria.dateFrom && criteria.dateTo) {
+        const start = new Date(criteria.dateFrom);
+        const end = new Date(criteria.dateTo);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 93) {
+          toast.error("Please select a date range of 3 months or less for detailed reports.");
+          return;
+        }
+      }
+    }
     navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report/Print`, {
       state: { tab: activeTab, filters: criteria }
     });
@@ -109,14 +144,14 @@ const StockReport = () => {
       </div>
 
       <div className="flex flex-wrap border-b border-stroke dark:border-strokedark gap-1 bg-white dark:bg-boxdark font-black tracking-wider text-[10px] uppercase text-gray-500">
-        <button type="button" onClick={() => setActiveTab(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Activity</button>
-        <button type="button" onClick={() => setActiveTab(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Balance</button>
-        <button type="button" onClick={() => setActiveTab(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Status</button>
-        <button type="button" onClick={() => setActiveTab(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Transfer</button>
-        <button type="button" onClick={() => setActiveTab(5)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Detail With Price</button>
-        <button type="button" onClick={() => setActiveTab(6)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Product Report</button>
-        <button type="button" onClick={() => setActiveTab(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Status Detail</button>
-        <button type="button" onClick={() => setActiveTab(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Location Stock</button>
+        <button type="button" onClick={() => handleTabChange(1)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 1 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Activity</button>
+        <button type="button" onClick={() => handleTabChange(2)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 2 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Balance</button>
+        <button type="button" onClick={() => handleTabChange(3)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 3 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Status</button>
+        <button type="button" onClick={() => handleTabChange(4)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 4 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Stock Transfer</button>
+        <button type="button" onClick={() => handleTabChange(5)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 5 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Detail With Price</button>
+        <button type="button" onClick={() => handleTabChange(6)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 6 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Product Report</button>
+        <button type="button" onClick={() => handleTabChange(7)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 7 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Status Detail</button>
+        <button type="button" onClick={() => handleTabChange(8)} className={`py-2.5 px-4 transition border-b-2 cursor-pointer ${activeTab === 8 ? 'border-primary text-primary font-black bg-primary/5' : 'border-transparent text-gray-400 hover:text-black'}`}>Location Stock</button>
       </div>
 
       <div className="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark p-6">
@@ -126,7 +161,7 @@ const StockReport = () => {
           {(activeTab === 1 || activeTab === 2 || activeTab === 5 || activeTab === 6) && (
             <>
               <SearchableDropdown label="Product Group (UOM):" placeholder="UOM Group" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-              <SearchableDropdown label="Brand Name:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
               <SearchableDropdown label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               
               {activeTab === 5 && (
@@ -181,7 +216,7 @@ const StockReport = () => {
           {activeTab === 7 && (
             <>
               <SearchableDropdown label="Product Group (UOM):" placeholder="UOM Group" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-              <SearchableDropdown label="Brand Name:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
               <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
               
               <div>
@@ -199,7 +234,7 @@ const StockReport = () => {
           {activeTab === 8 && (
             <>
               <SearchableDropdown label="Target Warehouse Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
-              <SearchableDropdown label="Brand Name:" placeholder="Brand" options={brandOptions} value={criteria.brand} onChange={(val) => handleInputChange('brand', val)} />
+              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
               <SearchableDropdown label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               <div><label className="block font-bold text-gray-500 mb-1">As Of Date Cutoff:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.asOfDate} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('asOfDate', today); else handleInputChange('asOfDate', e.target.value); }} className="w-full border rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none" /></div>
             </>
@@ -207,8 +242,8 @@ const StockReport = () => {
 
           {activeTab === 1 && (
             <>
-              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket From:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateFrom', today); else handleInputChange('dateFrom', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
-              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket To:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateTo', today); else handleInputChange('dateTo', e.target.value); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
+              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket From:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; let newDateFrom = e.target.value; if (newDateFrom > today) newDateFrom = today; handleInputChange('dateFrom', newDateFrom); if (activeTab === 1 || activeTab === 2 || activeTab === 3) { const dFrom = new Date(newDateFrom); const dTo = new Date(criteria.dateTo); const diffDays = Math.ceil(Math.abs(dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24)); if (dTo < dFrom || diffDays > 90) { const maxAllowed = new Date(dFrom.setDate(dFrom.getDate() + 90)).toISOString().split('T')[0]; handleInputChange('dateTo', maxAllowed < today ? maxAllowed : today); } } }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
+              <div><label className="block font-bold text-gray-500 mb-1">Date Bracket To:</label><input type="date" min={criteria.dateFrom} max={criteria.dateFrom && (activeTab === 1 || activeTab === 2 || activeTab === 3) ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], new Date().toISOString().split('T')[0]].sort()[0] : new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; const maxAllowed = criteria.dateFrom && (activeTab === 1 || activeTab === 2 || activeTab === 3) ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], today].sort()[0] : today; let newDateTo = e.target.value; if (newDateTo > maxAllowed) newDateTo = maxAllowed; if (newDateTo < criteria.dateFrom) newDateTo = criteria.dateFrom; handleInputChange('dateTo', newDateTo); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
               <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Quick Dates:</span>
                 <button type="button" onClick={() => { const t = new Date().toISOString().split('T')[0]; handleInputChange('dateFrom', t); handleInputChange('dateTo', t); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Today</button>

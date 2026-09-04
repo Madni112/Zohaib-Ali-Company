@@ -68,18 +68,25 @@ const StockReportPrint = () => {
 
                 // 1. Fetch base product list mapping
                 let prodQuery = supabase.from('products').select('*');
-                if (filters.brand && filters.brand !== 'All') prodQuery = prodQuery.eq('brand', filters.brand);
+
+                if (filters.bin && filters.bin !== 'All') prodQuery = prodQuery.eq('bin', filters.bin);
                 if (filters.category && filters.category !== 'All') prodQuery = prodQuery.eq('category', filters.category);
 
                 const { data: baseProducts, error: prodError } = await prodQuery;
                 if (prodError) throw prodError;
 
-                // 2. Fetch live data streams from all transaction tables
-                const { data: openStocks } = await supabase.from('opening_stocks').select('*');
-                const { data: purchases } = await supabase.from('supplier_purchases').select('*');
-                const { data: sales } = await supabase.from('sales_invoices').select('*');
-                const { data: pReturns } = await supabase.from('purchase_returns').select('*');
-                const { data: sReturns } = await supabase.from('sales_returns').select('*');
+                // 2. We only fetch raw tables for Tab 8 now. Tabs 1-3 use the RPC.
+                let openStocks: any = [], purchases: any = [], sales: any = [], pReturns: any = [], sReturns: any = [];
+                if (activeTab === 8) {
+                    const [os, p, s, pr, sr] = await Promise.all([
+                        supabase.from('opening_stocks').select('*'),
+                        supabase.from('supplier_purchases').select('*'),
+                        supabase.from('sales_invoices').select('*'),
+                        supabase.from('purchase_returns').select('*'),
+                        supabase.from('sales_returns').select('*')
+                    ]);
+                    openStocks = os.data; purchases = p.data; sales = s.data; pReturns = pr.data; sReturns = sr.data;
+                }
 
                 const asOfDateClean = (activeTab === 3 && filters.asOfDate) ? String(filters.asOfDate).trim() : '';
                 const dateFromClean = filters.dateFrom ? String(filters.dateFrom).trim() : '';
@@ -97,127 +104,37 @@ const StockReportPrint = () => {
                     return '';
                 };
 
+                // Fetch aggregated stock data via RPC
+                const { data: stockData, error: stockError } = await supabase.rpc('calculate_dynamic_stock', {
+                    p_location: String(filters.location || 'All'),
+                    p_start_date: dateFromClean || null,
+                    p_end_date: dateToClean || null
+                });
+                
+                if (stockError) {
+                    console.error("RPC Error:", stockError);
+                    toast.error(stockError.message || "Failed to compile stock data.");
+                }
+
+                // Map results back to products
+                const stockMap = new Map();
+                (stockData || []).forEach((row: any) => {
+                    stockMap.set(String(row.product_name).toLowerCase(), row);
+                });
+
                 const calculatedAggregatedRows = (baseProducts || []).map(product => {
                     const name = String(product.product_name || '').trim().toLowerCase();
-                    const targetLocation = String(filters.location || 'All').trim().toLowerCase();
-
-                    // A. Calculate Base Opening Stock from initial opening_stocks table
-                    const baseOpening = (openStocks || [])
-                        .filter((os: any) => {
-                            const osName = String(os.product_name || os.item_name || os.itemName || '').trim().toLowerCase();
-                            const osLoc = String(os.location || os.target_warehouse || '').trim().toLowerCase();
-                            const matchName = (osName === name || osName.includes(name));
-                            const matchLoc = (targetLocation === 'all' || osLoc === targetLocation);
-                            return matchName && matchLoc;
-                        })
-                        .reduce((sum: number, os: any) => sum + (Number(os.quantity || os.qty || 0)), 0);
-
-                    let priorIn = 0;
-                    let priorOut = 0;
-                    let periodIn = 0;
-                    let periodOut = 0;
-
-                    // B. Purchases
-                    (purchases || []).forEach((p: any) => {
-                        const pLoc = String(p.target_warehouse || p.location || '').trim().toLowerCase();
-                        const matchLoc = (targetLocation === 'all' || pLoc === targetLocation);
-
-                        if (matchLoc && String(p.status).toLowerCase() !== 'cancel' && String(p.status).toLowerCase() !== 'deleted') {
-                            const pDate = parseDateStr(p, ['purchase_date', 'created_at', 'date']);
-                            const itemsArray = Array.isArray(p.items) ? p.items : JSON.parse(p.items || '[]');
-
-                            itemsArray.forEach((item: any) => {
-                                const pName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
-                                if (pName === name || pName.includes(name)) {
-                                    const qty = Number(item.qty || item.quantity || 0);
-                                    if (dateFromClean && pDate < dateFromClean) {
-                                        priorIn += qty;
-                                    } else if ((!dateFromClean || pDate >= dateFromClean) && (!dateToClean || pDate <= dateToClean)) {
-                                        periodIn += qty;
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    // C. Sales Returns (Stock In)
-                    (sReturns || []).forEach((sr: any) => {
-                        const srLoc = String(sr.dispatch_warehouse || sr.location || '').trim().toLowerCase();
-                        const matchLoc = (targetLocation === 'all' || srLoc === targetLocation);
-
-                        if (matchLoc && String(sr.status).toLowerCase() !== 'cancel') {
-                            const srDate = parseDateStr(sr, ['return_date', 'created_at', 'date']);
-                            const itemsArray = Array.isArray(sr.items) ? sr.items : JSON.parse(sr.items || '[]');
-
-                            itemsArray.forEach((item: any) => {
-                                const srName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
-                                if (srName === name || srName.includes(name)) {
-                                    const qty = Number(item.qty || item.quantity || 0);
-                                    if (dateFromClean && srDate < dateFromClean) {
-                                        priorIn += qty;
-                                    } else if ((!dateFromClean || srDate >= dateFromClean) && (!dateToClean || srDate <= dateToClean)) {
-                                        periodIn += qty;
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    // D. Sales Invoices (Stock Out)
-                    (sales || []).forEach((s: any) => {
-                        const sLoc = String(s.dispatch_warehouse || s.location || '').trim().toLowerCase();
-                        const matchLoc = (targetLocation === 'all' || sLoc === targetLocation);
-                        const statusClean = String(s.sale_status || '').trim().toLowerCase();
-                        if (matchLoc && statusClean !== 'cancel' && statusClean !== 'deleted') {
-                            const sDate = parseDateStr(s, ['sale_date', 'created_at', 'date']);
-                            const itemsArray = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]');
-
-                            itemsArray.forEach((item: any) => {
-                                const sName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
-                                if (sName === name || sName.includes(name)) {
-                                    const qty = Number(item.qty || item.quantity || 0);
-                                    if (dateFromClean && sDate < dateFromClean) {
-                                        priorOut += qty;
-                                    } else if ((!dateFromClean || sDate >= dateFromClean) && (!dateToClean || sDate <= dateToClean)) {
-                                        periodOut += qty;
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    // E. Purchase Returns (Stock Out)
-                    (pReturns || []).forEach((pr: any) => {
-                        const prLoc = String(pr.source_warehouse || pr.location || '').trim().toLowerCase();
-                        const matchLoc = (targetLocation === 'all' || prLoc === targetLocation);
-
-                        if (matchLoc && String(pr.status).toLowerCase() !== 'cancel') {
-                            const prDate = parseDateStr(pr, ['return_date', 'created_at', 'date']);
-                            const itemsArray = Array.isArray(pr.items) ? pr.items : JSON.parse(pr.items || '[]');
-
-                            itemsArray.forEach((item: any) => {
-                                const prName = String(item.product_name || item.itemName || item.item_name || '').trim().toLowerCase();
-                                if (prName === name || prName.includes(name)) {
-                                    const qty = Number(item.qty || item.quantity || 0);
-                                    if (dateFromClean && prDate < dateFromClean) {
-                                        priorOut += qty;
-                                    } else if ((!dateFromClean || prDate >= dateFromClean) && (!dateToClean || prDate <= dateToClean)) {
-                                        periodOut += qty;
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    const computedOpening = baseOpening + priorIn - priorOut;
-                    const netActivity = periodIn - periodOut;
+                    const stock = stockMap.get(name) || { opening_stock: 0, prior_in: 0, prior_out: 0, period_in: 0, period_out: 0 };
+                    
+                    const computedOpening = Number(stock.opening_stock) + Number(stock.prior_in) - Number(stock.prior_out);
+                    const netActivity = Number(stock.period_in) - Number(stock.period_out);
                     const trueRemainingStock = computedOpening + netActivity;
 
                     return {
                         ...product,
                         computed_opening: computedOpening,
-                        period_stock_in: periodIn,
-                        period_stock_out: periodOut,
+                        period_stock_in: Number(stock.period_in),
+                        period_stock_out: Number(stock.period_out),
                         net_activity: netActivity,
                         computed_true_stock: trueRemainingStock,
                         calculated_valuation: trueRemainingStock * Number(product.retail_price || product.sale_price || 0)
@@ -409,7 +326,7 @@ const StockReportPrint = () => {
             const tabTitle = tabTitles[activeTab] || 'Stock Report';
             const filterMeta = {
                 'Report Tab': tabTitle,
-                'Brand': filters.brand || 'All',
+                'Bin': filters.bin || 'All',
                 'Category': filters.category || 'All',
                 'Product': filters.product || 'All',
                 'Location': filters.location || 'All',
@@ -423,8 +340,8 @@ const StockReportPrint = () => {
                 columns = [
                     { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
                     { header: 'Product Item Name', key: 'product_name', width: 28 },
-                    { header: 'Brand', key: 'brand', width: 16 },
-                    { header: 'Category', key: 'category', width: 16 },
+
+                    { header: 'Bin / Category', key: 'category', width: 16 },
                     { header: 'Opening Stock', key: 'computed_opening', width: 16, type: 'number' },
                     { header: 'Stock In', key: 'period_stock_in', width: 14, type: 'number' },
                     { header: 'Stock Out', key: 'period_stock_out', width: 14, type: 'number' },
@@ -456,8 +373,8 @@ const StockReportPrint = () => {
                 columns = [
                     { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
                     { header: 'Product Item Name', key: 'product_name', width: 28 },
-                    { header: 'Brand', key: 'brand', width: 16 },
-                    { header: 'Category', key: 'category', width: 16 },
+
+                    { header: 'Bin / Category', key: 'category', width: 16 },
                     { header: 'UOM', key: 'uom', width: 12 },
                     { header: 'Current Stock', key: 'current_stock', width: 16, type: 'number' },
                     { header: 'Unit Rate (Rs.)', key: 'price', width: 16, type: 'currency' },
@@ -469,8 +386,7 @@ const StockReportPrint = () => {
                     return {
                         idx: i + 1,
                         product_name: r.product_name,
-                        brand: r.brand || '-',
-                        category: r.category || '-',
+                        category: `${r.bin || 'N/A'} / ${r.category || '-'}`,
                         uom: r.uom || 'Pcs',
                         current_stock: stk,
                         price: prc,
@@ -566,7 +482,7 @@ const StockReportPrint = () => {
                                     <th className="p-2 border border-slate-300 text-center w-10">Index</th>
                                     <th className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
                                     <th className="p-2 border border-slate-300">Group (UOM)</th>
-                                    <th className="p-2 border border-slate-300">Brand / Category</th>
+                                    <th className="p-2 border border-slate-300">Category</th>
                                     <th className="p-2 border border-slate-300 text-right pr-2">Opening Stock</th>
                                     <th className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">Stock In</th>
                                     <th className="p-2 border border-slate-300 text-right pr-2 text-rose-700">Stock Out</th>
@@ -580,7 +496,7 @@ const StockReportPrint = () => {
                                         <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
                                         <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                         <td className="p-2 border border-slate-300 uppercase">{row.uom || 'PC'}</td>
-                                        <td className="p-2 border border-slate-300 font-sans"><span className="text-teal-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
+                                        <td className="p-2 border border-slate-300 font-sans"><span className="text-gray-500">{row.category || 'General'}</span></td>
                                         <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-gray-700">{Number(row.computed_opening || 0).toLocaleString()}</td>
                                         <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-emerald-700 font-bold">+{Number(row.period_stock_in || 0).toLocaleString()}</td>
                                         <td className="p-2 border border-slate-300 text-right pr-2 font-mono text-rose-700 font-bold">-{Number(row.period_stock_out || 0).toLocaleString()}</td>
@@ -612,7 +528,7 @@ const StockReportPrint = () => {
                                     <th className="p-2 border border-slate-300 text-center w-12">Index</th>
                                     <th className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
                                     <th className="p-2 border border-slate-300">Group (UOM)</th>
-                                    <th className="p-2 border border-slate-300">Brand Link</th>
+
                                     <th className="p-2 border border-slate-300">Category</th>
                                     <th className="p-2 border border-slate-300 text-right pr-3">Dynamic Remaining Quantity</th>
                                 </tr>
@@ -623,8 +539,7 @@ const StockReportPrint = () => {
                                         <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
                                         <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                         <td className="p-2 border border-slate-300 uppercase">{row.uom || 'PC'}</td>
-                                        <td className="p-2 border border-slate-300 text-purple-700 font-sans">{row.brand || 'Generic'}</td>
-                                        <td className="p-2 border border-slate-300 font-sans text-gray-500">{row.category || 'General'}</td>
+                                        <td className="p-2 border border-slate-300 font-sans"><span className="text-purple-700 font-bold">{row.bin || 'N/A'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
                                         <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black">{Number(row.computed_true_stock || 0).toLocaleString()}</td>
                                     </tr>
                                 ))}
@@ -646,7 +561,7 @@ const StockReportPrint = () => {
                                     <th className="p-2 border border-slate-300 text-center w-12">Index</th>
                                     <th className="p-2 border border-slate-300">Product Stock Asset Identifier</th>
                                     <th className="p-2 border border-slate-300">Warehouse Location</th>
-                                    <th className="p-2 border border-slate-300">Brand / Category</th>
+                                    <th className="p-2 border border-slate-300">Category</th>
                                     <th className="p-2 border border-slate-300 text-center">Stock Availability Status</th>
                                     <th className="p-2 border border-slate-300 text-right pr-3">Dynamic Remaining Quantity</th>
                                 </tr>
@@ -679,7 +594,7 @@ const StockReportPrint = () => {
                                             <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                             <td className="p-2 border border-slate-300 font-sans text-gray-700 font-bold">{loc}</td>
-                                            <td className="p-2 border border-slate-300 font-sans"><span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
+                                            <td className="p-2 border border-slate-300 font-sans"><span className="text-teal-700 font-bold">{row.bin || 'N/A'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
                                             <td className="p-2 border border-slate-300 text-center">{statusBadge}</td>
                                             <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black">{qty.toLocaleString()}</td>
                                         </tr>
@@ -796,7 +711,7 @@ const StockReportPrint = () => {
                                 <tr>
                                     <th className="p-2 border border-slate-300 text-center w-12">Index</th>
                                     <th className="p-2 border border-slate-300">Stock Asset Description</th>
-                                    <th className="p-2 border border-slate-300">Brand Link</th>
+
                                     <th className="p-2 border border-slate-300 text-center w-20">Units Count</th>
                                     <th className="p-2 border border-slate-300 text-right w-24">Unit Rate</th>
                                     <th className="p-2 border border-slate-300 text-right w-36 pr-4 bg-green-50/30 text-success">Aggregated StockValue</th>
@@ -811,7 +726,7 @@ const StockReportPrint = () => {
                                         <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
                                             <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                            <td className="p-2 border border-slate-300 uppercase text-purple-700">{row.brand || 'Generic'}</td>
+
                                             <td className="p-2 border border-slate-300 text-center text-primary font-black">{qty.toLocaleString()}</td>
                                             <td className="p-2 border border-slate-300 text-right">Rs. {rate.toLocaleString()}</td>
                                             <td className="p-2 border border-slate-300 text-right pr-4 text-success font-black bg-success/5">Rs. {row.calculated_valuation.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -838,7 +753,7 @@ const StockReportPrint = () => {
                                     <th className="p-2 border border-slate-300 text-center w-12">Index</th>
                                     <th className="p-2 border border-slate-300">Warehouse Location</th>
                                     <th className="p-2 border border-slate-300">Product Stock Asset Name</th>
-                                    <th className="p-2 border border-slate-300">Group (UOM) / Brand</th>
+                                    <th className="p-2 border border-slate-300">Group (UOM)</th>
                                     <th className="p-2 border border-slate-300 text-center w-28">Available Stock</th>
                                     <th className="p-2 border border-slate-300 text-right w-28">Unit Sale Rate</th>
                                     <th className="p-2 border border-slate-300 text-right w-36 pr-3 text-success">Location Asset Valuation</th>
@@ -876,7 +791,7 @@ const StockReportPrint = () => {
                                             <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-sans font-bold text-purple-800 uppercase bg-purple-50/40">{locName}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
-                                            <td className="p-2 border border-slate-300 font-sans"><span className="text-gray-700">{row.uom || 'PC'}</span> / <span className="text-purple-700 font-bold">{row.brand || 'Generic'}</span></td>
+                                            <td className="p-2 border border-slate-300 font-sans"><span className="text-gray-700">{row.uom || 'PC'}</span> / <span className="text-purple-700 font-bold">{row.bin || 'N/A'}</span></td>
                                             <td className="p-2 border border-slate-300 text-center text-primary font-black text-sm">{qty.toLocaleString()}</td>
                                             <td className="p-2 border border-slate-300 text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                             <td className="p-2 border border-slate-300 text-right text-success font-black pr-3 bg-success/5">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>

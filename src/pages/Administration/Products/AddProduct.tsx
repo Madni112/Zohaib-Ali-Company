@@ -6,7 +6,8 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
-import { MdSquareFoot, MdViewModule, MdAttachMoney, MdLayers } from 'react-icons/md';
+import { MdSquareFoot, MdViewModule, MdAttachMoney, MdLayers, MdClose, MdSave, MdFormatColorFill, MdAdd, MdDelete, MdInfo, MdLabelOutline } from 'react-icons/md';
+import SearchableDropdown from '../../../components/SearchableDropdown';
 
 interface UomItem {
   id: number;
@@ -23,15 +24,13 @@ const AddProduct = () => {
   
   // Master database lists
   const [categories, setCategories] = useState<any[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
+
   const [surfaceFinishes, setSurfaceFinishes] = useState<any[]>([]);
   const [groupedUoms, setGroupedUoms] = useState<{ [key: string]: UomItem[] }>({});
 
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
-  const [highlightedCategoryIndex, setHighlightedCategoryIndex] = useState(0);
 
-  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
-  const [highlightedBrandIndex, setHighlightedBrandIndex] = useState(0);
+
+
 
   const [isUomDropdownOpen, setIsUomDropdownOpen] = useState(false);
   const [highlightedUomIndex, setHighlightedUomIndex] = useState(0);
@@ -53,12 +52,9 @@ const AddProduct = () => {
         
         const { data: catData } = await supabase
           .from('inventory_categories')
-          .select('id, name, code')
+          .select('id, name, code, parent_id')
           .order('name', { ascending: true });
-        const { data: brandData } = await supabase
-          .from('inventory_brands')
-          .select('id, name')
-          .order('name', { ascending: true });
+
         
         try {
           const { data: finishData } = await supabase
@@ -85,7 +81,7 @@ const AddProduct = () => {
           .order('short_code', { ascending: true });
 
         if (catData) setCategories(catData);
-        if (brandData) setBrands(brandData);
+
         
         if (uomData) {
           const groups = uomData.reduce((acc: { [key: string]: UomItem[] }, curr: UomItem) => {
@@ -140,10 +136,12 @@ const AddProduct = () => {
         </div>
 
         <Formik
-          initialValues={editData ? {
+          initialValues={isEditMode ? {
             productName: editData.product_name || '',
             category: editData.category || '',
-            brand: editData.brand || '',
+            subCategory: editData.sub_category || '',
+            subSubCategory: editData.sub_sub_category || '',
+
             uom: editData.uom || 'PCS',
             profit: editData.profit || 0,
             purchasePrice: editData.purchase_price || 0,
@@ -171,7 +169,9 @@ const AddProduct = () => {
           } : {
             productName: '',
             category: '',
-            brand: '',
+            subCategory: '',
+            subSubCategory: '',
+
             uom: '',
             profit: 0,
             purchasePrice: '',
@@ -200,7 +200,7 @@ const AddProduct = () => {
           })}
           onSubmit={async (values) => {
             setLoading(true);
-            const isTileCategory = String(values.category || '').trim().toLowerCase().includes('tile');
+            const isTileCategory = String(values.subSubCategory || '').trim().toLowerCase().includes('tile');
             const computedProfit = (Number(values.retailPrice) || 0) - (Number(values.purchasePrice) || 0);
 
             let finalDescription = '';
@@ -225,7 +225,9 @@ const AddProduct = () => {
             const databasePayload = {
               product_name: values.productName.trim(),
               category: values.category,
-              brand: values.brand,
+              sub_category: values.subCategory,
+              sub_sub_category: values.subSubCategory,
+
               uom: finalUom || 'PCS',
               bin: values.finishType?.trim() || '',
               product_description: finalDescription,
@@ -292,7 +294,7 @@ const AddProduct = () => {
           }}
         >
           {({ handleChange, values, errors, touched, setFieldValue }) => {
-            const isTileCategory = String(values.category || '').trim().toLowerCase().includes('tile');
+            const isTileCategory = String(values.subSubCategory || '').trim().toLowerCase().includes('tile');
 
             // Tile Live Calculations
             const tileH = Number(values.tileHeight) || 0;
@@ -338,147 +340,157 @@ const AddProduct = () => {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {/* 1. Category Selector */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                    {/* 1. Parent Category (Top Level) */}
                     <div>
                       <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
-                        Product Category *
+                        Parent Category
+                      </label>
+                      <SearchableDropdown
+                        value={values.subSubCategory}
+                        onChange={(val) => {
+                          setFieldValue('subSubCategory', val);
+                          setFieldValue('subCategory', '');
+                          setFieldValue('category', '');
+                        }}
+                        options={categories.filter(c => c.parent_id === null).map(cat => cat.name)}
+                        placeholder="Parent Category"
+                        allowAll={false}
+                      />
+                    </div>
+
+                    {/* 1.1 Sub Category (Middle Level) */}
+                    <div>
+                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
+                        Sub Category
+                      </label>
+                      <SearchableDropdown
+                        value={values.subCategory}
+                        onChange={(val) => {
+                          setFieldValue('subCategory', val);
+                          setFieldValue('category', '');
+                        }}
+                        options={(() => {
+                          const parent = categories.find(c => c.name === values.subSubCategory && c.parent_id === null);
+                          if (!parent) return [];
+                          return categories.filter(c => c.parent_id === parent.id).map(cat => cat.name);
+                        })()}
+                        placeholder="Sub Category"
+                        allowAll={false}
+                        disabled={!values.subSubCategory}
+                      />
+                    </div>
+
+                    {/* 1.2 Category (Bottom Level) */}
+                    <div>
+                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
+                        Category <span className="text-rose-500">*</span>
+                      </label>
+                      <SearchableDropdown
+                        value={values.category}
+                        onChange={(val) => setFieldValue('category', val)}
+                        options={(() => {
+                          const parent = categories.find(c => c.name === values.subSubCategory && c.parent_id === null);
+                          if (!parent) return [];
+                          const sub = categories.find(c => c.name === values.subCategory && c.parent_id === parent.id);
+                          if (!sub) return [];
+                          return categories.filter(c => c.parent_id === sub.id).map(cat => cat.name);
+                        })()}
+                        placeholder="Category"
+                        allowAll={false}
+                        disabled={!values.subCategory}
+                        className={touched.category && errors.category ? 'border border-rose-500 rounded-lg' : ''}
+                      />
+                      {touched.category && errors.category && (
+                        <p className="text-[10px] text-rose-500 mt-1 font-semibold">{errors.category as string}</p>
+                      )}
+                    </div>
+
+                    {/* 4. Brand */}
+                    <div>
+                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
+                        Brand
                       </label>
                       <div className="relative">
                         <input
                           type="text"
-                          name="category"
+                          name="finishType"
                           autoComplete="off"
                           onChange={(e) => {
                             handleChange(e);
-                            setIsCategoryDropdownOpen(true);
-                            setHighlightedCategoryIndex(0);
+                            setIsBinDropdownOpen(true);
+                            setHighlightedBinIndex(0);
                           }}
                           onFocus={() => {
-                            setIsCategoryDropdownOpen(true);
-                            setHighlightedCategoryIndex(0);
+                            setIsBinDropdownOpen(true);
+                            setHighlightedBinIndex(0);
                           }}
                           onBlur={() => {
-                            // Delay hiding so clicks register
-                            setTimeout(() => setIsCategoryDropdownOpen(false), 200);
+                            setTimeout(() => setIsBinDropdownOpen(false), 200);
                           }}
                           onKeyDown={(e) => {
-                            const query = String(values.category || '').toLowerCase();
-                            const filteredCats = categories.filter(c => 
-                              c.name?.toLowerCase().includes(query) || 
-                              c.code?.toLowerCase().includes(query)
-                            );
+                            let availableBins = surfaceFinishes.map((f: any) => f.name);
+                            const filteredBins = availableBins.filter(b => b.toLowerCase().includes(String(values.finishType || '').toLowerCase()));
                             
                             if (e.key === 'ArrowDown') {
                               e.preventDefault();
-                              setHighlightedCategoryIndex((prev) => prev < filteredCats.length - 1 ? prev + 1 : 0);
+                              setHighlightedBinIndex((prev) => prev < filteredBins.length - 1 ? prev + 1 : 0);
                             } else if (e.key === 'ArrowUp') {
                               e.preventDefault();
-                              setHighlightedCategoryIndex((prev) => prev > 0 ? prev - 1 : filteredCats.length - 1);
+                              setHighlightedBinIndex((prev) => prev > 0 ? prev - 1 : filteredBins.length - 1);
                             } else if (e.key === 'Enter') {
                               e.preventDefault();
-                              if (filteredCats.length > 0) {
-                                setFieldValue('category', filteredCats[highlightedCategoryIndex]?.name || filteredCats[0]?.name);
-                                setIsCategoryDropdownOpen(false);
+                              if (filteredBins.length > 0) {
+                                setFieldValue('finishType', filteredBins[highlightedBinIndex] || filteredBins[0]);
+                                setIsBinDropdownOpen(false);
                               }
                             } else if (e.key === 'Tab' || e.key === 'Escape') {
-                              setIsCategoryDropdownOpen(false);
+                              setIsBinDropdownOpen(false);
                             }
                           }}
-                          value={values.category}
-                          className={`w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 dark:text-white ${
-                            touched.category && errors.category ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
-                          }`}
-                          placeholder="Search or enter category..."
+                          value={values.finishType}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
+                          placeholder="Search or enter brand..."
                         />
-                        {isCategoryDropdownOpen && (
+                        {isBinDropdownOpen && (
                           <div className="absolute left-0 top-full mt-1.5 z-[99999] w-full min-w-[200px] max-h-[250px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
                             {(() => {
-                              const query = String(values.category || '').toLowerCase();
-                              const filteredCats = categories.filter(c => 
-                                c.name?.toLowerCase().includes(query) || 
-                                c.code?.toLowerCase().includes(query)
-                              );
+                              let availableBins = surfaceFinishes.map((f: any) => f.name);
+                              const filteredBins = availableBins.filter(b => b.toLowerCase().includes(String(values.finishType || '').toLowerCase()));
                               
-                              return filteredCats.length > 0 ? (
-                                filteredCats.map((cat, idx) => {
-                                  const isHighlighted = idx === highlightedCategoryIndex;
+                              return filteredBins.length > 0 ? (
+                                filteredBins.map((bin, idx) => {
+                                  const isHighlighted = idx === highlightedBinIndex;
                                   return (
                                     <div
-                                      key={cat.id || idx}
-                                      onMouseEnter={() => setHighlightedCategoryIndex(idx)}
+                                      key={bin}
+                                      onMouseEnter={() => setHighlightedBinIndex(idx)}
                                       onMouseDown={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        setFieldValue('category', cat.name);
-                                        setIsCategoryDropdownOpen(false);
+                                        setFieldValue('finishType', bin);
+                                        setIsBinDropdownOpen(false);
                                       }}
-                                      className={`p-3 cursor-pointer transition text-xs flex items-center justify-between gap-4 ${
+                                      className={`p-3 cursor-pointer transition text-xs font-bold flex items-center ${
                                         isHighlighted 
                                           ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 text-emerald-700 dark:text-emerald-400' 
                                           : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200'
                                       }`}
                                     >
-                                      <span className="font-bold uppercase truncate">{cat.name || 'Unnamed Category'}</span>
-                                      {cat.code && <span className="text-[10px] opacity-80 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 whitespace-nowrap">Code: {cat.code}</span>}
+                                      {bin}
                                     </div>
                                   );
                                 })
                               ) : (
                                 <div className="p-4 text-center text-xs text-slate-400 italic">
-                                  Press Enter to add "{values.category}"
+                                  Press Enter to add "{values.finishType}"
                                 </div>
                               );
                             })()}
                           </div>
                         )}
                       </div>
-                      {(() => {
-                        const selectedCategory = categories.find(c => c.name?.toLowerCase() === String(values.category || '').trim().toLowerCase());
-                        return selectedCategory?.code ? (
-                          <div className="mt-1.5 ml-1 text-[10.5px] font-bold font-mono text-emerald-600 dark:text-emerald-400 opacity-90">
-                            CODE: {selectedCategory.code}
-                          </div>
-                        ) : null;
-                      })()}
-                      {touched.category && errors.category && (
-                        <p className="text-[10px] text-rose-500 mt-1 font-semibold">{errors.category as string}</p>
-                      )}
-                    </div>
-
-                    {/* 2. Code (Placed right after Category) */}
-                    <div>
-                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
-                        Code
-                      </label>
-                      <input
-                        type="text"
-                        name="itemSrNo"
-                        onChange={handleChange}
-                        value={values.itemSrNo}
-                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs text-slate-800 dark:text-white font-mono"
-                        placeholder="Enter Code"
-                      />
-                    </div>
-
-                    {/* 3. Description */}
-                    <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
-                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
-                        Description *
-                      </label>
-                      <input
-                        type="text"
-                        name="productName"
-                        onChange={handleChange}
-                        value={values.productName}
-                        className={`w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-900 dark:text-white ${
-                          touched.productName && errors.productName ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
-                        }`}
-                        placeholder={isTileCategory ? "e.g. Master Tiles Calacatta White 60x60 (Glazed Polished)" : "Enter Description"}
-                      />
-                      {touched.productName && errors.productName && (
-                        <p className="text-[10px] text-rose-500 mt-1 font-semibold">{errors.productName as string}</p>
-                      )}
                     </div>
 
                     {/* 5. UOM */}
@@ -583,90 +595,39 @@ const AddProduct = () => {
                       </div>
                     </div>
 
-                    {/* 6. Bin */}
+                    {/* 6. Code */}
                     <div>
                       <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
-                        Bin
+                        Code
                       </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          name="finishType"
-                          autoComplete="off"
-                          onChange={(e) => {
-                            handleChange(e);
-                            setIsBinDropdownOpen(true);
-                            setHighlightedBinIndex(0);
-                          }}
-                          onFocus={() => {
-                            setIsBinDropdownOpen(true);
-                            setHighlightedBinIndex(0);
-                          }}
-                          onBlur={() => {
-                            setTimeout(() => setIsBinDropdownOpen(false), 200);
-                          }}
-                          onKeyDown={(e) => {
-                            let availableBins = surfaceFinishes.map((f: any) => f.name);
-                            const filteredBins = availableBins.filter(b => b.toLowerCase().includes(String(values.finishType || '').toLowerCase()));
-                            
-                            if (e.key === 'ArrowDown') {
-                              e.preventDefault();
-                              setHighlightedBinIndex((prev) => prev < filteredBins.length - 1 ? prev + 1 : 0);
-                            } else if (e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              setHighlightedBinIndex((prev) => prev > 0 ? prev - 1 : filteredBins.length - 1);
-                            } else if (e.key === 'Enter') {
-                              e.preventDefault();
-                              if (filteredBins.length > 0) {
-                                setFieldValue('finishType', filteredBins[highlightedBinIndex] || filteredBins[0]);
-                                setIsBinDropdownOpen(false);
-                              }
-                            } else if (e.key === 'Tab' || e.key === 'Escape') {
-                              setIsBinDropdownOpen(false);
-                            }
-                          }}
-                          value={values.finishType}
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs font-semibold text-slate-900 dark:text-white"
-                          placeholder="Search or enter bin..."
-                        />
-                        {isBinDropdownOpen && (
-                          <div className="absolute left-0 top-full mt-1.5 z-[99999] w-full min-w-[200px] max-h-[250px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
-                            {(() => {
-                              let availableBins = surfaceFinishes.map((f: any) => f.name);
-                              const filteredBins = availableBins.filter(b => b.toLowerCase().includes(String(values.finishType || '').toLowerCase()));
-                              
-                              return filteredBins.length > 0 ? (
-                                filteredBins.map((bin, idx) => {
-                                  const isHighlighted = idx === highlightedBinIndex;
-                                  return (
-                                    <div
-                                      key={bin}
-                                      onMouseEnter={() => setHighlightedBinIndex(idx)}
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setFieldValue('finishType', bin);
-                                        setIsBinDropdownOpen(false);
-                                      }}
-                                      className={`p-3 cursor-pointer transition text-xs font-bold flex items-center ${
-                                        isHighlighted 
-                                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 text-emerald-700 dark:text-emerald-400' 
-                                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-200'
-                                      }`}
-                                    >
-                                      {bin}
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <div className="p-4 text-center text-xs text-slate-400 italic">
-                                  Press Enter to add "{values.finishType}"
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
-                      </div>
+                      <input
+                        type="text"
+                        name="itemSrNo"
+                        onChange={handleChange}
+                        value={values.itemSrNo}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 bg-white dark:bg-slate-800 outline-none focus:border-emerald-600 text-xs text-slate-800 dark:text-white font-mono"
+                        placeholder="Enter Code"
+                      />
+                    </div>
+
+                    {/* 7. Description */}
+                    <div className="sm:col-span-2 md:col-span-1 lg:col-span-1">
+                      <label className="mb-1.5 block font-bold text-slate-800 dark:text-slate-100">
+                        Description *
+                      </label>
+                      <input
+                        type="text"
+                        name="productName"
+                        onChange={handleChange}
+                        value={values.productName}
+                        className={`w-full rounded-xl border p-2.5 bg-white dark:bg-slate-800 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-900 dark:text-white ${
+                          touched.productName && errors.productName ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
+                        }`}
+                        placeholder={isTileCategory ? "e.g. Master Tiles Calacatta White 60x60 (Glazed Polished)" : "Enter Description"}
+                      />
+                      {touched.productName && errors.productName && (
+                        <p className="text-[10px] text-rose-500 mt-1 font-semibold">{errors.productName as string}</p>
+                      )}
                     </div>
                   </div>
                 </div>

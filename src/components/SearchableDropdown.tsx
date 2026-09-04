@@ -9,6 +9,8 @@ interface SearchableDropdownProps {
   placeholder: string;
   className?: string;
   allLabel?: string;
+  allowAll?: boolean;
+  disabled?: boolean;
 }
 
 export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
@@ -18,7 +20,9 @@ export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
   onChange,
   placeholder,
   className = '',
-  allLabel
+  allLabel,
+  allowAll = true,
+  disabled = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -47,13 +51,11 @@ export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
   }, [query, isOpen]);
 
   const defaultAllText = allLabel || `All ${placeholder}s`;
-
-  // Total items in list: 0 is default "All", 1..n are filtered options
-  const totalCount = filtered.length + 1;
+  const totalCount = allowAll ? filtered.length + 1 : filtered.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
+    if (!isOpen || disabled) {
+      if (!disabled && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter')) {
         setIsOpen(true);
         e.preventDefault();
       }
@@ -68,10 +70,11 @@ export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
       setHighlightedIndex(prev => (prev - 1 + totalCount) % totalCount);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (highlightedIndex === 0) {
+      if (allowAll && highlightedIndex === 0) {
         onChange('All');
       } else {
-        const selectedOpt = filtered[highlightedIndex - 1];
+        const offset = allowAll ? 1 : 0;
+        const selectedOpt = filtered[highlightedIndex - offset];
         if (selectedOpt) onChange(selectedOpt);
       }
       setIsOpen(false);
@@ -92,17 +95,19 @@ export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
   }, [highlightedIndex, isOpen]);
 
   return (
-    <div className={`relative ${className}`} ref={containerRef} onKeyDown={handleKeyDown}>
+    <div className={`relative ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`} ref={containerRef} onKeyDown={handleKeyDown}>
       {label && <label className="block font-bold text-gray-500 dark:text-slate-400 text-[11px] mb-1">{label}</label>}
       <div
-        onClick={() => setIsOpen(!isOpen)}
-        tabIndex={0}
-        className="w-full rounded-lg border border-stroke dark:border-strokedark bg-transparent p-2 font-semibold text-xs text-black dark:text-white cursor-pointer flex justify-between items-center transition hover:border-primary select-none min-h-[34px] outline-none focus:border-primary"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        tabIndex={disabled ? -1 : 0}
+        className={`w-full rounded-lg border border-stroke dark:border-strokedark bg-transparent p-2 font-semibold text-xs text-black dark:text-white flex justify-between items-center transition select-none min-h-[34px] outline-none ${disabled ? 'bg-slate-50 dark:bg-slate-800' : 'cursor-pointer hover:border-primary focus:border-primary'}`}
       >
-        <span className="truncate">{value === 'All' ? `${defaultAllText} (${options.length})` : value}</span>
+        <span className="truncate">
+          {value === 'All' && allowAll ? `${defaultAllText} (${options.length})` : value || `-- Select ${placeholder} --`}
+        </span>
       </div>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div className="absolute left-0 top-full mt-1.5 z-[999999] w-full min-w-[220px] bg-white dark:bg-[#1A222C] border border-stroke dark:border-strokedark rounded-xl shadow-2xl p-2 space-y-1">
           <div className="relative mb-1">
             <MdSearch size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -117,21 +122,24 @@ export const SearchableDropdown: React.FC<SearchableDropdownProps> = ({
           </div>
 
           <div ref={listRef} className="max-h-48 overflow-y-auto divide-y divide-stroke dark:divide-strokedark">
-            <div
-              onClick={() => { onChange('All'); setIsOpen(false); setQuery(''); }}
-              className={`p-2 rounded-lg cursor-pointer text-xs flex justify-between items-center transition ${
-                highlightedIndex === 0 || value === 'All'
-                  ? 'bg-primary/10 text-primary font-bold'
-                  : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-black dark:text-white'
-              }`}
-            >
-              <span>{defaultAllText}</span>
-              <span className="text-[10px] text-gray-400 font-mono">({options.length})</span>
-            </div>
+            {allowAll && (
+              <div
+                onClick={() => { onChange('All'); setIsOpen(false); setQuery(''); }}
+                className={`p-2 rounded-lg cursor-pointer text-xs flex justify-between items-center transition ${
+                  highlightedIndex === 0 || value === 'All'
+                    ? 'bg-primary/10 text-primary font-bold'
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-black dark:text-white'
+                }`}
+              >
+                <span>{defaultAllText}</span>
+                <span className="text-[10px] text-gray-400 font-mono">({options.length})</span>
+              </div>
+            )}
 
             {filtered.length > 0 ? (
               filtered.map((opt, idx) => {
-                const isHighlighted = highlightedIndex === idx + 1;
+                const offset = allowAll ? 1 : 0;
+                const isHighlighted = highlightedIndex === idx + offset;
                 const isSelected = value === opt;
                 return (
                   <div
