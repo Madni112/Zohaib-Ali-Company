@@ -31,31 +31,32 @@ const StockReportPrint = () => {
 
                     const dateFromClean = filters.dateFrom ? String(filters.dateFrom).trim() : '';
                     const dateToClean = filters.dateTo ? String(filters.dateTo).trim() : '';
-                    const targetLocation = String(filters.location || 'All').trim().toLowerCase();
-                    const targetEmployee = String(filters.employee || 'All').trim().toLowerCase();
-                    const targetProduct = String(filters.product || 'All').trim().toLowerCase();
+                    const targetLocations = (filters.location || []).map((l: string) => l.trim().toLowerCase());
+                    const targetEmployees = (filters.employee || []).map((e: string) => e.trim().toLowerCase());
+                    const targetProducts = (filters.product || []).map((p: string) => p.trim().toLowerCase());
 
                     const filteredTransfers = (transfers || []).filter((t: any) => {
                         const tDate = String(t.transfer_date || t.created_at || '').split('T')[0].split(' ')[0];
                         if (dateFromClean && tDate < dateFromClean) return false;
                         if (dateToClean && tDate > dateToClean) return false;
 
-                        if (targetLocation !== 'all') {
+                        if (targetLocations.length > 0) {
                             const fromLoc = String(t.from_location || '').trim().toLowerCase();
                             const toLoc = String(t.to_location || '').trim().toLowerCase();
-                            if (fromLoc !== targetLocation && toLoc !== targetLocation) return false;
+                            if (!targetLocations.includes(fromLoc) && !targetLocations.includes(toLoc)) return false;
                         }
 
-                        if (targetEmployee !== 'all') {
+                        if (targetEmployees.length > 0) {
                             const emp = String(t.employee || t.created_by || '').trim().toLowerCase();
-                            if (!emp.includes(targetEmployee)) return false;
+                            if (!targetEmployees.some((te: string) => emp.includes(te))) return false;
                         }
 
-                        if (targetProduct !== 'all') {
+                        if (targetProducts.length > 0) {
                             const itemsArray = Array.isArray(t.items) ? t.items : JSON.parse(t.items || '[]');
-                            const hasProd = itemsArray.some((i: any) =>
-                                String(i.itemName || i.product_name || i.item_name || '').trim().toLowerCase().includes(targetProduct)
-                            );
+                            const hasProd = itemsArray.some((i: any) => {
+                                const iName = String(i.itemName || i.product_name || i.item_name || '').trim().toLowerCase();
+                                return targetProducts.some((tp: string) => iName.includes(tp));
+                            });
                             if (!hasProd) return false;
                         }
 
@@ -69,8 +70,10 @@ const StockReportPrint = () => {
                 // 1. Fetch base product list mapping
                 let prodQuery = supabase.from('products').select('*');
 
-                if (filters.bin && filters.bin !== 'All') prodQuery = prodQuery.eq('bin', filters.bin);
-                if (filters.category && filters.category !== 'All') prodQuery = prodQuery.eq('category', filters.category);
+                if (filters.bin && filters.bin.length > 0) prodQuery = prodQuery.in('bin', filters.bin);
+                if (filters.parentCategory && filters.parentCategory.length > 0) prodQuery = prodQuery.in('category', filters.parentCategory);
+                if (filters.subCategory && filters.subCategory.length > 0) prodQuery = prodQuery.in('sub_category', filters.subCategory);
+                if (filters.subSubCategory && filters.subSubCategory.length > 0) prodQuery = prodQuery.in('sub_sub_category', filters.subSubCategory);
 
                 const { data: baseProducts, error: prodError } = await prodQuery;
                 if (prodError) throw prodError;
@@ -104,9 +107,10 @@ const StockReportPrint = () => {
                     return '';
                 };
 
-                // Fetch aggregated stock data via RPC
+                // Use first location if multiple selected since RPC doesn't support array easily, or 'All' if empty
+                const rpcLoc = (filters.location && filters.location.length > 0) ? filters.location[0] : 'All';
                 const { data: stockData, error: stockError } = await supabase.rpc('calculate_dynamic_stock', {
-                    p_location: String(filters.location || 'All'),
+                    p_location: String(rpcLoc),
                     p_start_date: dateFromClean || null,
                     p_end_date: dateToClean || null
                 });
@@ -147,11 +151,12 @@ const StockReportPrint = () => {
                     const registeredLocs = (dbLocs && dbLocs.length > 0)
                         ? dbLocs.map(l => String(l.name).trim())
                         : ['Market', 'Latifabad', 'Main Warehouse'];
-
                     const { data: transfers } = await supabase.from('stock_transfers').select('*');
 
                     const locationRows: any[] = [];
-                    const targetLocFilter = String(filters.location || 'All').trim().toLowerCase();
+                    const targetLocFilter = Array.isArray(filters.location) && filters.location.length > 0 
+                        ? filters.location.map((l: string) => l.trim().toLowerCase()) 
+                        : [];
 
                     for (const product of (baseProducts || [])) {
                         const name = String(product.product_name || '').trim().toLowerCase();
@@ -262,7 +267,7 @@ const StockReportPrint = () => {
 
                         for (const locName of activeLocations) {
                             const qty = locationStockMap[locName] || 0;
-                            if (targetLocFilter === 'all' || locName.toLowerCase() === targetLocFilter) {
+                            if (targetLocFilter.length === 0 || targetLocFilter.includes(locName.toLowerCase())) {
                                 locationRows.push({
                                     ...product,
                                     id: `${product.id}_${locName}`,
@@ -283,8 +288,8 @@ const StockReportPrint = () => {
                     }
 
                     let finalLocPool = locationRows;
-                    if (filters.product && filters.product !== 'All') {
-                        finalLocPool = finalLocPool.filter(p => p.product_name === filters.product);
+                    if (filters.product && filters.product.length > 0) {
+                        finalLocPool = finalLocPool.filter(p => filters.product.includes(p.product_name));
                     }
                     setReportRows(finalLocPool);
                     setLoading(false);
@@ -293,8 +298,8 @@ const StockReportPrint = () => {
 
                 let finalFilteredPool = calculatedAggregatedRows;
 
-                if (filters.product && filters.product !== 'All') {
-                    finalFilteredPool = finalFilteredPool.filter(p => p.product_name === filters.product);
+                if (filters.product && filters.product.length > 0) {
+                    finalFilteredPool = finalFilteredPool.filter(p => filters.product.includes(p.product_name));
                 }
 
                 setReportRows(finalFilteredPool);
@@ -326,10 +331,10 @@ const StockReportPrint = () => {
             const tabTitle = tabTitles[activeTab] || 'Stock Report';
             const filterMeta = {
                 'Report Tab': tabTitle,
-                'Bin': filters.bin || 'All',
-                'Category': filters.category || 'All',
-                'Product': filters.product || 'All',
-                'Location': filters.location || 'All',
+                'Brand': filters.bin?.length > 0 ? filters.bin.join(', ') : 'All',
+                'Category': [filters.parentCategory?.join(', '), filters.subCategory?.join(', '), filters.subSubCategory?.join(', ')].filter(c => c && c.length > 0).join(' / ') || 'All',
+                'Product': filters.product?.length > 0 ? filters.product.join(', ') : 'All',
+                'Location': filters.location?.length > 0 ? filters.location.join(', ') : 'All',
                 'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
             };
 
@@ -341,7 +346,7 @@ const StockReportPrint = () => {
                     { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
                     { header: 'Product Item Name', key: 'product_name', width: 28 },
 
-                    { header: 'Bin / Category', key: 'category', width: 16 },
+                    { header: 'Brand / Category', key: 'category', width: 16 },
                     { header: 'Opening Stock', key: 'computed_opening', width: 16, type: 'number' },
                     { header: 'Stock In', key: 'period_stock_in', width: 14, type: 'number' },
                     { header: 'Stock Out', key: 'period_stock_out', width: 14, type: 'number' },
@@ -374,7 +379,7 @@ const StockReportPrint = () => {
                     { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
                     { header: 'Product Item Name', key: 'product_name', width: 28 },
 
-                    { header: 'Bin / Category', key: 'category', width: 16 },
+                    { header: 'Brand / Category', key: 'category', width: 16 },
                     { header: 'UOM', key: 'uom', width: 12 },
                     { header: 'Current Stock', key: 'current_stock', width: 16, type: 'number' },
                     { header: 'Unit Rate (Rs.)', key: 'price', width: 16, type: 'currency' },

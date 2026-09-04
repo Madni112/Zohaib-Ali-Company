@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import { useAuth } from '../../../Context/Auth';
-import { FiCheckCircle, FiTruck, FiX, FiClock, FiPlusCircle, FiAlertCircle } from 'react-icons/fi';
+import { FiCheckCircle, FiTruck, FiX, FiClock, FiPlusCircle, FiAlertCircle, FiPrinter } from 'react-icons/fi';
 
 const ShopDispatchQueue = () => {
   const navigate = useNavigate();
@@ -25,6 +25,7 @@ const ShopDispatchQueue = () => {
   const [approvalDriver, setApprovalDriver] = useState('');
   const [approvalRemarks, setApprovalRemarks] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isManualDriver, setIsManualDriver] = useState(false);
 
   // Datatable layout state controllers
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,8 +99,10 @@ const ShopDispatchQueue = () => {
     setIsTransportDropdownOpen(false);
     setApprovalFreightCharges(challan.freight_charges !== undefined && challan.freight_charges !== null ? Number(challan.freight_charges) : 0);
     setApprovalVehicle(challan.vehicle_no && challan.vehicle_no !== 'Pending Dispatch' ? challan.vehicle_no : '');
-    setApprovalDriver(challan.driver_name || '');
-    setApprovalRemarks(challan.remarks || '');
+    setApprovalDriver(challan.driver_name && challan.driver_name !== 'Pending Dispatch' ? challan.driver_name : '');
+    setApprovalRemarks(challan.gate_remarks || '');
+    setIsManualDriver(false);
+    setIsSubmittingApproval(false);
   };
 
   // Handle Qty change inside the Approval modal (supports blank, 0, and fractional)
@@ -399,7 +402,7 @@ const ShopDispatchQueue = () => {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Customer: <span className="text-white font-bold">{selectedChallanForApproval.customer_name}</span> • Warehouse: <span className="text-emerald-400 font-bold">{selectedChallanForApproval.dispatch_warehouse}</span>
+                    Customer: <span className="text-white font-bold">{selectedChallanForApproval.customer_name}</span> • Location: <span className="text-emerald-400 font-bold">{selectedChallanForApproval.dispatch_warehouse}</span>
                   </p>
                 </div>
               </div>
@@ -447,6 +450,7 @@ const ShopDispatchQueue = () => {
                   <thead>
                     <tr className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                       <th className="p-3 w-8 text-center">S#</th>
+                      <th className="p-3 w-32">Code</th>
                       <th className="p-3">Product Description</th>
                       <th className="p-3 w-24 text-center">Ordered Qty</th>
                       <th className="p-3 w-32 text-center bg-emerald-100/60 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">Sending Now</th>
@@ -462,9 +466,11 @@ const ShopDispatchQueue = () => {
                       return (
                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                           <td className="p-3 text-center text-gray-400 font-sans">{idx + 1}</td>
+                          <td className="p-3 font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                            {item.skuCode}
+                          </td>
                           <td className="p-3">
                             <p className="font-bold text-black dark:text-white">{item.pDescription}</p>
-                            {item.skuCode && <p className="font-mono text-[10px] text-gray-500">{item.skuCode}</p>}
                           </td>
                           <td className="p-3 text-center font-mono font-bold text-slate-700 dark:text-slate-300 text-sm">
                             {orderQty}
@@ -499,8 +505,23 @@ const ShopDispatchQueue = () => {
                 </table>
               </div>
 
+              {/* Manual Driver Pill Toggle */}
+              <div className="flex justify-end mb-2">
+                <div 
+                  onClick={() => setIsManualDriver(!isManualDriver)}
+                  className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border w-fit ${
+                    isManualDriver 
+                      ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800' 
+                      : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                  }`}
+                >
+                  Add Custom Driver Details
+                </div>
+              </div>
+
               {/* Transit Logistics & Freight Settlement Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-meta-4/10 p-3.5 rounded-xl border border-stroke dark:border-strokedark">
+              {!isManualDriver && (
+              <div className="grid grid-cols-1 gap-4 bg-slate-50 dark:bg-meta-4/10 p-3.5 rounded-xl border border-stroke dark:border-strokedark mb-4">
                 
                 {/* Searchable Transportation Carrier Dropdown */}
                 <div className="relative">
@@ -554,36 +575,46 @@ const ShopDispatchQueue = () => {
                               </div>
                             );
                           })}
+                          {approvalTransportSearch.trim() !== '' &&
+                            !['No Transport (Handover)', 'Customer\'s Own Transport', ...transportList.map(t => t.name)]
+                              .some(name => name.toLowerCase() === approvalTransportSearch.trim().toLowerCase()) && (
+                              <div
+                                onMouseDown={async () => {
+                                  const newCarrier = approvalTransportSearch.trim();
+                                  setApprovalTransportName(newCarrier);
+                                  setIsTransportDropdownOpen(false);
+                                  setApprovalFreightCharges(0);
+                                  
+                                  try {
+                                    const { error } = await supabase.from('logistics_transportation').insert([{
+                                      name: newCarrier,
+                                      status: 'Active'
+                                    }]);
+                                    if (error) throw error;
+                                    toast.success(`"${newCarrier}" added to Transport Directory!`);
+                                    fetchTransportList();
+                                  } catch (err: any) {
+                                    toast.error('Could not save transporter: ' + err.message);
+                                  }
+                                }}
+                                className="p-2 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-800/40 cursor-pointer flex justify-between items-center text-xs font-bold border-t border-emerald-100 dark:border-emerald-800/50"
+                              >
+                                <span>+ Add "{approvalTransportSearch.trim()}" as New Transporter</span>
+                              </div>
+                            )}
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Freight Charges Amount (Submitted for Cashier/Salesman Approval) */}
-                <div>
-                  <label className="block font-bold text-black dark:text-white mb-1">
-                    Freight / Bilty Charges (PKR):
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={approvalFreightCharges}
-                    onChange={(e) => setApprovalFreightCharges(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
-                    onBlur={() => {
-                      if (approvalFreightCharges === '' || isNaN(Number(approvalFreightCharges))) {
-                        setApprovalFreightCharges(0);
-                      }
-                    }}
-                    placeholder="0"
-                    className="w-full p-2.5 rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark font-black font-mono text-emerald-600 text-xs outline-none focus:ring-2 focus:ring-primary"
-                  />
-                  <p className="text-[10px] text-gray-500 mt-1">Submitted for Admin/Salesman verification & settlement approval</p>
-                </div>
+
 
               </div>
+              )}
 
               {/* Transit & Vehicle Information */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {isManualDriver && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block font-bold text-black dark:text-white mb-1">Vehicle No / Truck Plate #</label>
                   <input
@@ -605,9 +636,10 @@ const ShopDispatchQueue = () => {
                   />
                 </div>
               </div>
+              )}
 
               <div>
-                <label className="block font-bold text-black dark:text-white mb-1">Dispatch Annotations / Gate Remarks</label>
+                <label className="block font-bold text-black dark:text-white mb-1">Remarks</label>
                 <input
                   type="text"
                   value={approvalRemarks}
@@ -703,9 +735,14 @@ const ShopDispatchQueue = () => {
                           {group.customer_name}
                         </span>
                       </div>
-                      <p className="text-[11px] text-gray-500 mt-0.5">
-                        Dispatch Source: <span className="font-semibold text-slate-700 dark:text-slate-300">{group.dispatch_warehouse}</span>
-                      </p>
+                      <div className="text-[11px] text-gray-500 mt-0.5 flex flex-col gap-0.5">
+                        <p>Dispatch Source: <span className="font-semibold text-slate-700 dark:text-slate-300">{group.dispatch_warehouse}</span></p>
+                        {group.challans[0]?.shipping_address && (
+                          <p className="text-emerald-700 dark:text-emerald-400">
+                            Ship To: <span className="font-semibold">{group.challans[0].shipping_address}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -816,6 +853,18 @@ const ShopDispatchQueue = () => {
                                 >
                                   <FiTruck size={12} /> {isPending ? 'Approve Items' : 'Edit Dispatch'}
                                 </button>
+
+                                {/* PRINT BUTTON */}
+                                {!isPending && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Delivery-Challan/Print/${c.id}`)}
+                                    title="Print Gate Pass / Delivery Challan"
+                                    className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition duration-150 cursor-pointer"
+                                  >
+                                    <FiPrinter size={12} /> Print
+                                  </button>
+                                )}
 
                                 {/* SEND REST BUTTON (Only shown when partially dispatched with remaining hold items) */}
                                 {canSendRest && (

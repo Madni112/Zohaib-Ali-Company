@@ -111,6 +111,7 @@ const NewInvoice = () => {
         cashAmountPaid: Number(editData.cash_amount_paid || 0),
         bankAmountPaid: Number(editData.bank_amount || 0),
         dcNo: editData.dc_no || '',
+        shippingAddress: editData.shipping_address || '',
         showDiscount: parsedItems.some((i: any) => Number(i.discountAmt || i.discount_amt || i.discount || 0) > 0),
         items: parsedItems.map((it: any) => ({
           ...it,
@@ -125,6 +126,7 @@ const NewInvoice = () => {
       dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
       transportType: 'No Transport (Handover)', transportCharges: 0, settlementMode: 'Cash',
       selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0, dcNo: '',
+      shippingAddress: '',
       items: [{ skuCode: '', itemName: '', warehouse: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0 }]
     };
   };
@@ -153,6 +155,7 @@ const NewInvoice = () => {
         }
       }
     ),
+    shippingAddress: Yup.string().nullable(),
     saleDate: Yup.string().required('Required Field'),
     taxScenario: Yup.string().required('Required Field'),
     salesman: Yup.string().required('Required Field'),
@@ -335,6 +338,7 @@ const NewInvoice = () => {
         total_amount: String(calculatedGrandTotal),
         receipt_status: totalPaidCombined >= calculatedGrandTotal ? 'Paid' : 'On Credit',
         sale_status: 'Confirm',
+        shipping_address: values.shippingAddress,
         items: values.items,
         scenario_type: values.applyFbrTax ? values.taxScenario : 'Standard Retail Sale (No Tax)'
       };
@@ -391,6 +395,7 @@ const NewInvoice = () => {
             await supabase.from('delivery_challans').insert([{
               invoice_no: formattedInvCode,
               customer_name: customerFinalName,
+              shipping_address: values.shippingAddress,
               challan_date: values.saleDate || new Date().toISOString().split('T')[0],
               dispatch_warehouse: whName,
               transport_name: values.transportType || 'By Road Transport',
@@ -597,6 +602,20 @@ const NewInvoice = () => {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                  <div>
+                    <label className="block font-bold text-gray-500 mb-1">Shipping Address (Optional):</label>
+                    <textarea 
+                      name="shippingAddress" 
+                      placeholder="Enter full shipping address if applicable..." 
+                      value={values.shippingAddress} 
+                      onChange={handleChange} 
+                      rows={2}
+                      className="w-full rounded border border-stroke p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white focus:border-primary dark:border-strokedark" 
+                    />
+                  </div>
+                </div>
+
                 {/* 🌟 TAX & DISCOUNT TOGGLE BAR: CLEAN & UNCLUTTERED DEFAULT UI */}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-meta-4/20 border border-stroke dark:border-strokedark rounded-sm">
                   <div className="flex flex-wrap items-center gap-6">
@@ -617,24 +636,25 @@ const NewInvoice = () => {
                     */}
 
                     {/* Discount Column Toggle */}
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={values.showDiscount}
-                        onChange={(e) => {
-                          const isChecked = e.target.checked;
-                          setFieldValue('showDiscount', isChecked);
-                          if (!isChecked) {
-                            values.items.forEach((_: any, idx: number) => {
-                              setFieldValue(`items.${idx}.discountPer`, 0);
-                              setFieldValue(`items.${idx}.discountAmt`, 0);
-                            });
-                          }
-                        }}
-                        className="w-4 h-4 text-amber-600 rounded cursor-pointer accent-amber-600"
-                      />
-                      <span className="font-bold text-xs text-black dark:text-white">Enable Line Discounts (%)</span>
-                    </label>
+                    <div 
+                      onClick={() => {
+                        const isChecked = !values.showDiscount;
+                        setFieldValue('showDiscount', isChecked);
+                        if (!isChecked) {
+                          values.items.forEach((_: any, idx: number) => {
+                            setFieldValue(`items.${idx}.discountPer`, 0);
+                            setFieldValue(`items.${idx}.discountAmt`, 0);
+                          });
+                        }
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                        values.showDiscount 
+                          ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800' 
+                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                      }`}
+                    >
+                      Discounts
+                    </div>
                   </div>
 
                   {values.applyFbrTax && (

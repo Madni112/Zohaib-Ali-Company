@@ -537,24 +537,25 @@ const AddPurchases = () => {
                     */}
 
                     {/* Discount Column Toggle */}
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={values.showDiscount}
-                        onChange={(e) => {
-                          const isChecked = e.target.checked;
-                          setFieldValue('showDiscount', isChecked);
-                          if (!isChecked) {
-                            values.items.forEach((_: any, idx: number) => {
-                              setFieldValue(`items.${idx}.discountPer`, 0);
-                              setFieldValue(`items.${idx}.discountAmt`, 0);
-                            });
-                          }
-                        }}
-                        className="w-4 h-4 text-amber-600 rounded cursor-pointer accent-amber-600"
-                      />
-                      <span className="font-bold text-xs text-black dark:text-white">Enable Line Discounts (%)</span>
-                    </label>
+                    <div 
+                      onClick={() => {
+                        const isChecked = !values.showDiscount;
+                        setFieldValue('showDiscount', isChecked);
+                        if (!isChecked) {
+                          values.items.forEach((_: any, idx: number) => {
+                            setFieldValue(`items.${idx}.discountPer`, 0);
+                            setFieldValue(`items.${idx}.discountAmt`, 0);
+                          });
+                        }
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                        values.showDiscount 
+                          ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800' 
+                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                      }`}
+                    >
+                      Discounts
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1270,7 +1271,7 @@ const AddPurchases = () => {
                     </div>
 
                     <div>
-                      <span className="font-bold text-gray-500 block mb-1">Purchase Order Memo / Remarks:</span>
+                      <span className="font-bold text-gray-500 block mb-1">Remarks:</span>
                       <input
                         type="text"
                         name="remarks"

@@ -28,6 +28,7 @@ const AddDeliveryChallan = () => {
     dcDate: new Date().toISOString().split('T')[0], // Defaults dynamically to today's timestamp
     vehicleNo: '',
     driverName: '',
+    gatePassNo: '',
     status: 'Pending Dispatch',
     remarks: '',
     items: [{ poNoSub: '', pDescription: '', location: '', rate: 0, orderQty: 1, dispatchedQty: 1, holdQty: 0, qty: 1, disAmt: 0, distPer: 0, discount: 0, notes: '' }]
@@ -76,6 +77,7 @@ const AddDeliveryChallan = () => {
               dcDate: challanRecord.challan_date || challanRecord.dc_date || challanRecord.created_at?.split('T')[0],
               vehicleNo: challanRecord.vehicle_no || '',
               driverName: challanRecord.driver_name || '',
+              gatePassNo: challanRecord.gate_pass_no || '',
               status: challanRecord.status || 'Dispatched',
               remarks: challanRecord.remarks || '',
               items: rawItems.length > 0 ? rawItems : [{ poNoSub: '', pDescription: '', location: '', rate: 0, orderQty: 1, dispatchedQty: 1, holdQty: 0, qty: 1, disAmt: 0, distPer: 0, discount: 0, notes: '' }]
@@ -188,6 +190,7 @@ const AddDeliveryChallan = () => {
               challan_date: values.dcDate,
               vehicle_no: values.vehicleNo,
               driver_name: values.driverName,
+              gate_pass_no: values.gatePassNo,
               remarks: values.remarks,
               total_quantity: totalDispatchedQty,
               total_amount: baseAmount,
@@ -286,6 +289,12 @@ const AddDeliveryChallan = () => {
                 <div>
                   <label className="block font-medium text-black dark:text-white mb-1.5 text-xs uppercase tracking-wide">Remarks:</label>
                   <input type="text" name="remarks" onChange={handleChange} value={values.remarks} className="w-full rounded border border-stroke p-2 bg-transparent dark:border-strokedark text-black dark:text-white outline-none focus:border-primary text-xs" placeholder="Enter general annotations..." />
+                </div>
+
+                {/* Field 9: Gate Pass No tracker */}
+                <div>
+                  <label className="block font-medium text-black dark:text-white mb-1.5 text-xs uppercase tracking-wide">Gate Pass No:</label>
+                  <input type="text" name="gatePassNo" onChange={handleChange} value={values.gatePassNo} className="w-full rounded border border-stroke p-2 bg-transparent dark:border-strokedark text-black dark:text-white outline-none focus:border-primary text-xs" placeholder="Manual Gate Pass No." />
                 </div>
               </div>
 

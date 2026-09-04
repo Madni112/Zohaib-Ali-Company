@@ -4,6 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
+import SearchableMultiSelect from '../../../components/SearchableMultiSelect';
 import SearchableDropdown from '../../../components/SearchableDropdown';
 
 const SalesReport = () => {
@@ -26,17 +27,29 @@ const SalesReport = () => {
     const [locations, setLocations] = useState<any[]>([]);
     const [availableInvoices, setAvailableInvoices] = useState<any[]>([]);
 
-    const [criteria, setCriteria] = useState(() => location.state?.criteria || ({
-        customer: location.state?.customer || location.state?.criteria?.customer || 'All',
-        salesman: location.state?.salesman || location.state?.criteria?.salesman || 'All',
-        transport: location.state?.transport || location.state?.criteria?.transport || 'All',
-        category: location.state?.category || location.state?.criteria?.category || 'All',
-        uom: 'All', bin: 'All', product: 'All', location: 'All',
-        saleType: 'All', saleMethod: 'All', invoiceNo: 'All',
-        withLedgerSummary: false,
-        dateFrom: location.state?.dateFrom || location.state?.criteria?.dateFrom || new Date().toISOString().split('T')[0],
-        dateTo: location.state?.dateTo || location.state?.criteria?.dateTo || new Date().toISOString().split('T')[0]
-    }));
+    const parseCriteriaArray = (val: any) => Array.isArray(val) ? val : (typeof val === 'string' && val !== 'All' ? [val] : []);
+
+    const [criteria, setCriteria] = useState(() => {
+        const base = location.state?.criteria || {};
+        return {
+            customer: location.state?.customer ? [location.state.customer] : parseCriteriaArray(base.customer),
+            salesman: location.state?.salesman ? [location.state.salesman] : parseCriteriaArray(base.salesman),
+            transport: location.state?.transport ? [location.state.transport] : parseCriteriaArray(base.transport),
+            parentCategory: location.state?.parentCategory ? [location.state.parentCategory] : parseCriteriaArray(base.parentCategory),
+            subCategory: location.state?.subCategory ? [location.state.subCategory] : parseCriteriaArray(base.subCategory),
+            subSubCategory: location.state?.subSubCategory ? [location.state.subSubCategory] : parseCriteriaArray(base.subSubCategory),
+            uom: parseCriteriaArray(base.uom), 
+            bin: parseCriteriaArray(base.bin), 
+            product: parseCriteriaArray(base.product), 
+            location: parseCriteriaArray(base.location),
+            saleType: base.saleType || 'All', 
+            saleMethod: base.saleMethod || 'All', 
+            invoiceNo: base.invoiceNo || 'All',
+            withLedgerSummary: base.withLedgerSummary || false,
+            dateFrom: location.state?.dateFrom || base.dateFrom || new Date().toISOString().split('T')[0],
+            dateTo: location.state?.dateTo || base.dateTo || new Date().toISOString().split('T')[0]
+        };
+    });
 
     useEffect(() => {
         navigate('.', { replace: true, state: { ...location.state, reportType, criteria } });
@@ -50,7 +63,7 @@ const SalesReport = () => {
                     supabase.from('customers').select('id, customerName'),
                     supabase.from('salesmen').select('id, name'),
                     supabase.from('logistics_transportation').select('id, name'),
-                    supabase.from('inventory_categories').select('id, name'),
+                    supabase.from('inventory_categories').select('id, name, parent_id'),
                     supabase.from('inventory_surface_finishes').select('id, name'),
                     supabase.from('products').select('id, product_name'),
                     supabase.from('inventory_locations').select('id, name'),
@@ -84,17 +97,27 @@ const SalesReport = () => {
     }, [tenantId]);
 
     const handleInputChange = (field: string, value: any) => {
-        setCriteria(prev => ({ ...prev, [field]: value }));
+        setCriteria(prev => {
+            const updated = { ...prev, [field]: value };
+            if (field === 'parentCategory') {
+                updated.subCategory = [];
+                updated.subSubCategory = [];
+            }
+            if (field === 'subCategory') {
+                updated.subSubCategory = [];
+            }
+            return updated;
+        });
     };
 
     const handleTabChange = (type: 'sale' | 'return' | 'invoice') => {
         setReportType(type);
         setCriteria(prev => ({
-            customer: 'All',
-            salesman: 'All',
-            transport: 'All',
-            category: 'All',
-            uom: 'All', bin: 'All', product: 'All', location: 'All',
+            customer: [],
+            salesman: [],
+            transport: [],
+            parentCategory: [], subCategory: [], subSubCategory: [],
+            uom: [], bin: [], product: [], location: [],
             saleType: 'All', saleMethod: 'All', invoiceNo: 'All',
             withLedgerSummary: false,
             dateFrom: prev.dateFrom,
@@ -105,7 +128,28 @@ const SalesReport = () => {
     const customerOptions = useMemo(() => customers.map(c => c.customerName).filter(Boolean), [customers]);
     const salesmanOptions = useMemo(() => salesmen.map(s => s.name).filter(Boolean), [salesmen]);
     const transportOptions = useMemo(() => transports.map(t => t.name).filter(Boolean), [transports]);
-    const categoryOptions = useMemo(() => categories.map(c => c.name).filter(Boolean), [categories]);
+    const parentCategories = useMemo(() => categories.filter(c => c.parent_id === null), [categories]);
+    const subCategories = useMemo(() => {
+        if (!criteria.parentCategory || criteria.parentCategory.length === 0) {
+            const parentIds = new Set(parentCategories.map(p => p.id));
+            return categories.filter(c => c.parent_id !== null && parentIds.has(c.parent_id));
+        }
+        const selectedPCatIds = new Set(parentCategories.filter(c => criteria.parentCategory.includes(c.name)).map(c => c.id));
+        return categories.filter(c => c.parent_id !== null && selectedPCatIds.has(c.parent_id));
+    }, [categories, criteria.parentCategory, parentCategories]);
+    
+    const bottomCategories = useMemo(() => {
+        if (!criteria.subCategory || criteria.subCategory.length === 0) {
+            const subIds = new Set(subCategories.map(s => s.id));
+            return categories.filter(c => c.parent_id !== null && subIds.has(c.parent_id));
+        }
+        const selectedSCatIds = new Set(subCategories.filter(c => criteria.subCategory.includes(c.name)).map(c => c.id));
+        return categories.filter(c => c.parent_id !== null && selectedSCatIds.has(c.parent_id));
+    }, [categories, criteria.subCategory, subCategories]);
+
+    const parentCategoryOptions = useMemo(() => parentCategories.map(c => c.name).filter(Boolean), [parentCategories]);
+    const subCategoryOptions = useMemo(() => subCategories.map(c => c.name).filter(Boolean), [subCategories]);
+    const subSubCategoryOptions = useMemo(() => bottomCategories.map(c => c.name).filter(Boolean), [bottomCategories]);
     const uomOptions = useMemo(() => uoms.map(u => u.name).filter(Boolean), [uoms]);
 
     const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
@@ -133,15 +177,18 @@ const SalesReport = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
                     {reportType === 'sale' && (
                         <>
-                            <SearchableDropdown label="Customer Group:" placeholder="Customer" options={customerOptions} value={criteria.customer} onChange={(val) => handleInputChange('customer', val)} />
-                            <SearchableDropdown label="Sales Officer:" placeholder="Salesman" options={salesmanOptions} value={criteria.salesman} onChange={(val) => handleInputChange('salesman', val)} />
-                            <SearchableDropdown label="Logistics Fleet:" placeholder="Fleet" options={transportOptions} value={criteria.transport} onChange={(val) => handleInputChange('transport', val)} />
-                            <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
-                            <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
+                            <SearchableMultiSelect label="Market Customer:" placeholder="Customer" options={customerOptions} value={criteria.customer} onChange={(val) => handleInputChange('customer', val)} />
+                            <SearchableMultiSelect label="Salesman:" placeholder="Salesman" options={salesmanOptions} value={criteria.salesman} onChange={(val) => handleInputChange('salesman', val)} />
+                            <SearchableMultiSelect label="Transport / Driver:" placeholder="Transport" options={transportOptions} value={criteria.transport} onChange={(val) => handleInputChange('transport', val)} />
 
-                            <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
-                            <SearchableDropdown label="Target Products:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
-                            <SearchableDropdown label="Inventory Locations:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
+                            <SearchableMultiSelect label="Parent Category:" placeholder="Parent Category" options={parentCategoryOptions} value={criteria.parentCategory} onChange={(val) => handleInputChange('parentCategory', val)} />
+                            <SearchableMultiSelect label="Sub Category:" placeholder="Sub Category" options={subCategoryOptions} value={criteria.subCategory} onChange={(val) => handleInputChange('subCategory', val)} />
+                            <SearchableMultiSelect label="Category:" placeholder="Category" options={subSubCategoryOptions} value={criteria.subSubCategory} onChange={(val) => handleInputChange('subSubCategory', val)} />
+
+                            <SearchableMultiSelect label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
+                            <SearchableMultiSelect label="Brand:" placeholder="Brand" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
+                            <SearchableMultiSelect label="Target Stock Assets:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+                            <SearchableMultiSelect label="Dispatching Warehouses:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
                             
                             <div>
                                 <label className="block text-gray-500 mb-1 font-bold">Sale Type Allocation:</label>
@@ -163,13 +210,18 @@ const SalesReport = () => {
                     )}
                     {reportType === 'return' && (
                         <>
-                            <SearchableDropdown label="Customer Group:" placeholder="Customer" options={customerOptions} value={criteria.customer} onChange={(val) => handleInputChange('customer', val)} />
-                            <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
-                            <SearchableDropdown label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
+                            <SearchableMultiSelect label="Market Customer:" placeholder="Customer" options={customerOptions} value={criteria.customer} onChange={(val) => handleInputChange('customer', val)} />
+                            <SearchableMultiSelect label="Salesman:" placeholder="Salesman" options={salesmanOptions} value={criteria.salesman} onChange={(val) => handleInputChange('salesman', val)} />
+                            <SearchableMultiSelect label="Transport / Driver:" placeholder="Transport" options={transportOptions} value={criteria.transport} onChange={(val) => handleInputChange('transport', val)} />
 
-                            <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
-                            <SearchableDropdown label="Target Products:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
-                            <SearchableDropdown label="Inventory Locations:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
+                            <SearchableMultiSelect label="Parent Category:" placeholder="Parent Category" options={parentCategoryOptions} value={criteria.parentCategory} onChange={(val) => handleInputChange('parentCategory', val)} />
+                            <SearchableMultiSelect label="Sub Category:" placeholder="Sub Category" options={subCategoryOptions} value={criteria.subCategory} onChange={(val) => handleInputChange('subCategory', val)} />
+                            <SearchableMultiSelect label="Category:" placeholder="Category" options={subSubCategoryOptions} value={criteria.subSubCategory} onChange={(val) => handleInputChange('subSubCategory', val)} />
+
+                            <SearchableMultiSelect label="Product Groups (UOM):" placeholder="UOM" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
+                            <SearchableMultiSelect label="Brand:" placeholder="Brand" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
+                            <SearchableMultiSelect label="Target Stock Assets:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+                            <SearchableMultiSelect label="Dispatching Warehouses:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
                         </>
                     )}
 

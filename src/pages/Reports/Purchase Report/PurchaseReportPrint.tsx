@@ -25,8 +25,8 @@ const PurchaseReportPrint = () => {
 
         if (rType === 'purchase') {
           let query = supabase.from('supplier_purchases').select('*');
-          if (filters.vendor && filters.vendor !== 'All') query = query.eq('supplier_name', filters.vendor);
-          if (filters.location && filters.location !== 'All') query = query.eq('target_warehouse', filters.location);
+          if (filters.vendor && filters.vendor.length > 0) query = query.in('supplier_name', filters.vendor);
+          if (filters.location && filters.location.length > 0) query = query.in('target_warehouse', filters.location);
 
           if (filters.purchaseType && filters.purchaseType !== 'All') {
             if (filters.purchaseType === 'Cash') query = query.eq('payment_term', 'Cash');
@@ -53,8 +53,8 @@ const PurchaseReportPrint = () => {
         else if (rType === 'return') {
           // ✅ ALIGNED TO YOUR NEW SQL SCHEMA: Queries purchase_returns matching vendor_name
           let query = supabase.from('purchase_returns').select('*');
-          if (filters.vendor && filters.vendor !== 'All') query = query.eq('vendor_name', filters.vendor);
-          if (filters.location && filters.location !== 'All') query = query.eq('source_warehouse', filters.location);
+          if (filters.vendor && filters.vendor.length > 0) query = query.in('vendor_name', filters.vendor);
+          if (filters.location && filters.location.length > 0) query = query.in('source_warehouse', filters.location);
           if (filters.dateFrom && filters.dateTo) {
             query = query.gte('created_at', `${filters.dateFrom}T00:00:00`).lte('created_at', `${filters.dateTo}T23:59:59.999Z`);
           }
@@ -95,8 +95,9 @@ const PurchaseReportPrint = () => {
       setExporting(true);
       const filterMeta = {
         'Report Type': String(rType).toUpperCase(),
-        'Vendor': filters.vendor || 'All',
-        'Location': filters.location || 'All',
+        'Vendor': filters.vendor?.length > 0 ? filters.vendor.join(', ') : 'All',
+        'Location': filters.location?.length > 0 ? filters.location.join(', ') : 'All',
+        'Category': [filters.parentCategory?.join(', '), filters.subCategory?.join(', '), filters.subSubCategory?.join(', ')].filter(c => c && c.length > 0).join(' / ') || 'All',
         'Purchase Type': filters.purchaseType || 'All',
         'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
       };

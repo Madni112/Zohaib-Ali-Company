@@ -169,15 +169,21 @@ const PrintChallan = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-b border-gray-300 pb-4 mb-6 text-xs uppercase tracking-wider font-semibold">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 border-b border-gray-300 pb-4 mb-6 text-xs uppercase tracking-wider font-semibold">
             <div>
-              <span className="text-gray-500 block mb-0.5">Challan / Gate Pass #:</span>
+              <span className="text-gray-500 block mb-0.5">System DC #:</span>
               <strong className="text-sm font-black text-black font-mono">
                 {challanTitle}
               </strong>
             </div>
             <div>
-              <span className="text-gray-500 block mb-0.5">Linked Sales Invoice:</span>
+              <span className="text-gray-500 block mb-0.5">Gate Pass #:</span>
+              <strong className="text-sm font-black text-emerald-800 font-mono">
+                {challan.gate_pass_no || 'N/A'}
+              </strong>
+            </div>
+            <div>
+              <span className="text-gray-500 block mb-0.5">Linked Invoice:</span>
               <span className="text-red-600 text-sm font-mono font-black">{challan.invoice_no || 'N/A'}</span>
             </div>
             <div>
@@ -185,7 +191,7 @@ const PrintChallan = () => {
               <span className="text-black text-sm font-bold">{formatPrintDate(challan.dc_date || challan.created_at)}</span>
             </div>
             <div>
-              <span className="text-gray-500 block mb-0.5">Vehicle / Truck Plate:</span>
+              <span className="text-gray-500 block mb-0.5">Vehicle Plate:</span>
               <strong className="text-black text-sm font-bold">{challan.vehicle_no || 'Direct Handover'}</strong>
             </div>
           </div>
@@ -204,6 +210,7 @@ const PrintChallan = () => {
               <h4 className="font-bold text-gray-500 mb-2 uppercase tracking-wide text-[11px]">Consignee / Customer:</h4>
               <div className="space-y-1 text-black font-medium">
                 <p className="text-sm font-extrabold text-black">{challan.customer_name}</p>
+                {challan.shipping_address && <p className="text-xs text-gray-800 break-words mt-1 whitespace-pre-wrap">{challan.shipping_address}</p>}
                 {challan.remarks && <p className="mt-2 text-gray-700 bg-gray-100 p-2 rounded text-[11px] font-sans">Remarks: {challan.remarks}</p>}
               </div>
             </div>
@@ -214,48 +221,41 @@ const PrintChallan = () => {
               <thead>
                 <tr className="bg-gray-100 text-black font-bold uppercase tracking-wider border-b border-gray-300 text-center">
                   <th className="border border-gray-300 p-2.5 w-12">S#</th>
-                  <th className="border border-gray-300 p-2.5 text-left">Product Details / Item Descriptions</th>
-                  <th className="border border-gray-300 p-2.5 w-24">Warehouse</th>
-                  <th className="border border-gray-300 p-2.5 w-20">Ordered</th>
-                  <th className="border border-gray-300 p-2.5 w-24 bg-gray-200">Dispatched</th>
-                  <th className="border border-gray-300 p-2.5 w-20">On Hold</th>
+                  <th className="border border-gray-300 p-2.5 w-32">Code</th>
+                  <th className="border border-gray-300 p-2.5 text-left">Description</th>
+                  <th className="border border-gray-300 p-2.5 w-24">Qty</th>
                 </tr>
               </thead>
               <tbody>
-                {challan.items && challan.items.map((item, idx) => {
-                  const orderQty = Number(item.orderQty ?? item.qty ?? 0);
-                  const dispatchedQty = Number(item.dispatchedQty ?? item.qty ?? 0);
-                  const holdQty = Number(item.holdQty ?? Math.max(0, orderQty - dispatchedQty));
-
+                {(() => {
+                  const printedItems = challan.items ? challan.items.filter((item: any) => Number(item.dispatchedQty ?? item.qty ?? 0) > 0) : [];
                   return (
-                    <tr key={idx} className="font-medium text-center">
-                      <td className="border border-gray-300 p-2 text-center bg-gray-50/50">{idx + 1}</td>
-                      <td className="border border-gray-300 p-2 text-black font-semibold text-left">{item.pDescription}</td>
-                      <td className="border border-gray-300 p-2 text-center text-gray-600">{item.location || 'Main WH'}</td>
-                      <td className="border border-gray-300 p-2 text-center text-gray-700 font-mono">{orderQty}</td>
-                      <td className="border border-gray-300 p-2 text-center font-black text-sm text-black bg-gray-100 font-mono">
-                        {dispatchedQty}
-                      </td>
-                      <td className="border border-gray-300 p-2 text-center text-gray-600 font-mono">
-                        {holdQty > 0 ? `${holdQty} Hold` : '0'}
-                      </td>
-                    </tr>
+                    <>
+                      {printedItems.map((item: any, idx: number) => {
+                        const dispatchedQty = Number(item.dispatchedQty ?? item.qty ?? 0);
+
+                        return (
+                          <tr key={idx} className="font-medium text-center">
+                            <td className="border border-gray-300 p-2 text-center bg-gray-50/50">{idx + 1}</td>
+                            <td className="border border-gray-300 p-2 text-center font-mono">{item.skuCode || item.pCode}</td>
+                            <td className="border border-gray-300 p-2 text-black font-semibold text-left">{item.pDescription}</td>
+                            <td className="border border-gray-300 p-2 text-center font-black text-sm text-black bg-gray-100 font-mono">
+                              {dispatchedQty}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="bg-gray-50 font-bold border-t-2 border-gray-400 text-center">
+                        <td colSpan={3} className="border border-gray-300 p-2.5 text-right uppercase tracking-wider text-gray-600">
+                          Total Qty:
+                        </td>
+                        <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-200">
+                          {printedItems.reduce((sum: number, item: any) => sum + (Number(item.dispatchedQty ?? item.qty) || 0), 0).toLocaleString()}
+                        </td>
+                      </tr>
+                    </>
                   );
-                })}
-                <tr className="bg-gray-50 font-bold border-t-2 border-gray-400 text-center">
-                  <td colSpan={3} className="border border-gray-300 p-2.5 text-right uppercase tracking-wider text-gray-600">
-                    Totals:
-                  </td>
-                  <td className="border border-gray-300 p-2.5 text-center font-bold text-gray-700">
-                    {challan.items?.reduce((sum, item) => sum + (Number(item.orderQty ?? item.qty) || 0), 0).toLocaleString()}
-                  </td>
-                  <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-200">
-                    {challan.items?.reduce((sum, item) => sum + (Number(item.dispatchedQty ?? item.qty) || 0), 0).toLocaleString()}
-                  </td>
-                  <td className="border border-gray-300 p-2.5 text-center font-bold text-gray-700">
-                    {challan.items?.reduce((sum, item) => sum + (Number(item.holdQty ?? Math.max(0, Number(item.orderQty ?? item.qty ?? 0) - Number(item.dispatchedQty ?? item.qty ?? 0))) || 0), 0).toLocaleString()}
-                  </td>
-                </tr>
+                })()}
               </tbody>
             </table>
           </div>

@@ -178,8 +178,7 @@ const SalesHistory = () => {
 
   const filteredInvoices = invoices.filter(inv =>
     inv.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    inv.id.toString().includes(searchTerm) ||
-    String(inv.quotation_id || '').toLowerCase().includes(searchTerm.toLowerCase())
+    inv.id.toString().includes(searchTerm)
   );
 
   const totalEntries = filteredInvoices.length;
@@ -433,7 +432,7 @@ const SalesHistory = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search invoices, customers, or quotation IDs..."
+              placeholder="Search invoices or customers..."
               className="w-full sm:w-72 rounded-xl border border-slate-200 py-2 px-3.5 bg-slate-50/50 dark:bg-slate-800/60 dark:border-slate-700 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 text-xs text-slate-800 dark:text-white transition"
             />
           </div>
@@ -444,7 +443,6 @@ const SalesHistory = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 text-center w-16">Invoice No</th>
-                <th className="py-3.5 px-4 text-center w-24">Quotation ID</th>
                 <th className="py-3.5 px-4 text-center">DC No</th>
                 <th className="py-3.5 px-4">Sale Date</th>
                 <th className="py-3.5 px-4 text-center">Sale Type</th>
@@ -459,7 +457,7 @@ const SalesHistory = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-14">
+                  <td colSpan={10} className="text-center py-14">
                     <div className="flex flex-col items-center justify-center gap-2.5">
                       <Spinner size="w-8 h-8" color="border-primary" />
                       <span className="text-xs font-bold text-slate-500 dark:text-slate-400 animate-pulse">
@@ -469,7 +467,7 @@ const SalesHistory = () => {
                   </td>
                 </tr>
               ) : paginatedInvoices.length === 0 ? (
-                <tr><td colSpan={11} className="text-center py-10 text-xs text-slate-400 italic">No invoice records found.</td></tr>
+                <tr><td colSpan={10} className="text-center py-10 text-xs text-slate-400 italic">No invoice records found.</td></tr>
               ) : (
                 paginatedInvoices.map((inv) => {
                   const rawInvoiceIdString = String(inv.id).trim().toLowerCase();
@@ -483,11 +481,6 @@ const SalesHistory = () => {
                     );
                   });
 
-                  const rawQuotationVal = String(inv.quotation_id || '').trim();
-                  const displayQuotationId = rawQuotationVal && rawQuotationVal !== 'null' && rawQuotationVal !== 'undefined'
-                    ? (rawQuotationVal.toUpperCase().startsWith('QTN-') ? rawQuotationVal : `QTN-${rawQuotationVal.padStart(4, '0')}`)
-                    : '-';
-
                   const paddedInvoiceIdString = String(inv.id).padStart(4, '0');
                   const invoiceKey = `inv-${paddedInvoiceIdString}`;
                   const customInvKey = String(inv.invoice_no || '').trim().toLowerCase();
@@ -498,7 +491,6 @@ const SalesHistory = () => {
                       <td className="py-3 px-4 text-slate-900 dark:text-white font-bold text-center font-mono">
                         {inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`}
                       </td>
-                      <td className="py-3 px-4 text-center text-emerald-600 dark:text-emerald-400 font-mono font-bold">{displayQuotationId}</td>
                       <td className="py-3 px-4 text-center font-mono">
                         {linkedDCs.length > 0 ? (
                           <div className="flex flex-col items-center gap-1">

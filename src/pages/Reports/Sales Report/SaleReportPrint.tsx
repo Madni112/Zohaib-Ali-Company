@@ -25,10 +25,10 @@ const SaleReportPrint = () => {
 
         if (rType === 'sale') {
           let query = supabase.from('sales_invoices').select('*');
-          if (filters.customer && filters.customer !== 'All') query = query.eq('customer_name', filters.customer);
-          if (filters.salesman && filters.salesman !== 'All') query = query.eq('salesman', filters.salesman);
-          if (filters.transport && filters.transport !== 'All') query = query.eq('transport_name', filters.transport);
-          if (filters.location && filters.location !== 'All') query = query.eq('dispatch_warehouse', filters.location);
+          if (filters.customer && filters.customer.length > 0) query = query.in('customer_name', filters.customer);
+          if (filters.salesman && filters.salesman.length > 0) query = query.in('salesman', filters.salesman);
+          if (filters.transport && filters.transport.length > 0) query = query.in('transport_name', filters.transport);
+          if (filters.location && filters.location.length > 0) query = query.in('dispatch_warehouse', filters.location);
 
           if (filters.saleType && filters.saleType !== 'All') {
             if (filters.saleType === 'Cash') query = query.eq('payment_term', 'Cash');
@@ -85,7 +85,7 @@ const SaleReportPrint = () => {
 
         else if (rType === 'return') {
           let query = supabase.from('sales_returns').select('*');
-          if (filters.customer && filters.customer !== 'All') query = query.eq('customer_name', filters.customer);
+          if (filters.customer && filters.customer.length > 0) query = query.in('customer_name', filters.customer);
           if (filters.dateFrom && filters.dateTo) {
             const startStr = String(filters.dateFrom).split('T')[0];
             const endStr = String(filters.dateTo).split('T')[0];
@@ -131,11 +131,12 @@ const SaleReportPrint = () => {
       setExporting(true);
       const filterMeta = {
         'Report Type': String(rType).toUpperCase(),
-        'Customer': filters.customer || 'All',
-        'Salesman': filters.salesman || 'All',
-        'Transportation': filters.transport || 'All',
-        'Location': filters.location || 'All',
-        'Bin': filters.bin || 'All',
+        'Customer': filters.customer?.length > 0 ? filters.customer.join(', ') : 'All',
+        'Salesman': filters.salesman?.length > 0 ? filters.salesman.join(', ') : 'All',
+        'Transportation': filters.transport?.length > 0 ? filters.transport.join(', ') : 'All',
+        'Location': filters.location?.length > 0 ? filters.location.join(', ') : 'All',
+        'Brand': filters.bin?.length > 0 ? filters.bin.join(', ') : 'All',
+        'Category': [filters.parentCategory?.join(', '), filters.subCategory?.join(', '), filters.subSubCategory?.join(', ')].filter(c => c && c.length > 0).join(' / ') || 'All',
         'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
       };
 

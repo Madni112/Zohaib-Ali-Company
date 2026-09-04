@@ -3,7 +3,7 @@ import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import TableActions from '../../ui/TableActions';
-import { MdDelete, MdAdd, MdCategory, MdClose, MdChevronRight, MdFolder } from 'react-icons/md';
+import { MdDelete, MdAdd, MdCategory, MdClose, MdChevronRight, MdFolder, MdSave } from 'react-icons/md';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { useAuth } from '../../Context/Auth';
 

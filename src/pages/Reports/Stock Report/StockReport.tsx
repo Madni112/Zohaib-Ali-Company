@@ -4,7 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
-import SearchableDropdown from '../../../components/SearchableDropdown';
+import SearchableMultiSelect from '../../../components/SearchableMultiSelect';
 
 const StockReport = () => {
   const navigate = useNavigate();
@@ -23,20 +23,29 @@ const StockReport = () => {
   const [locations, setLocations] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
 
-  const [criteria, setCriteria] = useState(() => location.state?.criteria || ({
-    uom: location.state?.uom || location.state?.criteria?.uom || 'All',
-    bin: location.state?.bin || location.state?.criteria?.bin || 'All',
-    product: location.state?.product || location.state?.criteria?.product || 'All',
-    location: location.state?.location || location.state?.criteria?.location || 'All',
-    employee: 'All', category: 'All', stockValueTier: 'All',
-    dateFrom: location.state?.dateFrom || location.state?.criteria?.dateFrom || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    dateTo: location.state?.dateTo || location.state?.criteria?.dateTo || new Date().toISOString().split('T')[0],
-    asOfDate: location.state?.asOfDate || location.state?.criteria?.asOfDate || new Date().toISOString().split('T')[0],
-    showSalePrice: true,
-    showPurchasePrice: true,
-    showFinalPrice: true,
-    showSpecifications: true
-  }));
+  const parseCriteriaArray = (val: any) => Array.isArray(val) ? val : (typeof val === 'string' && val !== 'All' ? [val] : []);
+
+  const [criteria, setCriteria] = useState(() => {
+    const base = location.state?.criteria || {};
+    return {
+      uom: location.state?.uom ? [location.state.uom] : parseCriteriaArray(base.uom),
+      bin: location.state?.bin ? [location.state.bin] : parseCriteriaArray(base.bin),
+      product: location.state?.product ? [location.state.product] : parseCriteriaArray(base.product),
+      location: location.state?.location ? [location.state.location] : parseCriteriaArray(base.location),
+      employee: parseCriteriaArray(base.employee),
+      parentCategory: location.state?.parentCategory ? [location.state.parentCategory] : parseCriteriaArray(base.parentCategory),
+      subCategory: location.state?.subCategory ? [location.state.subCategory] : parseCriteriaArray(base.subCategory),
+      subSubCategory: location.state?.subSubCategory ? [location.state.subSubCategory] : parseCriteriaArray(base.subSubCategory),
+      stockValueTier: base.stockValueTier || 'All',
+      dateFrom: location.state?.dateFrom || base.dateFrom || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
+      dateTo: location.state?.dateTo || base.dateTo || new Date().toISOString().split('T')[0],
+      asOfDate: location.state?.asOfDate || base.asOfDate || new Date().toISOString().split('T')[0],
+      showSalePrice: base.showSalePrice !== undefined ? base.showSalePrice : true,
+      showPurchasePrice: base.showPurchasePrice !== undefined ? base.showPurchasePrice : true,
+      showFinalPrice: base.showFinalPrice !== undefined ? base.showFinalPrice : true,
+      showSpecifications: base.showSpecifications !== undefined ? base.showSpecifications : true
+    };
+  });
 
   useEffect(() => {
     navigate('.', { replace: true, state: { ...location.state, activeTab, criteria } });
@@ -47,7 +56,7 @@ const StockReport = () => {
       try {
         setLoading(true);
         const [catRes, prodRes, locRes, empRes, uomRes, binRes] = await Promise.all([
-          supabase.from('inventory_categories').select('id, name'),
+          supabase.from('inventory_categories').select('id, name, parent_id'),
           supabase.from('products').select('id, product_name, category, bin, uom'),
           supabase.from('inventory_locations').select('id, name'),
           supabase.from('salesmen').select('id, name'),
@@ -80,32 +89,57 @@ const StockReport = () => {
   const handleInputChange = (field: string, value: any) => {
     setCriteria(prev => {
       const updated = { ...prev, [field]: value };
-      if (field === 'bin') updated.product = 'All';
+      if (field === 'bin') updated.product = [];
+      if (field === 'parentCategory') {
+        updated.subCategory = [];
+        updated.subSubCategory = [];
+      }
+      if (field === 'subCategory') {
+        updated.subSubCategory = [];
+      }
       return updated;
     });
   };
 
   const getContextualProductSelectionPool = () => {
-    const selectedBin = String(criteria.bin || '').trim().toLowerCase();
-    if (!selectedBin || selectedBin === 'all') return products;
-    return products.filter(p => String(p.bin || '').trim().toLowerCase() === selectedBin);
+    if (!criteria.bin || criteria.bin.length === 0) return products;
+    const selectedBins = criteria.bin.map((b: string) => b.toLowerCase());
+    return products.filter(p => selectedBins.includes(String(p.bin || '').trim().toLowerCase()));
   };
 
   const uomOptions = useMemo(() => uoms.map(u => u.name).filter(Boolean), [uoms]);
   const binOptions = useMemo(() => bins.map(b => b.name).filter(Boolean), [bins]);
   const productOptions = useMemo(() => getContextualProductSelectionPool().map(p => p.product_name).filter(Boolean), [products, criteria.bin]);
   const locationOptions = useMemo(() => locations.map(l => l.name).filter(Boolean), [locations]);
-  const categoryOptions = useMemo(() => categories.map(c => c.name).filter(Boolean), [categories]);
+  const parentCategories = useMemo(() => categories.filter(c => c.parent_id === null), [categories]);
+  const subCategories = useMemo(() => {
+    if (!criteria.parentCategory || criteria.parentCategory.length === 0) {
+      const parentIds = new Set(parentCategories.map(p => p.id));
+      return categories.filter(c => c.parent_id !== null && parentIds.has(c.parent_id));
+    }
+    const selectedPCatIds = new Set(parentCategories.filter(c => criteria.parentCategory.includes(c.name)).map(c => c.id));
+    return categories.filter(c => c.parent_id !== null && selectedPCatIds.has(c.parent_id));
+  }, [categories, criteria.parentCategory, parentCategories]);
+  
+  const bottomCategories = useMemo(() => {
+    if (!criteria.subCategory || criteria.subCategory.length === 0) {
+      const subIds = new Set(subCategories.map(s => s.id));
+      return categories.filter(c => c.parent_id !== null && subIds.has(c.parent_id));
+    }
+    const selectedSCatIds = new Set(subCategories.filter(c => criteria.subCategory.includes(c.name)).map(c => c.id));
+    return categories.filter(c => c.parent_id !== null && selectedSCatIds.has(c.parent_id));
+  }, [categories, criteria.subCategory, subCategories]);
+
+  const parentCategoryOptions = useMemo(() => parentCategories.map(c => c.name).filter(Boolean), [parentCategories]);
+  const subCategoryOptions = useMemo(() => subCategories.map(c => c.name).filter(Boolean), [subCategories]);
+  const subSubCategoryOptions = useMemo(() => bottomCategories.map(c => c.name).filter(Boolean), [bottomCategories]);
   const employeeOptions = useMemo(() => employees.map(e => e.name).filter(Boolean), [employees]);
 
   const handleTabChange = (tab: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8) => {
     setActiveTab(tab);
     setCriteria(prev => ({
-      uom: 'All',
-      bin: 'All',
-      product: 'All',
-      location: 'All',
-      employee: 'All', category: 'All', stockValueTier: 'All',
+      uom: [], bin: [], product: [], location: [], employee: [],
+      parentCategory: [], subCategory: [], subSubCategory: [], stockValueTier: 'All',
       dateFrom: prev.dateFrom,
       dateTo: prev.dateTo,
       asOfDate: prev.asOfDate,
@@ -160,9 +194,9 @@ const StockReport = () => {
 
           {(activeTab === 1 || activeTab === 2 || activeTab === 5 || activeTab === 6) && (
             <>
-              <SearchableDropdown label="Product Group (UOM):" placeholder="UOM Group" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
-              <SearchableDropdown label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+              <SearchableMultiSelect label="Product Group (UOM):" placeholder="UOM Group" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
+              <SearchableMultiSelect label="Brand:" placeholder="Brand" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
+              <SearchableMultiSelect label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               
               {activeTab === 5 && (
                 <div className="md:col-span-4 grid grid-cols-2 sm:grid-cols-4 gap-4 bg-gray-50 dark:bg-meta-4/20 p-3 rounded border border-stroke dark:border-strokedark mt-2">
@@ -189,17 +223,17 @@ const StockReport = () => {
 
           {activeTab === 3 && (
             <>
-              <SearchableDropdown label="Warehouse Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
-              <SearchableDropdown label="Target Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+              <SearchableMultiSelect label="Warehouse Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
+              <SearchableMultiSelect label="Target Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               <div><label className="block font-bold text-gray-500 mb-1">As Of Date Balance:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.asOfDate} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('asOfDate', today); else handleInputChange('asOfDate', e.target.value); }} className="w-full border rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none" /></div>
             </>
           )}
 
           {activeTab === 4 && (
             <>
-              <SearchableDropdown label="Transfer Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
-              <SearchableDropdown label="Target Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
-              <SearchableDropdown label="Employee Logistics Link:" placeholder="Personnel Agent" options={employeeOptions} value={criteria.employee} onChange={(val) => handleInputChange('employee', val)} />
+              <SearchableMultiSelect label="Transfer Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
+              <SearchableMultiSelect label="Target Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+              <SearchableMultiSelect label="Employee Logistics Link:" placeholder="Personnel Agent" options={employeeOptions} value={criteria.employee} onChange={(val) => handleInputChange('employee', val)} />
               <div><label className="block font-bold text-gray-500 mb-1">Transfer Start Date:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateFrom', today); else handleInputChange('dateFrom', e.target.value); }} className="w-full border rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none" /></div>
               <div><label className="block font-bold text-gray-500 mb-1">Transfer End Date:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('dateTo', today); else handleInputChange('dateTo', e.target.value); }} className="w-full border rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none" /></div>
               <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
@@ -215,9 +249,11 @@ const StockReport = () => {
 
           {activeTab === 7 && (
             <>
-              <SearchableDropdown label="Product Group (UOM):" placeholder="UOM Group" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
-              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
-              <SearchableDropdown label="Product Category:" placeholder="Category" options={categoryOptions} value={criteria.category} onChange={(val) => handleInputChange('category', val)} />
+              <SearchableMultiSelect label="Product Group (UOM):" placeholder="UOM Group" options={uomOptions} value={criteria.uom} onChange={(val) => handleInputChange('uom', val)} />
+              <SearchableMultiSelect label="Brand:" placeholder="Brand" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
+              <SearchableMultiSelect label="Parent Category:" placeholder="Parent Category" options={parentCategoryOptions} value={criteria.parentCategory} onChange={(val) => handleInputChange('parentCategory', val)} />
+              <SearchableMultiSelect label="Sub Category:" placeholder="Sub Category" options={subCategoryOptions} value={criteria.subCategory} onChange={(val) => handleInputChange('subCategory', val)} />
+              <SearchableMultiSelect label="Category:" placeholder="Category" options={subSubCategoryOptions} value={criteria.subSubCategory} onChange={(val) => handleInputChange('subSubCategory', val)} />
               
               <div>
                 <label className="block font-bold text-gray-500 mb-1">StockValue Tier Filter:</label>
@@ -233,9 +269,9 @@ const StockReport = () => {
 
           {activeTab === 8 && (
             <>
-              <SearchableDropdown label="Target Warehouse Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
-              <SearchableDropdown label="Bin Allocation:" placeholder="Bin" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
-              <SearchableDropdown label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
+              <SearchableMultiSelect label="Target Warehouse Location:" placeholder="Location" options={locationOptions} value={criteria.location} onChange={(val) => handleInputChange('location', val)} />
+              <SearchableMultiSelect label="Brand:" placeholder="Brand" options={binOptions} value={criteria.bin} onChange={(val) => handleInputChange('bin', val)} />
+              <SearchableMultiSelect label="Select Product Asset:" placeholder="Product" options={productOptions} value={criteria.product} onChange={(val) => handleInputChange('product', val)} />
               <div><label className="block font-bold text-gray-500 mb-1">As Of Date Cutoff:</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.asOfDate} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; if (e.target.value > today) handleInputChange('asOfDate', today); else handleInputChange('asOfDate', e.target.value); }} className="w-full border rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none" /></div>
             </>
           )}
