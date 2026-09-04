@@ -5,7 +5,8 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiTrash2, FiUser, FiUserCheck, FiX, FiCheck, FiPrinter } from 'react-icons/fi';
+import { FiPrinter, FiSave, FiCheck, FiX, FiUserCheck, FiTrash2, FiUser } from 'react-icons/fi';
+import { SearchableDropdown } from '../../../components/SearchableDropdown';
 import { useAuth } from '../../../Context/Auth';
 
 const NewInvoice = () => {
@@ -677,7 +678,7 @@ const NewInvoice = () => {
                   )}
                 </div>
 
-                <div className="border border-stroke dark:border-strokedark rounded-sm mt-4 relative z-30 overflow-x-auto min-h-[400px]">
+                <div className="border border-stroke dark:border-strokedark rounded-sm mt-4 relative z-30 overflow-visible pb-4">
                   <FieldArray name="items">
                     {({ push, remove }) => {
                       const showDiscount = values.showDiscount;
@@ -1406,17 +1407,20 @@ const NewInvoice = () => {
                     {(values.settlementMode === 'Bank' || values.settlementMode === 'Split') && (
                       <div>
                         <span className="font-bold text-gray-500 block mb-1">Corporate Bank Ledger Profile: *</span>
-                        <select
-                          name="selectedBankTitle"
-                          value={values.selectedBankTitle}
-                          onChange={handleChange}
-                          className={`w-full border rounded p-2 text-xs bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.selectedBankTitle ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
-                        >
-                          <option value="">-- Choose Account Wire Registry --</option>
-                          {banksList.map(b => (
-                            <option key={b.id} value={b.accountTitle}>{b.bankName} - {b.accountTitle}</option>
-                          ))}
-                        </select>
+                        <SearchableDropdown
+                          options={banksList.map(b => `${b.bankName} - ${b.accountTitle}`)}
+                          value={
+                            banksList.find(b => b.accountTitle === values.selectedBankTitle)
+                              ? `${banksList.find(b => b.accountTitle === values.selectedBankTitle)!.bankName} - ${values.selectedBankTitle}`
+                              : values.selectedBankTitle
+                          }
+                          onChange={(val) => {
+                            const match = banksList.find(b => `${b.bankName} - ${b.accountTitle}` === val);
+                            handleChange({ target: { name: 'selectedBankTitle', value: match ? match.accountTitle : val } });
+                          }}
+                          placeholder="-- Search Account Wire Registry --"
+                          className={hasAttempted && errors.selectedBankTitle ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}
+                        />
                         {hasAttempted && errors.selectedBankTitle && <p className="text-red-500 text-[10px] font-bold mt-1">{String(errors.selectedBankTitle)}</p>}
                       </div>
                     )}
