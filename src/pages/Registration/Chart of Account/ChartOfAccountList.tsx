@@ -4,7 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
-import { MdAdd, MdAccountBalanceWallet, MdAutoAwesome } from 'react-icons/md';
+import { MdAdd, MdAccountBalanceWallet, MdAutoAwesome, MdFolder, MdFolderOpen, MdInsertDriveFile, MdRemove } from 'react-icons/md';
 
 const RECOMMENDED_DEFAULT_ACCOUNTS = [
     { account_code: '1010', account_title: 'Cash Box', category_code: 'A-Assets', control_code: 'Cash', notes: 'Main cash in hand vault / cash register' },
@@ -148,15 +148,27 @@ const ChartOfAccountList = () => {
         acc.category_code?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const totalEntries = filteredAccounts.length;
-    const totalPages = Math.ceil(totalEntries / pageSize);
-    const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, totalEntries);
-    const paginatedAccounts = filteredAccounts.slice(startIndex, startIndex + pageSize);
+    const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, pageSize]);
+    const toggleNode = (nodeId: string) => {
+        setExpandedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
+    };
+
+    const isExpanded = (nodeId: string) => {
+        return expandedNodes[nodeId] !== false; // Default to true (expanded)
+    };
+
+    const treeData = React.useMemo(() => {
+        const tree: Record<string, Record<string, any[]>> = {};
+        filteredAccounts.forEach(acc => {
+            const cat = acc.category_code || 'Uncategorized';
+            const ctrl = acc.control_code || 'Unassigned';
+            if (!tree[cat]) tree[cat] = {};
+            if (!tree[cat][ctrl]) tree[cat][ctrl] = [];
+            tree[cat][ctrl].push(acc);
+        });
+        return tree;
+    }, [filteredAccounts]);
 
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-xs">
@@ -190,99 +202,93 @@ const ChartOfAccountList = () => {
 
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Show</span>
-                        <select
-                            value={pageSize}
-                            onChange={(e) => setPageSize(Number(e.target.value))}
-                            className="rounded border border-stroke py-1 px-2 bg-transparent dark:border-strokedark outline-none focus:border-primary text-xs font-semibold text-black dark:text-white"
-                        >
-                            {[10, 20, 50, 100].map((size: number) => (
-                                <option key={size} value={size} className="dark:bg-boxdark">{size}</option>
-                            ))}
-                        </select>
-                        <span>entries</span>
+                        {/* Pagination removed for tree view continuous flow */}
                     </div>
 
                     <div className="flex items-center gap-2 text-xs w-full sm:w-auto text-gray-500 dark:text-gray-400">
                         <span>Search:</span>
-                        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search code, titles, controls..." className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-xs text-black dark:text-white" />
+                        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search code, titles, controls..." className="w-full sm:w-64 rounded border border-stroke py-1.5 px-3 bg-transparent dark:border-strokedark outline-none text-xs text-black dark:text-white focus:border-primary" />
                     </div>
                 </div>
 
-                <div className="max-w-full overflow-x-auto">
-                    <table className="w-full table-auto border-collapse">
-                        <thead>
-                            <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
-                                <th className="py-4 px-4 font-semibold w-16">S#</th>
-                                <th className="py-4 px-4 font-semibold w-28">Account Code</th>
-                                <th className="py-4 px-4 font-semibold">Account Title</th>
-                                <th className="py-4 px-4 font-semibold">Control Classification Group</th>
-                                <th className="py-4 px-4 font-semibold w-36">Main Category</th>
-                                <th className="py-4 px-4 font-semibold text-center w-24">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
-                                <tr><td colSpan={6} className="text-center py-12"><Spinner /></td></tr>
-                            ) : paginatedAccounts.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-10 text-gray-400">No ledger financial accounts registered.</td></tr>
-                            ) : (
-                                paginatedAccounts.map((account, idx) => {
-                                    const serialNumber = startIndex + idx + 1;
-                                    return (
-                                        <tr key={account.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150">
-                                            <td className="py-3.5 px-4 font-medium text-black dark:text-white">{serialNumber}</td>
-                                            <td className="py-3.5 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">{account.account_code}</td>
-                                            <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-1.5">
-                                                <MdAccountBalanceWallet size={14} className="text-emerald-600 dark:text-emerald-400" /> {account.account_title}
-                                            </td>
-                                            <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-semibold">{account.control_code}</td>
-                                            <td className="py-3.5 px-4">
-                                                <span className="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
-                                                    {account.category_code}
-                                                </span>
-                                            </td>
-                                            <td className="py-3.5 px-4 text-center">
-                                                <TableActions
-                                                    onEdit={() => navigate('/Registration/Chart-of-Account/Add', { state: { account } })}
-                                                    onDelete={() => handleDeleteAccount(account.id)}
-                                                    editTitle="Edit Account"
-                                                    deleteTitle="Delete Account"
-                                                />
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                <div className="max-w-full overflow-x-auto rounded-md bg-white dark:bg-meta-4/10 p-2 sm:p-4 border border-stroke dark:border-strokedark font-sans">
+                    {loading ? (
+                        <div className="text-center py-12"><Spinner /></div>
+                    ) : filteredAccounts.length === 0 ? (
+                        <div className="text-center py-10 text-gray-400 italic">No ledger financial accounts found.</div>
+                    ) : (
+                        <div className="flex flex-col gap-2 min-w-[600px]">
+                            {/* Header row to align columns */}
+                            <div className="flex items-center text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-2 pb-2 border-b border-stroke dark:border-strokedark">
+                                <div className="flex-1">Account Title / Group</div>
+                                <div className="w-24 text-right">Account Code</div>
+                                <div className="w-28 flex justify-center">Actions</div>
+                            </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4 pt-4 border-t border-stroke dark:border-strokedark">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Showing {startIndex + 1} to {endIndex} of {totalEntries} entries</div>
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-                            >
-                                Previous
-                            </button>
-                            <span className="px-3 py-1.5 font-bold text-teal-600 text-xs">
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <button
-                                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages || totalPages === 0}
-                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-40 cursor-pointer text-xs"
-                            >
-                                Next
-                            </button>
+                            {Object.entries(treeData).map(([category, controls]) => (
+                                <div key={category} className="flex flex-col gap-1.5">
+                                    {/* Level 1: Category */}
+                                    <div className="flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-md border border-slate-100 dark:border-slate-800 group">
+                                        <button onClick={() => toggleNode(`cat-${category}`)} className="text-slate-400 hover:text-emerald-600 transition bg-white dark:bg-slate-700 p-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                                            {isExpanded(`cat-${category}`) ? <MdRemove size={14} /> : <MdAdd size={14} />}
+                                        </button>
+                                        <MdFolder className="text-slate-700 dark:text-slate-300 group-hover:text-emerald-600 transition" size={18} />
+                                        <span className="font-black text-[13px] text-slate-900 dark:text-white uppercase tracking-tight">{category}</span>
+                                        <span className="ml-2 text-[9px] font-black uppercase bg-primary/10 text-primary px-1.5 py-0.5 rounded">Category</span>
+                                    </div>
+
+                                    {isExpanded(`cat-${category}`) && (
+                                        <div className="pl-6 flex flex-col gap-1 mt-0.5 border-l-2 border-slate-100 dark:border-slate-800 ml-3.5 mb-2">
+                                            {Object.entries(controls).map(([control, accs]) => (
+                                                <div key={control} className="flex flex-col gap-1 mt-0.5">
+                                                    {/* Level 2: Control Group */}
+                                                    <div className="flex items-center gap-2 p-1.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded transition group">
+                                                        <button onClick={() => toggleNode(`ctrl-${category}-${control}`)} className="text-slate-400 hover:text-emerald-600 transition bg-white dark:bg-slate-700 p-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                                                            {isExpanded(`ctrl-${category}-${control}`) ? <MdRemove size={12} /> : <MdAdd size={12} />}
+                                                        </button>
+                                                        <MdFolderOpen className="text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 transition" size={16} />
+                                                        <span className="font-bold text-xs text-slate-800 dark:text-slate-200">{control}</span>
+                                                        <span className="ml-2 text-[9px] font-bold uppercase bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded">Group</span>
+                                                    </div>
+
+                                                    {isExpanded(`ctrl-${category}-${control}`) && (
+                                                        <div className="pl-6 flex flex-col gap-0.5 border-l border-slate-100 dark:border-slate-800 ml-2.5">
+                                                            {/* Level 3: Accounts */}
+                                                            {accs.map(account => (
+                                                                <div key={account.id} className="flex items-center p-1.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded transition group">
+                                                                    <div className="flex-1 flex items-center gap-2.5 pl-1.5">
+                                                                        <MdInsertDriveFile className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 transition" size={14} />
+                                                                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition">{account.account_title}</span>
+                                                                    </div>
+                                                                    <div className="w-24 text-right">
+                                                                        <span className="font-mono text-xs font-bold text-slate-400 group-hover:text-emerald-600 dark:text-slate-500 dark:group-hover:text-emerald-400 transition">{account.account_code}</span>
+                                                                    </div>
+                                                                    <div className="w-28 flex justify-center opacity-40 group-hover:opacity-100 transition">
+                                                                        <TableActions
+                                                                            onEdit={() => navigate('/Registration/Chart-of-Account/Add', { state: { account } })}
+                                                                            onDelete={() => handleDeleteAccount(account.id)}
+                                                                            editTitle="Edit Account"
+                                                                            deleteTitle="Delete Account"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
+                    )}
                 </div>
 
             </div>
+
         </div>
+
     );
 };
 

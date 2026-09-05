@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
+import { createClient } from '@supabase/supabase-js';
 import Spinner from '../../ui/Spinner';
 import DarkModeSwitcher from '../../components/Header/DarkModeSwitcher';
 import {

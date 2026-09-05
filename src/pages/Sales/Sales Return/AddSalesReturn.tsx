@@ -336,6 +336,7 @@ const AddSalesReturn = () => {
   const validationSchema = Yup.object().shape({
     customerName: Yup.string().required('Customer selection is required'),
     sourceWarehouse: Yup.string().required('Receiving warehouse selection is required'),
+    gatePassNo: Yup.string().required('Gate Pass No is required'),
     returnDate: Yup.string().required('Return date is required'),
     paymentTerm: Yup.string().required('Reimbursement method is required'),
     amountPaid: Yup.number().when('paymentTerm', {
@@ -408,6 +409,7 @@ const AddSalesReturn = () => {
             customerName: editData.customer_name || '',
             sourceWarehouse: editData.warehouse_name || editData.source_warehouse || (locations[0]?.name || 'Main Warehouse'),
             invoiceNo: editData.original_invoice_no || editData.invoice_no || editData.metadata?.linkedInvoiceNo || '',
+            gatePassNo: editData.gate_pass_no || '',
             returnDate: editData.return_date || (editData.created_at ? editData.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
             paymentTerm: editData.settlement_mode || editData.payment_term || (editData.metadata?.cashPayoutPaid && editData.metadata?.bankPayoutPaid ? 'Split' : (Number(editData.payout_amount_paid || editData.amount_paid || 0) > 0 ? 'By Cash' : 'On Credit')),
             selectedBankId: editData.metadata?.selectedBankId || editData.bank_name || '',
@@ -435,6 +437,7 @@ const AddSalesReturn = () => {
             customerName: editData.customer_name || '',
             sourceWarehouse: editData.dispatch_warehouse || (locations[0]?.name || 'Main Warehouse'),
             invoiceNo: `INV-${String(editData.id).padStart(4, '0')}`,
+            gatePassNo: editData.gate_pass_no || '',
             returnDate: new Date().toISOString().split('T')[0],
             paymentTerm: 'On Credit',
             selectedBankId: '',
@@ -455,6 +458,7 @@ const AddSalesReturn = () => {
             customerName: '',
             sourceWarehouse: locations[0]?.name || 'Main Warehouse',
             invoiceNo: '',
+            gatePassNo: '',
             returnDate: new Date().toISOString().split('T')[0],
             paymentTerm: 'On Credit',
             selectedBankId: '',
@@ -603,6 +607,7 @@ const AddSalesReturn = () => {
                 return_no: values.returnNo,
                 customer_name: values.customerName,
                 return_date: values.returnDate,
+                gate_pass_no: values.gatePassNo,
                 warehouse_name: values.sourceWarehouse,
                 source_warehouse: values.sourceWarehouse,
                 invoice_no: primaryLinkedInv || (selectedInvNo ? selectedInvNo : null),
@@ -722,7 +727,7 @@ const AddSalesReturn = () => {
               <Form className="space-y-6">
                 
                 {/* ── TOP FORM HEADER GRID ── */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   
                   {/* Return Memo ID Code */}
                   <div>
@@ -747,6 +752,23 @@ const AddSalesReturn = () => {
                       value={values.returnDate}
                       className={`w-full border rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-800 font-bold outline-none text-slate-900 dark:text-white text-xs ${
                         touched.returnDate && errors.returnDate ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Gate Pass No */}
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 font-bold uppercase text-[11px] mb-1">
+                      Gate Pass No: *
+                    </label>
+                    <input
+                      type="text"
+                      name="gatePassNo"
+                      onChange={handleChange}
+                      value={values.gatePassNo}
+                      placeholder="Enter Gate Pass..."
+                      className={`w-full border rounded-xl p-2.5 bg-slate-50/50 dark:bg-slate-800 font-bold outline-none text-slate-900 dark:text-white text-xs ${
+                        touched.gatePassNo && errors.gatePassNo ? 'border-red-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-600'
                       }`}
                     />
                   </div>

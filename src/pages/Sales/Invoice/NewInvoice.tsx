@@ -112,6 +112,21 @@ const NewInvoice = () => {
         cashAmountPaid: Number(editData.cash_amount_paid || 0),
         bankAmountPaid: Number(editData.bank_amount || 0),
         dcNo: editData.dc_no || '',
+        gatePasses: (() => {
+          if (!editData.gate_pass_no) return {};
+          try {
+            if (editData.gate_pass_no.includes(':')) {
+              const parts = String(editData.gate_pass_no).split(' | ');
+              const obj: any = {};
+              parts.forEach((p) => {
+                const [k, v] = p.split(':');
+                if (k && v) obj[k.trim()] = v.trim();
+              });
+              return obj;
+            }
+            return { [editData.items?.[0]?.warehouse || 'Main Warehouse']: editData.gate_pass_no };
+          } catch (e) { return {}; }
+        })(),
         shippingAddress: editData.shipping_address || '',
         showDiscount: parsedItems.some((i: any) => Number(i.discountAmt || i.discount_amt || i.discount || 0) > 0),
         items: parsedItems.map((it: any) => ({
@@ -127,6 +142,8 @@ const NewInvoice = () => {
       dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
       transportType: 'No Transport (Handover)', transportCharges: 0, settlementMode: 'Cash',
       selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0, dcNo: '',
+      dcNo: '',
+      gatePasses: {},
       shippingAddress: '',
       items: [{ skuCode: '', itemName: '', warehouse: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0 }]
     };
@@ -156,6 +173,19 @@ const NewInvoice = () => {
         }
       }
     ),
+    gatePasses: Yup.object().test('all-gate-passes', 'Gate pass required for all locations', function (value, ctx) {
+      const { items } = ctx.parent;
+      if (!items || !Array.isArray(items)) return true;
+      const validItems = items.filter((i: any) => i.itemName && i.itemName.trim() !== '');
+      if (validItems.length === 0) return true;
+      const uniqueLocations = Array.from(new Set(validItems.map((i: any) => i.warehouse || ctx.parent.dispatchWarehouse || 'Main Warehouse').filter(Boolean)));
+      for (const loc of uniqueLocations) {
+        if (!value || !value[loc as string]) {
+          return this.createError({ message: `Gate Pass required for ${loc}` });
+        }
+      }
+      return true;
+    }),
     shippingAddress: Yup.string().nullable(),
     saleDate: Yup.string().required('Required Field'),
     taxScenario: Yup.string().required('Required Field'),
@@ -340,6 +370,7 @@ const NewInvoice = () => {
         receipt_status: totalPaidCombined >= calculatedGrandTotal ? 'Paid' : 'On Credit',
         sale_status: 'Confirm',
         shipping_address: values.shippingAddress,
+        gate_pass_no: Object.entries(values.gatePasses || {}).map(([k, v]) => `${k}: ${v}`).join(' | '),
         items: values.items,
         scenario_type: values.applyFbrTax ? values.taxScenario : 'Standard Retail Sale (No Tax)'
       };
@@ -402,6 +433,7 @@ const NewInvoice = () => {
               transportation: values.transportType || 'By Road Transport',
               po_no: values.clientPoNumber || '',
               po_date: values.saleDate || null,
+              gate_pass_no: (values.gatePasses && values.gatePasses[whName]) || null,
               vehicle_no: values.transportCharges ? `Pending Dispatch` : 'Counter Delivery',
               remarks: `Awaiting warehouse approval for ${formattedInvCode} (${whName})`,
               total_quantity: whQty,
@@ -603,7 +635,10 @@ const NewInvoice = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
+                  <div className="hidden">
+                    {/* Gate pass moved below */}
+                  </div>
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Shipping Address (Optional):</label>
                     <textarea 
@@ -1381,6 +1416,37 @@ const NewInvoice = () => {
                     }}
                   </FieldArray>
                 </div>
+
+                {/* --- LOCATION GATE PASSES DYNAMIC SECTION --- */}
+                {(() => {
+                  const validItems = values.items.filter((i: any) => i.itemName && i.itemName.trim() !== '');
+                  if (validItems.length === 0) return null;
+                  const uniqueLocations = Array.from(new Set(validItems.map((i: any) => i.warehouse || values.dispatchWarehouse || 'Main Warehouse').filter(Boolean)));
+                  if (uniqueLocations.length === 0) return null;
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark mt-6">
+                      <div className="col-span-full mb-1">
+                        <h4 className="font-bold text-gray-700 dark:text-gray-300">Location Gate Passes</h4>
+                        <p className="text-xs text-gray-500">Provide a gate pass number for each dispatch location involved in this invoice.</p>
+                      </div>
+                      {uniqueLocations.map(loc => (
+                        <div key={loc as string}>
+                          <label className="block font-bold text-gray-500 mb-1 flex items-center gap-2">
+                            <span className="truncate">{loc as string}</span> *
+                          </label>
+                          <input 
+                            type="text" 
+                            name={`gatePasses.${loc as string}`} 
+                            value={values.gatePasses[loc as string] || ''} 
+                            onChange={handleChange} 
+                            placeholder={`Gate pass for ${loc}`} 
+                            className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && !values.gatePasses[loc as string] ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} 
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-col md:flex-row justify-between items-start gap-6 border border-stroke p-4 rounded-sm bg-slate-50/10 mt-6 relative z-0">
                   <div className="w-full md:w-1/2 space-y-4">
                     <div>

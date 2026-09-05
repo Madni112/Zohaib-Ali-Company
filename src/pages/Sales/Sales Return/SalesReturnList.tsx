@@ -185,6 +185,7 @@ const SalesReturnList = () => {
                 <th className="py-3.5 px-4 w-12 text-center">S#</th>
                 <th className="py-3.5 px-4 font-mono">Return Note #</th>
                 <th className="py-3.5 px-4 font-mono">Original Invoice</th>
+                <th className="py-3.5 px-4 font-mono">Gate Pass #</th>
                 <th className="py-3.5 px-4">Return Date</th>
                 <th className="py-3.5 px-4">Customer</th>
                 <th className="py-3.5 px-4 w-36 text-center">Return Status</th>
@@ -194,9 +195,9 @@ const SalesReturnList = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
+                <tr><td colSpan={9} className="text-center py-12"><Spinner /></td></tr>
               ) : filteredReturns.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-xs text-slate-400 italic">No return records found.</td></tr>
+                <tr><td colSpan={9} className="text-center py-10 text-xs text-slate-400 italic">No return records found.</td></tr>
               ) : (
                 paginatedReturns.map((ret, idx) => {
                   const serialNumber = startIndex + idx + 1;
@@ -225,6 +226,7 @@ const SalesReturnList = () => {
                       <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 text-center font-mono">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-bold text-emerald-600 dark:text-emerald-400 font-mono">{`RTN-${String(ret.id).padStart(4, '0')}`}</td>
                       <td className="py-3.5 px-4 font-mono font-semibold text-slate-600 dark:text-slate-400">{displayInvoiceNo}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">{ret.gate_pass_no || '-'}</td>
                       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">{ret.return_date ? ret.return_date : new Date(ret.created_at).toLocaleDateString()}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{ret.customer_name}</td>
                       <td className="py-3.5 px-4 text-center">

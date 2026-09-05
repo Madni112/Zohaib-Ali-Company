@@ -791,6 +791,7 @@ const ShopDispatchQueue = () => {
                           <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
                             <td className="py-3 px-4 font-mono">
                               <p className="font-bold text-primary dark:text-primary text-xs">{challanCode}</p>
+                              {c.gate_pass_no && <p className="text-[10px] text-emerald-600 font-bold mb-0.5">GP: {c.gate_pass_no}</p>}
                               <p className="text-[10px] text-gray-500">{c.challan_date || (c.created_at ? new Date(c.created_at).toLocaleDateString() : '-')}</p>
                             </td>
 

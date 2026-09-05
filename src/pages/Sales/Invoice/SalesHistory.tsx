@@ -483,6 +483,7 @@ const SalesHistory = () => {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
                 <th className="py-3.5 px-4 text-center w-16 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('invoice_no')}>Invoice No <span className={sortConfig?.key === 'invoice_no' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'invoice_no' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-center">Gate Pass #</th>
                 <th className="py-3.5 px-4 text-center">DC No</th>
                 <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('sale_date')}>Sale Date <span className={sortConfig?.key === 'sale_date' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'sale_date' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 text-center cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('payment_term')}>Sale Type <span className={sortConfig?.key === 'payment_term' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'payment_term' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
@@ -530,6 +531,9 @@ const SalesHistory = () => {
                     <tr key={inv.id} className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150">
                       <td className="py-3 px-4 text-slate-900 dark:text-white font-bold text-center font-mono">
                         {inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400 font-bold text-center font-mono whitespace-nowrap">
+                        {inv.gate_pass_no || '-'}
                       </td>
                       <td className="py-3 px-4 text-center font-mono">
                         {linkedDCs.length > 0 ? (

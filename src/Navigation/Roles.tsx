@@ -362,7 +362,7 @@ export const adminRoutes = [
     hideFromSidebar: true
   },
   {
-    path: '/Registration/Chart-of-Account/AddAccount',
+    path: '/Registration/Chart-of-Account/Add',
     component: <AddChartOfAccount />,
     label: 'Add Account',
     hideFromSidebar: true
