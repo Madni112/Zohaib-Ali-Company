@@ -7,47 +7,47 @@ import TableActions from '../../../ui/TableActions';
 import { MdAdd, MdAccountBalanceWallet, MdAutoAwesome, MdFolder, MdFolderOpen, MdInsertDriveFile, MdRemove } from 'react-icons/md';
 
 const RECOMMENDED_DEFAULT_ACCOUNTS = [
-    { account_code: '1010', account_title: 'Cash Box', category_code: 'A-Assets', control_code: 'Cash', notes: 'Main cash in hand vault / cash register' },
-    { account_code: '1011', account_title: 'Opening Balance', category_code: 'Equity/Capital', control_code: 'Opening Balances', notes: 'Initial capital equity and opening balance account' },
-    { account_code: '1020', account_title: 'Account Receivables (Payment From Customers)', category_code: 'A-Assets', control_code: 'Customers', notes: 'Trade debtors and customer invoice receivables ledger' },
-    { account_code: '1030', account_title: 'Merchandise Inventory (Stock in Hand)', category_code: 'A-Assets', control_code: 'Inventory', notes: 'Stock assets for warehouse valuation' },
-    { account_code: '2010', account_title: 'Accounts Payable (Trade Creditors)', category_code: 'L-Liabilities', control_code: 'Vendor', notes: 'Supplier procurement and vendor liability' },
-    { account_code: '4010', account_title: 'Sales Income Account', category_code: 'Income', control_code: 'Sales', notes: 'Primary gross commercial sales income' },
-    { account_code: '4020', account_title: 'Discount Allowed (Sales Discount)', category_code: 'Income', control_code: 'Discounts', notes: 'Concessions granted to buyers' },
-    { account_code: '4030', account_title: 'Discount Received (Purchase Discount)', category_code: 'Income', control_code: 'Discounts', notes: 'Discounts received from vendors' },
-    { account_code: '5010', account_title: 'Purchases / Cost of Goods Sold', category_code: 'Expenses', control_code: 'Cost of Sales', notes: 'Direct procurement cost of inventory' },
-    { account_code: '5020', account_title: 'Office / Warehouse Rent Expense', category_code: 'Expenses', control_code: 'Rent Expenses', notes: 'Monthly premises rental' },
-    { account_code: '5030', account_title: 'Salaries & Staff Wages Expense', category_code: 'Expenses', control_code: 'Payroll', notes: 'Monthly employee compensation' },
-    { account_code: '5040', account_title: 'Transportation & Freight Charges', category_code: 'Expenses', control_code: 'Logistics', notes: 'Carriage, courier, and shipping charges' },
-    { account_code: '000', account_title: 'Electricity Bill', category_code: 'Expenses', control_code: 'Utility Bills', notes: 'Monthly electricity and power utility expenses' },
+    { account_code: '1010', account_title: 'Cash Box', category_code: '1. ASSETS', control_code: 'Cash', notes: 'Main cash in hand vault / cash register' },
+    { account_code: '1011', account_title: 'Opening Balance', category_code: '3. EQUITY', control_code: 'Opening Balances', notes: 'Initial capital equity and opening balance account' },
+    { account_code: '1020', account_title: 'Account Receivables (Payment From Customers)', category_code: '1. ASSETS', control_code: 'Customers', notes: 'Trade debtors and customer invoice receivables ledger' },
+    { account_code: '1030', account_title: 'Merchandise Inventory (Stock in Hand)', category_code: '1. ASSETS', control_code: 'Inventory', notes: 'Stock assets for warehouse valuation' },
+    { account_code: '2010', account_title: 'Accounts Payable (Trade Creditors)', category_code: '2. LIABILITIES', control_code: 'Vendor', notes: 'Supplier procurement and vendor liability' },
+    { account_code: '4010', account_title: 'Sales Income Account', category_code: '4. REVENUE', control_code: 'Sales', notes: 'Primary gross commercial sales income' },
+    { account_code: '4020', account_title: 'Discount Allowed (Sales Discount)', category_code: '4. REVENUE', control_code: 'Discounts', notes: 'Concessions granted to buyers' },
+    { account_code: '4030', account_title: 'Discount Received (Purchase Discount)', category_code: '4. REVENUE', control_code: 'Discounts', notes: 'Discounts received from vendors' },
+    { account_code: '5010', account_title: 'Purchases / Cost of Goods Sold', category_code: '5. EXPENSES', control_code: 'Cost of Sales', notes: 'Direct procurement cost of inventory' },
+    { account_code: '5020', account_title: 'Office / Warehouse Rent Expense', category_code: '5. EXPENSES', control_code: 'Rent Expenses', notes: 'Monthly premises rental' },
+    { account_code: '5030', account_title: 'Salaries & Staff Wages Expense', category_code: '5. EXPENSES', control_code: 'Payroll', notes: 'Monthly employee compensation' },
+    { account_code: '5040', account_title: 'Transportation & Freight Charges', category_code: '5. EXPENSES', control_code: 'Logistics', notes: 'Carriage, courier, and shipping charges' },
+    { account_code: '000', account_title: 'Electricity Bill', category_code: '5. EXPENSES', control_code: 'Utility Bills', notes: 'Monthly electricity and power utility expenses' },
 ];
 
 const RECOMMENDED_CATEGORIES = [
-    { name: 'A-Assets' },
-    { name: 'L-Liabilities' },
-    { name: 'Income' },
-    { name: 'Expenses' },
-    { name: 'Equity/Capital' },
+    { name: '1. ASSETS' },
+    { name: '2. LIABILITIES' },
+    { name: '3. EQUITY' },
+    { name: '4. REVENUE' },
+    { name: '5. EXPENSES' },
 ];
 
 const RECOMMENDED_CONTROLS = [
-    { category_name: 'A-Assets', control_name: 'Cash' },
-    { category_name: 'A-Assets', control_name: 'Banks' },
-    { category_name: 'A-Assets', control_name: 'Customers' },
-    { category_name: 'A-Assets', control_name: 'Inventory' },
-    { category_name: 'L-Liabilities', control_name: 'Vendor' },
-    { category_name: 'L-Liabilities', control_name: 'Payroll' },
-    { category_name: 'Income', control_name: 'Sales' },
-    { category_name: 'Income', control_name: 'Discounts' },
-    { category_name: 'Income', control_name: 'Other Income' },
-    { category_name: 'Expenses', control_name: 'Cost of Sales' },
-    { category_name: 'Expenses', control_name: 'Utility Bills' },
-    { category_name: 'Expenses', control_name: 'Rent Expenses' },
-    { category_name: 'Expenses', control_name: 'Payroll' },
-    { category_name: 'Expenses', control_name: 'Logistics' },
-    { category_name: 'Expenses', control_name: 'General Expenses' },
-    { category_name: 'Equity/Capital', control_name: 'Opening Balances' },
-    { category_name: 'Equity/Capital', control_name: 'Capital' },
+    { category_name: '1. ASSETS', control_name: 'Cash' },
+    { category_name: '1. ASSETS', control_name: 'Banks' },
+    { category_name: '1. ASSETS', control_name: 'Customers' },
+    { category_name: '1. ASSETS', control_name: 'Inventory' },
+    { category_name: '2. LIABILITIES', control_name: 'Vendor' },
+    { category_name: '2. LIABILITIES', control_name: 'Payroll' },
+    { category_name: '4. REVENUE', control_name: 'Sales' },
+    { category_name: '4. REVENUE', control_name: 'Discounts' },
+    { category_name: '4. REVENUE', control_name: 'Other Income' },
+    { category_name: '5. EXPENSES', control_name: 'Cost of Sales' },
+    { category_name: '5. EXPENSES', control_name: 'Utility Bills' },
+    { category_name: '5. EXPENSES', control_name: 'Rent Expenses' },
+    { category_name: '5. EXPENSES', control_name: 'Payroll' },
+    { category_name: '5. EXPENSES', control_name: 'Logistics' },
+    { category_name: '5. EXPENSES', control_name: 'General Expenses' },
+    { category_name: '3. EQUITY', control_name: 'Opening Balances' },
+    { category_name: '3. EQUITY', control_name: 'Capital' },
 ];
 
 const ChartOfAccountList = () => {
@@ -155,7 +155,7 @@ const ChartOfAccountList = () => {
     };
 
     const isExpanded = (nodeId: string) => {
-        return expandedNodes[nodeId] !== false; // Default to true (expanded)
+        return expandedNodes[nodeId] === true; // Default to false (collapsed)
     };
 
     const treeData = React.useMemo(() => {
@@ -169,6 +169,29 @@ const ChartOfAccountList = () => {
         });
         return tree;
     }, [filteredAccounts]);
+
+    const handleKeyDown = (e: React.KeyboardEvent, type: string, id: string, payload?: any) => {
+        if (e.key === 'ArrowRight') {
+            if (!isExpanded(id)) toggleNode(id);
+        } else if (e.key === 'ArrowLeft') {
+            if (isExpanded(id)) toggleNode(id);
+        } else if (e.key === 'Enter') {
+            if (type === 'account' && payload) {
+                navigate('/Registration/Chart-of-Account/Add', { state: { account: payload } });
+            } else {
+                toggleNode(id);
+            }
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const focusableElements = Array.from(document.querySelectorAll('.keyboard-nav-node')) as HTMLElement[];
+            const currentIndex = focusableElements.indexOf(e.currentTarget as HTMLElement);
+            if (e.key === 'ArrowDown' && currentIndex < focusableElements.length - 1) {
+                focusableElements[currentIndex + 1].focus();
+            } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+                focusableElements[currentIndex - 1].focus();
+            }
+        }
+    };
 
     return (
         <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-xs">
@@ -225,11 +248,16 @@ const ChartOfAccountList = () => {
                                 <div className="w-28 flex justify-center">Actions</div>
                             </div>
 
-                            {Object.entries(treeData).map(([category, controls]) => (
+                            {Object.entries(treeData).sort(([a], [b]) => a.localeCompare(b)).map(([category, controls]) => (
                                 <div key={category} className="flex flex-col gap-1.5">
                                     {/* Level 1: Category */}
-                                    <div className="flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-md border border-slate-100 dark:border-slate-800 group">
-                                        <button onClick={() => toggleNode(`cat-${category}`)} className="text-slate-400 hover:text-emerald-600 transition bg-white dark:bg-slate-700 p-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                                    <div 
+                                        className="keyboard-nav-node focus:outline-none focus:ring-2 focus:ring-primary focus:bg-slate-100 dark:focus:bg-slate-700 flex items-center gap-2.5 p-2 bg-slate-50 dark:bg-slate-800/60 rounded-md border border-slate-100 dark:border-slate-800 group"
+                                        tabIndex={0}
+                                        onKeyDown={(e) => handleKeyDown(e, 'category', `cat-${category}`)}
+                                        onClick={() => toggleNode(`cat-${category}`)}
+                                    >
+                                        <button tabIndex={-1} className="text-slate-400 hover:text-emerald-600 transition bg-white dark:bg-slate-700 p-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center">
                                             {isExpanded(`cat-${category}`) ? <MdRemove size={14} /> : <MdAdd size={14} />}
                                         </button>
                                         <MdFolder className="text-slate-700 dark:text-slate-300 group-hover:text-emerald-600 transition" size={18} />
@@ -239,11 +267,16 @@ const ChartOfAccountList = () => {
 
                                     {isExpanded(`cat-${category}`) && (
                                         <div className="pl-6 flex flex-col gap-1 mt-0.5 border-l-2 border-slate-100 dark:border-slate-800 ml-3.5 mb-2">
-                                            {Object.entries(controls).map(([control, accs]) => (
+                                            {Object.entries(controls).sort(([a], [b]) => a.localeCompare(b)).map(([control, accs]) => (
                                                 <div key={control} className="flex flex-col gap-1 mt-0.5">
                                                     {/* Level 2: Control Group */}
-                                                    <div className="flex items-center gap-2 p-1.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded transition group">
-                                                        <button onClick={() => toggleNode(`ctrl-${category}-${control}`)} className="text-slate-400 hover:text-emerald-600 transition bg-white dark:bg-slate-700 p-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                                                    <div 
+                                                        className="keyboard-nav-node focus:outline-none focus:ring-2 focus:ring-primary focus:bg-slate-100 dark:focus:bg-slate-700 flex items-center gap-2 p-1.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded transition group cursor-pointer"
+                                                        tabIndex={0}
+                                                        onKeyDown={(e) => handleKeyDown(e, 'control', `ctrl-${category}-${control}`)}
+                                                        onClick={() => toggleNode(`ctrl-${category}-${control}`)}
+                                                    >
+                                                        <button tabIndex={-1} className="text-slate-400 hover:text-emerald-600 transition bg-white dark:bg-slate-700 p-0.5 rounded shadow-sm border border-slate-200 dark:border-slate-600 flex items-center justify-center">
                                                             {isExpanded(`ctrl-${category}-${control}`) ? <MdRemove size={12} /> : <MdAdd size={12} />}
                                                         </button>
                                                         <MdFolderOpen className="text-slate-500 dark:text-slate-400 group-hover:text-emerald-600 transition" size={16} />
@@ -252,23 +285,23 @@ const ChartOfAccountList = () => {
                                                     </div>
 
                                                     {isExpanded(`ctrl-${category}-${control}`) && (
-                                                        <div className="pl-6 flex flex-col gap-0.5 border-l border-slate-100 dark:border-slate-800 ml-2.5">
-                                                            {/* Level 3: Accounts */}
-                                                            {accs.map(account => (
-                                                                <div key={account.id} className="flex items-center p-1.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded transition group">
-                                                                    <div className="flex-1 flex items-center gap-2.5 pl-1.5">
-                                                                        <MdInsertDriveFile className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 transition" size={14} />
-                                                                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition">{account.account_title}</span>
+                                                        <div className="pl-6 flex flex-col gap-1 mt-0.5 border-l-2 border-slate-100 dark:border-slate-800 ml-3.5 pb-2">
+                                                            {accs.map((acc, index) => (
+                                                                <div 
+                                                                    key={acc.id} 
+                                                                    className={`keyboard-nav-node focus:outline-none focus:ring-2 focus:ring-primary focus:bg-slate-100 dark:focus:bg-slate-700 flex items-center justify-between p-2 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition ${index !== accs.length - 1 ? 'border-b border-stroke dark:border-strokedark/50' : ''}`}
+                                                                    tabIndex={0}
+                                                                    onKeyDown={(e) => handleKeyDown(e, 'account', `acc-${acc.id}`, acc)}
+                                                                >
+                                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                        <MdInsertDriveFile className="text-slate-400 shrink-0" size={15} />
+                                                                        <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">{acc.account_title}</span>
                                                                     </div>
-                                                                    <div className="w-24 text-right">
-                                                                        <span className="font-mono text-xs font-bold text-slate-400 group-hover:text-emerald-600 dark:text-slate-500 dark:group-hover:text-emerald-400 transition">{account.account_code}</span>
-                                                                    </div>
-                                                                    <div className="w-28 flex justify-center opacity-40 group-hover:opacity-100 transition">
+                                                                    <div className="w-24 text-right pr-4 text-emerald-600 dark:text-emerald-500 font-bold tracking-wider">{acc.account_code}</div>
+                                                                    <div className="w-28 flex justify-center">
                                                                         <TableActions
-                                                                            onEdit={() => navigate('/Registration/Chart-of-Account/Add', { state: { account } })}
-                                                                            onDelete={() => handleDeleteAccount(account.id)}
-                                                                            editTitle="Edit Account"
-                                                                            deleteTitle="Delete Account"
+                                                                            onEdit={() => navigate('/Registration/Chart-of-Account/Add', { state: { account: acc } })}
+                                                                            onDelete={() => handleDeleteAccount(acc.id)}
                                                                         />
                                                                     </div>
                                                                 </div>

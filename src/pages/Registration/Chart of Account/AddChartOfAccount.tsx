@@ -7,6 +7,14 @@ import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { FiPlus, FiX } from 'react-icons/fi';
 
+const DEFAULT_CATEGORIES = [
+    '1. ASSETS', '2. LIABILITIES', '3. EQUITY', '4. REVENUE', '5. EXPENSES'
+];
+
+const DEFAULT_CONTROLS = [
+    'Cash', 'Banks', 'Customers', 'Inventory', 'Vendor', 'Payroll', 'Sales', 'Discounts', 'Other Income', 'Cost of Sales', 'Utility Bills', 'Rent Expenses', 'Logistics', 'General Expenses', 'Opening Balances', 'Capital'
+];
+
 const AddChartOfAccount = () => {
   const [loading, setLoading] = useState(false);
   const [metadataLoading, setMetadataLoading] = useState(true);
@@ -34,9 +42,32 @@ const AddChartOfAccount = () => {
       const { data: catData } = await supabase.from('coa_categories').select('name').order('name', { ascending: true });
       const { data: ctrlData } = await supabase.from('coa_controls').select('category_name, control_name').order('control_name', { ascending: true });
       const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
+      
+      // Also fetch legacy unique values from chart_of_accounts to ensure nothing is missing
+      const { data: legacyCOA } = await supabase.from('chart_of_accounts').select('category_code, control_code');
 
-      if (catData) setCategoriesList(catData);
-      if (ctrlData) setControlsList(ctrlData);
+      // Merge Categories
+      const mergedCats = new Set((catData || []).map(c => c.name));
+      (legacyCOA || []).forEach(row => {
+        if (row.category_code) mergedCats.add(row.category_code);
+      });
+      setCategoriesList(Array.from(mergedCats).sort().map(name => ({ name })));
+
+      // Merge Controls
+      const mergedCtrlsMap = new Map();
+      (ctrlData || []).forEach(c => {
+        mergedCtrlsMap.set(`${c.category_name}::${c.control_name}`, c);
+      });
+      (legacyCOA || []).forEach(row => {
+        if (row.category_code && row.control_code) {
+          const key = `${row.category_code}::${row.control_code}`;
+          if (!mergedCtrlsMap.has(key)) {
+            mergedCtrlsMap.set(key, { category_name: row.category_code, control_name: row.control_code });
+          }
+        }
+      });
+      setControlsList(Array.from(mergedCtrlsMap.values()).sort((a, b) => a.control_name.localeCompare(b.control_name)));
+
       if (bankData) setBankAccountsList(bankData);
     } catch (err: any) {
       console.error(err.message);
@@ -96,6 +127,10 @@ const AddChartOfAccount = () => {
 
   const handleDeleteCategoryRow = async (name: string, setFieldValue: any) => {
     if (!name) return;
+    if (DEFAULT_CATEGORIES.includes(name)) {
+      toast.error('System default categories cannot be deleted.');
+      return;
+    }
     if (!window.confirm(`Are you certain you want to permanently delete "${name}" category? All linked control parameters will drop.`)) return;
 
     try {
@@ -112,6 +147,10 @@ const AddChartOfAccount = () => {
 
   const handleDeleteControlRow = async (controlName: string, setFieldValue: any) => {
     if (!controlName) return;
+    if (DEFAULT_CONTROLS.includes(controlName)) {
+      toast.error('System default controls cannot be deleted.');
+      return;
+    }
     if (!window.confirm(`Are you certain you want to permanently drop "${controlName}" control header row?`)) return;
 
     try {
@@ -241,7 +280,7 @@ const AddChartOfAccount = () => {
                       <option value="" className="dark:bg-boxdark text-gray-400">-- Select Category Code --</option>
                       {categoriesList.map(c => <option key={c.name} value={c.name} className="dark:bg-boxdark">{c.name}</option>)}
                     </select>
-                    {values.categoryCode && (
+                    {values.categoryCode && !DEFAULT_CATEGORIES.includes(values.categoryCode) && (
                       <button type="button" onClick={() => handleDeleteCategoryRow(values.categoryCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected category"><FiX size={16} /></button>
                     )}
                     <button type="button" onClick={() => setShowCategoryModal(true)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-stroke dark:border-strokedark bg-slate-50 dark:bg-meta-4/20 hover:bg-slate-100 text-gray-500 hover:text-black dark:hover:text-white font-bold transition"><FiPlus size={16} /></button>
@@ -265,7 +304,7 @@ const AddChartOfAccount = () => {
                       <option value="" className="dark:bg-boxdark text-gray-400">-- Select Control Code --</option>
                       {activeFilteredControls.map(c => <option key={c.control_name} value={c.control_name} className="dark:bg-boxdark">{c.control_name}</option>)}
                     </select>
-                    {values.controlCode && (
+                    {values.controlCode && !DEFAULT_CONTROLS.includes(values.controlCode) && (
                       <button type="button" onClick={() => handleDeleteControlRow(values.controlCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected control subgroup"><FiX size={16} /></button>
                     )}
                     <button type="button" onClick={() => {
