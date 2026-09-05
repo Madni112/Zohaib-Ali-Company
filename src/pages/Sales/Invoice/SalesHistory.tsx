@@ -11,7 +11,15 @@ const SalesHistory = () => {
   const navigate = useNavigate();
   const { tenantId } = useAuth();
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
 
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [openActionId, setOpenActionId] = useState<any | null>(null);
@@ -176,10 +184,42 @@ const SalesHistory = () => {
     }
   };
 
-  const filteredInvoices = invoices.filter(inv =>
-    inv.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    inv.id.toString().includes(searchTerm)
-  );
+  const filteredInvoices = React.useMemo(() => {
+    let result = invoices.filter(inv =>
+      inv.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.invoice_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      inv.id.toString().includes(searchTerm)
+    );
+
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+        
+        if (sortConfig.key === 'invoice_no') {
+            aVal = a.invoice_no || `INV-${String(a.id).padStart(4, '0')}`;
+            bVal = b.invoice_no || `INV-${String(b.id).padStart(4, '0')}`;
+        }
+        if (sortConfig.key === 'sale_date') {
+            aVal = a.sale_date || a.created_at;
+            bVal = b.sale_date || b.created_at;
+        }
+
+        if (['total_amount', 'cash_amount_paid', 'bank_amount', 'id'].includes(sortConfig.key)) {
+          aVal = Number(aVal) || 0;
+          bVal = Number(bVal) || 0;
+        } else if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = (bVal || '').toLowerCase();
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [invoices, searchTerm, sortConfig]);
 
   const totalEntries = filteredInvoices.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
@@ -442,15 +482,15 @@ const SalesHistory = () => {
           <table className="w-full border-collapse text-xs text-left">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/60 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200/80 dark:border-slate-800">
-                <th className="py-3.5 px-4 text-center w-16">Invoice No</th>
+                <th className="py-3.5 px-4 text-center w-16 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('invoice_no')}>Invoice No <span className={sortConfig?.key === 'invoice_no' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'invoice_no' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 text-center">DC No</th>
-                <th className="py-3.5 px-4">Sale Date</th>
-                <th className="py-3.5 px-4 text-center">Sale Type</th>
-                <th className="py-3.5 px-4">Salesman</th>
-                <th className="py-3.5 px-4">Customer</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4 text-right pr-3">Amount Received</th>
-                <th className="py-3.5 px-4 text-right pr-3">Total Net Amount</th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('sale_date')}>Sale Date <span className={sortConfig?.key === 'sale_date' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'sale_date' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-center cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('payment_term')}>Sale Type <span className={sortConfig?.key === 'payment_term' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'payment_term' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('salesman')}>Salesman <span className={sortConfig?.key === 'salesman' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'salesman' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('customer_name')}>Customer <span className={sortConfig?.key === 'customer_name' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'customer_name' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-center cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('receipt_status')}>Status <span className={sortConfig?.key === 'receipt_status' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'receipt_status' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-right pr-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('cash_amount_paid')}>Amount Received <span className={sortConfig?.key === 'cash_amount_paid' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'cash_amount_paid' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 text-right pr-3 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('total_amount')}>Total Net Amount <span className={sortConfig?.key === 'total_amount' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'total_amount' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 text-center w-14">Action</th>
               </tr>
             </thead>

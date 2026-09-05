@@ -28,6 +28,7 @@ interface InvoiceItem {
 
 interface InvoiceData {
   id: number;
+  invoice_no?: string;
   customer_name: string;
   salesman?: string;
   sale_date?: string;
@@ -210,7 +211,7 @@ const PrintInvoice = () => {
   const totalPaid = (cashPaid > 0 && bankPaid > 0) ? (cashPaid + bankPaid) : (cashPaid > 0 ? cashPaid : (bankPaid > 0 ? bankPaid : Number(invoice.cash_amount_paid || invoice.bank_amount || 0)));
   const remainingDebt = Math.max(0, grandTotal - totalPaid);
 
-  const invoiceNo = `INV-${String(invoice.id).padStart(4, '0')}`;
+  const invoiceNo = invoice.invoice_no || `INV-${String(invoice.id).padStart(4, '0')}`;
   const saleDateFormatted = invoice.sale_date 
     ? new Date(invoice.sale_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     : new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -391,8 +392,8 @@ const PrintInvoice = () => {
               {processedItems.map((item, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50">
                   <td className="py-2 px-2 text-center text-slate-400 font-mono">{idx + 1}</td>
-                  <td className="py-2 px-2 font-mono font-bold text-slate-700">{item.skuCode}</td>
-                  <td className="py-2 px-2">
+                  <td className="py-2 px-2 font-mono font-bold text-slate-700 break-all">{item.skuCode}</td>
+                  <td className="py-2 px-2 break-words">
                     <span className="font-bold text-slate-900 block leading-tight">{item.pName}</span>
                   </td>
                   <td className="py-2 px-2 text-center bg-slate-50/40">

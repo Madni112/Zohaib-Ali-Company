@@ -396,7 +396,6 @@ const NewInvoice = () => {
             await supabase.from('delivery_challans').insert([{
               invoice_no: formattedInvCode,
               customer_name: customerFinalName,
-              shipping_address: values.shippingAddress,
               challan_date: values.saleDate || new Date().toISOString().split('T')[0],
               dispatch_warehouse: whName,
               transport_name: values.transportType || 'By Road Transport',
@@ -420,6 +419,7 @@ const NewInvoice = () => {
           }
         } catch (dcErr: any) {
           console.error('Delivery challan auto-generation warning:', dcErr);
+          toast.error(`DC Auto-generation failed: ${dcErr.message || 'Unknown error'}`);
         }
 
         for (const item of values.items) {
@@ -585,7 +585,7 @@ const NewInvoice = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 dark:bg-meta-4/5 p-4 rounded-sm border border-stroke dark:border-strokedark">
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Invoice Number #: *</label>
-                    <input type="text" name="invoiceNo" placeholder="Enter Invoice #" value={values.invoiceNo} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.invoiceNo ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
+                    <input type="text" name="invoiceNo" placeholder="Enter Invoice #" value={values.invoiceNo} onChange={(e) => setFieldValue('invoiceNo', e.target.value.toUpperCase())} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.invoiceNo ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
                     {hasAttempted && errors.invoiceNo && <p className="text-red-500 text-xs font-bold mt-1">{String(errors.invoiceNo)}</p>}
                   </div>
 

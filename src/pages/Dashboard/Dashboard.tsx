@@ -608,16 +608,17 @@ const Dashboard: React.FC = () => {
     { name: chartViewTab === 'daily' ? 'Daily Customer Sales' : 'Monthly Customer Sales', data: customerGraphData }
   ];
 
-  // 3. Bank Balance Distribution Donut Chart
+  const totalBankBalance = metrics.bankAccounts ? metrics.bankAccounts.reduce((acc, b) => acc + Math.max(0, b.netBalance), 0) : 0;
+  
   const bankDonutOptions: any = {
     chart: { type: 'donut' },
-    colors: ['#059669', '#0D9488', '#D97706', '#0284C7', '#475569'],
-    labels: metrics.bankAccounts && metrics.bankAccounts.length > 0 ? metrics.bankAccounts.map((b) => b.accountTitle) : ['Default Bank'],
+    colors: totalBankBalance > 0 ? ['#059669', '#0D9488', '#D97706', '#0284C7', '#475569'] : ['#CBD5E1'],
+    labels: totalBankBalance > 0 ? metrics.bankAccounts.map((b) => b.accountTitle) : ['Zero Balance'],
     legend: { position: 'bottom' },
-    tooltip: { y: { formatter: (val: number) => `Rs. ${val.toLocaleString()}` } }
+    tooltip: { y: { formatter: (val: number) => `Rs. ${totalBankBalance > 0 ? val.toLocaleString() : '0.00'}` } }
   };
 
-  const bankDonutSeries = metrics.bankAccounts && metrics.bankAccounts.length > 0
+  const bankDonutSeries = totalBankBalance > 0
     ? metrics.bankAccounts.map((b) => Math.max(0, b.netBalance))
     : [1];
 
@@ -642,7 +643,7 @@ const Dashboard: React.FC = () => {
         <ActionCard title="Sales" subtitle="Customer Bill" Icon={MdShoppingCart} bgGradient="bg-gradient-to-br from-emerald-600 to-teal-800" onClick={() => navigate('/sales/invoice/list')} />
         <ActionCard title="Purchases" subtitle="Buy New Product" Icon={MdLocalMall} bgGradient="bg-gradient-to-br from-amber-600 to-amber-800" onClick={() => navigate('/Purchase/Purchases/list')} />
         <ActionCard title="Products" subtitle="Items List" Icon={MdAddBox} bgGradient="bg-gradient-to-br from-teal-600 to-cyan-800" onClick={() => navigate('/Administration/Products/list')} />
-        <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/sales/return')} />
+        <ActionCard title="Sale Return" subtitle="Customer Return" Icon={MdCompareArrows} bgGradient="bg-gradient-to-br from-slate-700 to-slate-900" onClick={() => navigate('/Sales/Sales-Return/List')} />
         <ActionCard title="Stock Report" subtitle="Inventory Audit" Icon={MdAssessment} bgGradient="bg-gradient-to-br from-emerald-700 to-teal-900" onClick={() => navigate('/Reports/Stock-Report')} />
         <ActionCard title="Today's Sale" subtitle={`Rs. ${metrics.todaysSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdTrendingUp} bgGradient="bg-gradient-to-br from-teal-500 to-emerald-700" onClick={() => { }} />
         <ActionCard title="This Month Sales" subtitle={`Rs. ${metrics.thisMonthSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} Icon={MdArrowUpward} bgGradient="bg-gradient-to-br from-emerald-800 to-slate-900" onClick={() => { }} />
@@ -651,10 +652,10 @@ const Dashboard: React.FC = () => {
 
       {/* --- FINANCIAL KPI STAT CARDS --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        <StatCard title="Calculated Cash Balance" value={metrics.cashBalance} Icon={MdAccountBalanceWallet} bgColor="bg-gradient-to-br from-emerald-500 to-teal-600" />
-        <StatCard title="Monthly Bank Balance" value={metrics.totalBankBalance} Icon={MdAccountBalance} bgColor="bg-gradient-to-br from-teal-600 to-cyan-700" />
-        <StatCard title="Customer Receivables" value={metrics.totalReceivables} Icon={MdReceiptLong} bgColor="bg-gradient-to-br from-amber-500 to-amber-700" />
-        <StatCard title="Total Assets" value={metrics.totalAssets} Icon={MdAssessment} bgColor="bg-gradient-to-br from-emerald-700 to-slate-900" />
+        <StatCard title="Cash" value={metrics.cashBalance} Icon={MdAccountBalanceWallet} bgColor="bg-gradient-to-br from-emerald-500 to-teal-600" />
+        <StatCard title="Bank Balance" value={metrics.totalBankBalance} Icon={MdAccountBalance} bgColor="bg-gradient-to-br from-teal-600 to-cyan-700" />
+        <StatCard title="Receivables" value={metrics.totalReceivables} Icon={MdReceiptLong} bgColor="bg-gradient-to-br from-amber-500 to-amber-700" />
+        <StatCard title="Assets" value={metrics.totalAssets} Icon={MdAssessment} bgColor="bg-gradient-to-br from-emerald-700 to-slate-900" />
       </div>
 
       {/* ========================================================================= */}
@@ -670,7 +671,7 @@ const Dashboard: React.FC = () => {
                   <span className="p-1 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
                     <MdOutlineReceipt size={16} />
                   </span>
-                  Customer Receivables Aging Ledger
+                  Customer Receivables
                 </h3>
                 <p className="text-[11px] text-slate-400">Last 10 outstanding sales invoices with real-time aging status</p>
               </div>
@@ -1038,7 +1039,7 @@ const Dashboard: React.FC = () => {
           <div>
             <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center gap-2">
               <MdAccountBalance className="text-emerald-600" />
-              Corporate Treasury Allocation
+              Bank Balance
             </h3>
             <ReactApexChart options={bankDonutOptions} series={bankDonutSeries} type="donut" height={260} />
           </div>
@@ -1053,7 +1054,7 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                  Liquidity & Cash Settlement Ledgers
+                  Cash & Bank Ledgers
                 </h3>
                 <p className="text-[11px] text-slate-400">Reconciled corporate bank accounts & cash drawer transactions</p>
               </div>
@@ -1154,7 +1155,27 @@ const Dashboard: React.FC = () => {
                           className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150"
                         >
                           <td className="py-2.5 px-3 text-slate-500 dark:text-slate-400">{c.date}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white font-sans">{c.source}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white font-sans">
+                            {(() => {
+                              const s = String(c.source || '');
+                              if (s.toLowerCase().includes('sale bill')) {
+                                const parts = s.split(/(sale bill)/i);
+                                return parts.map((part, i) =>
+                                  part.toLowerCase() === 'sale bill'
+                                    ? <span key={i} className="text-rose-500 font-black">{part}</span>
+                                    : <span key={i}>{part}</span>
+                                );
+                              } else if (s.toLowerCase().includes('purchase bill')) {
+                                const parts = s.split(/(purchase bill)/i);
+                                return parts.map((part, i) =>
+                                  part.toLowerCase() === 'purchase bill'
+                                    ? <span key={i} className="text-emerald-600 font-black">{part}</span>
+                                    : <span key={i}>{part}</span>
+                                );
+                              }
+                              return s;
+                            })()}
+                          </td>
                           <td className="py-2.5 px-3 text-slate-700 dark:text-slate-300 font-sans max-w-[140px] truncate" title={c.party}>
                             {c.party}
                           </td>
@@ -1205,7 +1226,7 @@ const Dashboard: React.FC = () => {
           <div className="flex justify-between items-center mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Sales Volume vs Procurement
+                Sales vs Purchases
               </h3>
               <p className="text-[11px] text-slate-400">Monthly comparative velocity & margins</p>
             </div>
@@ -1219,7 +1240,7 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-wrap justify-between items-center gap-2 mb-4 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <h3 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                Customer Sales Volume Trajectory
+                Customer Sales Trend
               </h3>
               <p className="text-[11px] text-slate-400">Interactive timeframe aggregation</p>
             </div>

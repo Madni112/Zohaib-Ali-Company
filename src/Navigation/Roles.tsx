@@ -144,13 +144,15 @@ export const adminRoutes = [
         component: <StockTransferList />,
         label: 'Stock Transfer',
         icon: MdCompareArrows
-      },
+      }
+      /* 
       {
         path: '/company',
         component: <AddCompany />,
         label: 'Company',
         icon: MdAccountBox
       }
+      */
     ]
   },
   {

@@ -232,7 +232,7 @@ const AccountReport = () => {
           {activeTab === 7 && (
             <>
               <SearchableDropdown label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
-              <SearchableDropdown label="Linked Principal Company:" placeholder="Company" options={companyOptions} value={filters.company} onChange={(val) => handleInputChange('company', val)} />
+              {/* <SearchableDropdown label="Linked Principal Company:" placeholder="Company" options={companyOptions} value={filters.company} onChange={(val) => handleInputChange('company', val)} /> */}
             </>
           )}
 
