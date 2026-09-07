@@ -221,7 +221,7 @@ const AddSalesReturn = () => {
             setSelectedInvNo(invRef);
             setInvSearchQuery(invRef);
             const cleanId = String(invRef).replace(/\D/g, '');
-            const matchedInv = invData?.find(i => `INV-${String(i.id).padStart(4, '0')}` === invRef || String(i.id) === cleanId);
+            const matchedInv = invData?.find(i => (i.invoice_no || `INV-${String(i.id).padStart(4, '0')}`) === invRef || String(i.id) === cleanId);
             if (matchedInv) setSelectedInvObj(matchedInv);
           } else {
             setInvSearchQuery('-- General Return (All Invoices FIFO) --');
@@ -257,7 +257,7 @@ const AddSalesReturn = () => {
 
   const filteredInvoices = customerInvoices.filter(inv => {
     if (!invSearchQuery || invSearchQuery.startsWith('-- General')) return true;
-    const invFormatted = `INV-${String(inv.id).padStart(4, '0')}`;
+    const invFormatted = inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`;
     return (
       invFormatted.toLowerCase().includes(invSearchQuery.toLowerCase()) ||
       (inv.invoice_date || '').toLowerCase().includes(invSearchQuery.toLowerCase()) ||
@@ -320,7 +320,7 @@ const AddSalesReturn = () => {
             sale_price: price,
             uom: item.uom || matchingProd?.uom || 'Nos',
             totalSoldQty: qty,
-            lastInvNo: `INV-${String(inv.id).padStart(4, '0')}`,
+            lastInvNo: inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`,
             current_stock: matchingProd?.current_stock || 0
           };
         } else {
@@ -436,7 +436,7 @@ const AddSalesReturn = () => {
             returnNo: defaultReturnNo,
             customerName: editData.customer_name || '',
             sourceWarehouse: editData.dispatch_warehouse || (locations[0]?.name || 'Main Warehouse'),
-            invoiceNo: `INV-${String(editData.id).padStart(4, '0')}`,
+            invoiceNo: editData.invoice_no || `INV-${String(editData.id).padStart(4, '0')}`,
             gatePassNo: editData.gate_pass_no || '',
             returnDate: new Date().toISOString().split('T')[0],
             paymentTerm: 'On Credit',
@@ -585,7 +585,7 @@ const AddSalesReturn = () => {
                   matchedInvoicesSummary.push({
                     item_name: item.itemName,
                     sku: item.skuCode || '',
-                    invoice_no: `INV-${String(inv.id).padStart(4, '0')}`,
+                    invoice_no: inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`,
                     invoice_date: inv.invoice_date || inv.created_at,
                     invoice_rate: invoiceRate,
                     entered_rate: enteredRate,
@@ -595,7 +595,7 @@ const AddSalesReturn = () => {
                   });
 
                   if (!primaryLinkedInv) {
-                    primaryLinkedInv = `INV-${String(inv.id).padStart(4, '0')}`;
+                    primaryLinkedInv = inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`;
                   }
 
                   remainingToMatch -= deductQty;
@@ -657,51 +657,9 @@ const AddSalesReturn = () => {
                 savedReturnId = insertedRtn?.id;
               }
 
-              // 3. Increment stock back into warehouse_inventory & products
-              for (const item of values.items) {
-                const returnQty = Number(item.qty || 0);
-                const pName = item.itemName;
-                const effectiveWh = item.warehouse || values.sourceWarehouse;
-
-                // Update warehouse_inventory
-                const { data: currentInv } = await supabase
-                  .from('warehouse_inventory')
-                  .select('id, quantity')
-                  .ilike('product_name', pName)
-                  .ilike('warehouse_name', effectiveWh)
-                  .maybeSingle();
-
-                if (currentInv) {
-                  await supabase
-                    .from('warehouse_inventory')
-                    .update({ quantity: (Number(currentInv.quantity) || 0) + returnQty })
-                    .eq('id', currentInv.id);
-                } else {
-                  await supabase
-                    .from('warehouse_inventory')
-                    .insert([{
-                      product_name: pName,
-                      warehouse_name: effectiveWh,
-                      quantity: returnQty
-                    }]);
-                }
-
-                // Update products master stock
-                const { data: currentMasterProd } = await supabase
-                  .from('products')
-                  .select('id, current_stock')
-                  .ilike('product_name', pName)
-                  .maybeSingle();
-
-                if (currentMasterProd) {
-                  await supabase
-                    .from('products')
-                    .update({ current_stock: (Number(currentMasterProd.current_stock) || 0) + returnQty })
-                    .eq('id', currentMasterProd.id);
-                }
-              }
-
-              toast.success(isEditMode ? 'Sales Return updated successfully!' : 'Sales Return Note generated & stock replenished!');
+              // Physical stock increment is now handled by the Warehouse team via Return Challans (VerifyReturnChallan.tsx)
+              
+              toast.success(isEditMode ? 'Sales Return updated successfully!' : 'Sales Return Note generated & pending warehouse verification!');
 
               if (shouldPrintAfterSave && savedReturnId) {
                 navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Sales-Return/Print/${savedReturnId}`);
@@ -719,9 +677,20 @@ const AddSalesReturn = () => {
             const customerSoldProducts = getCustomerSoldProducts(values.customerName);
 
             let calculatedGrossTotal = 0;
+            let totalDiscountDeducted = 0;
             values.items.forEach((it: any) => {
-              calculatedGrossTotal += (Number(it.qty || 0) * Number(it.rate || 0));
+              const qty = Number(it.qty || 0);
+              const rate = Number(it.rate || 0);
+              const rowGross = qty * rate;
+              calculatedGrossTotal += rowGross;
+
+              if (Number(it.discountPer) > 0) {
+                totalDiscountDeducted += rowGross * (Number(it.discountPer) / 100);
+              } else if (Number(it.discountAmt) > 0 && Number(it.originalQty) > 0) {
+                totalDiscountDeducted += (Number(it.discountAmt) / Number(it.originalQty)) * qty;
+              }
             });
+            const netReturnTotal = Math.max(0, calculatedGrossTotal - totalDiscountDeducted);
 
             return (
               <Form className="space-y-6">
@@ -928,7 +897,7 @@ const AddSalesReturn = () => {
                               setIsInvDropdownOpen(false);
                             } else if (filteredInvoices[highlightedInvIndex - 1]) {
                               const inv = filteredInvoices[highlightedInvIndex - 1];
-                              const formattedInv = `INV-${String(inv.id).padStart(4, '0')}`;
+                              const formattedInv = inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`;
                               setSelectedInvNo(formattedInv);
                               setInvSearchQuery(formattedInv);
                               setSelectedInvObj(inv);
@@ -946,6 +915,9 @@ const AddSalesReturn = () => {
                                   itemName: pi.itemName || pi.product_name || '',
                                   warehouse: pi.warehouse || inv.dispatch_warehouse || locations[0]?.name || 'Main Warehouse',
                                   qty: Number(pi.qty || pi.quantity || 1),
+                                  originalQty: Number(pi.qty || pi.quantity || 1),
+                                  discountPer: Number(pi.discountPer || 0),
+                                  discountAmt: Number(pi.discountAmt || 0),
                                   rate: Number(pi.rp ?? pi.rate ?? pi.sale_price ?? pi.price ?? 0),
                                   uom: pi.uom || 'Nos'
                                 }));
@@ -1005,7 +977,7 @@ const AddSalesReturn = () => {
                         </div>
 
                         {filteredInvoices.map((inv, iIdx) => {
-                          const formattedInv = `INV-${String(inv.id).padStart(4, '0')}`;
+                          const formattedInv = inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`;
                           return (
                             <div
                               key={inv.id}
@@ -1029,6 +1001,9 @@ const AddSalesReturn = () => {
                                     itemName: pi.itemName || pi.product_name || '',
                                     warehouse: pi.warehouse || inv.dispatch_warehouse || locations[0]?.name || 'Main Warehouse',
                                     qty: Number(pi.qty || pi.quantity || 1),
+                                    originalQty: Number(pi.qty || pi.quantity || 1),
+                                    discountPer: Number(pi.discountPer || 0),
+                                    discountAmt: Number(pi.discountAmt || 0),
                                     rate: Number(pi.rp ?? pi.rate ?? pi.sale_price ?? pi.price ?? 0),
                                     uom: pi.uom || 'Nos'
                                   }));
@@ -1674,7 +1649,21 @@ const AddSalesReturn = () => {
                         {values.paymentTerm === 'Split' ? (
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-slate-500 font-bold text-[10px] uppercase mb-1">Cash Payout (PKR):</label>
+                                <div className="flex justify-between items-center mb-1">
+                                  <label className="block text-slate-500 font-bold text-[10px] uppercase">Cash Payout (PKR):</label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const half = Math.floor(netReturnTotal / 2);
+                                      const remainder = netReturnTotal - half;
+                                      setFieldValue('cashAmountPaid', half.toString());
+                                      setFieldValue('bankAmountPaid', remainder.toString());
+                                    }}
+                                    className="text-[10px] font-bold bg-slate-200 dark:bg-slate-700 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-900/40 dark:hover:text-emerald-400 text-slate-600 dark:text-slate-300 px-2 rounded cursor-pointer transition-colors"
+                                  >
+                                    50 / 50
+                                  </button>
+                                </div>
                               <input
                                 type="number"
                                 name="cashAmountPaid"
@@ -1706,10 +1695,10 @@ const AddSalesReturn = () => {
                               </label>
                               <button
                                 type="button"
-                                onClick={() => setFieldValue('amountPaid', calculatedGrossTotal)}
+                                onClick={() => setFieldValue('amountPaid', netReturnTotal)}
                                 className="text-[10px] text-emerald-600 hover:underline font-bold"
                               >
-                                ⚡ Pay Full (Rs. {formatMoney(calculatedGrossTotal)})
+                                ⚡ Pay Full (Rs. {formatMoney(netReturnTotal)})
                               </button>
                             </div>
                             <input
@@ -1772,6 +1761,22 @@ const AddSalesReturn = () => {
                         </strong>
                       </div>
 
+                      {totalDiscountDeducted > 0 && (
+                        <div className="flex justify-between items-center text-rose-500 dark:text-rose-400 mt-2">
+                          <span className="font-sans">Total Discount Deducted:</span>
+                          <strong className="text-rose-600 dark:text-rose-400 font-black text-sm">
+                            - Rs. {formatMoney(totalDiscountDeducted)}
+                          </strong>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-slate-800 dark:text-slate-200 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <span className="font-sans font-bold">Net Return Value:</span>
+                        <strong className="text-emerald-600 dark:text-emerald-400 font-black text-lg">
+                          Rs. {formatMoney(netReturnTotal)}
+                        </strong>
+                      </div>
+
                       {values.paymentTerm !== 'On Credit' && (
                         <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400">
                           <span className="font-sans">Upfront Refund Disbursed:</span>
@@ -1784,7 +1789,7 @@ const AddSalesReturn = () => {
                           {values.paymentTerm === 'On Credit' ? 'Credit Balance to Invoices:' : 'Remaining Customer Balance:'}
                         </span>
                         <strong className="text-base">
-                          Rs. {formatMoney(values.paymentTerm === 'On Credit' ? calculatedGrossTotal : Math.max(0, calculatedGrossTotal - (values.paymentTerm === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : (Number(values.amountPaid) || 0))))}
+                          Rs. {formatMoney(values.paymentTerm === 'On Credit' ? netReturnTotal : Math.max(0, netReturnTotal - (values.paymentTerm === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : (Number(values.amountPaid) || 0))))}
                         </strong>
                       </div>
 

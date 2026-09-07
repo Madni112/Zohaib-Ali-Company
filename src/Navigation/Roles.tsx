@@ -59,6 +59,8 @@ import GRNList from '../pages/Purchase/GRN/GRNList';
 import AddGRN from '../pages/Purchase/GRN/AddGRN';
 import InwardChallanList from '../pages/Purchase/Inward Challan/InwardChallanList';
 import VerifyInward from '../pages/Purchase/Inward Challan/VerifyInward';
+import ReturnChallanList from '../pages/Warehouse/Return Challan/ReturnChallanList';
+import VerifyReturnChallan from '../pages/Warehouse/Return Challan/VerifyReturnChallan';
 import VendorList from '../pages/Purchase/Vendor/VendorList';
 import AddVendor from '../pages/Purchase/Vendor/AddVendor';
 import PurchaseReceiptList from '../pages/Purchase/Purchase Receipt/PurchaseReceiptList';
@@ -126,6 +128,12 @@ export const adminRoutes = [
         icon: MdDashboard,
         path: '/Administration/Products/List',
         component: <ProductList />,
+      },
+      {
+        label: 'Bulk Upload',
+        icon: MdDashboard,
+        path: '/Administration/Products/Bulk-Upload',
+        component: <BulkProductUpload />,
       },
       {
         path: '/Administration/Locations/List',
@@ -261,6 +269,18 @@ export const adminRoutes = [
         path: '/Purchase/Shop-Receiving',
         component: <InwardChallanList locationFilter="SHOP" />,
         icon: MdInbox
+      },
+      {
+        label: 'Return Challan (Warehouse)',
+        path: '/Warehouse/Return-Challan',
+        component: <ReturnChallanList locationFilter="WAREHOUSE" />,
+        icon: MdAssignmentReturn
+      },
+      {
+        label: 'Shop Return Queue',
+        path: '/Warehouse/Shop-Return',
+        component: <ReturnChallanList locationFilter="SHOP" />,
+        icon: MdAssignmentReturn
       },
       {
         label: 'Purchase Receipt',
@@ -615,6 +635,11 @@ export const adminRoutes = [
   {
     path: '/Purchase/Inward-Challan/Verify/:id',
     component: <VerifyInward />,
+    hideFromSidebar: true
+  },
+  {
+    path: '/Warehouse/Return-Challan/Verify/:id',
+    component: <VerifyReturnChallan />,
     hideFromSidebar: true
   },
   {

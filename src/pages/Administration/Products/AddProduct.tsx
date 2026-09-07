@@ -141,6 +141,7 @@ const AddProduct = () => {
             category: editData.category || '',
             subCategory: editData.sub_category || '',
             subSubCategory: editData.sub_sub_category || '',
+            itemType: editData.item_type || 'goods',
 
             uom: editData.uom || 'PCS',
             profit: editData.profit || 0,
@@ -148,6 +149,7 @@ const AddProduct = () => {
             scenarioName: editData.scenario_name || '',
             mrp: editData.mrp || editData.retail_price || 0,
             retailPrice: editData.retail_price || 0,
+            serviceCharges: editData.service_charges || 0,
             minStockAlert: editData.min_stock_alert !== undefined && editData.min_stock_alert !== null ? editData.min_stock_alert : '',
             hsCode: editData.hs_code || '',
             itemSrNo: editData.item_sr_no || '',
@@ -171,6 +173,7 @@ const AddProduct = () => {
             category: '',
             subCategory: '',
             subSubCategory: '',
+            itemType: 'goods',
 
             uom: '',
             profit: 0,
@@ -178,6 +181,7 @@ const AddProduct = () => {
             scenarioName: '',
             mrp: '',
             retailPrice: '',
+            serviceCharges: 0,
             minStockAlert: '',
             hsCode: '',
             itemSrNo: '',
@@ -201,7 +205,7 @@ const AddProduct = () => {
           onSubmit={async (values) => {
             setLoading(true);
             const isTileCategory = String(values.subSubCategory || '').trim().toLowerCase().includes('tile');
-            const computedProfit = (Number(values.retailPrice) || 0) - (Number(values.purchasePrice) || 0);
+            const computedProfit = (Number(values.retailPrice) || 0) + (values.itemType === 'service' ? (Number(values.serviceCharges) || 0) : 0) - (Number(values.purchasePrice) || 0);
 
             let finalDescription = '';
             let finalUom = values.uom;
@@ -223,6 +227,7 @@ const AddProduct = () => {
             }
 
             const databasePayload = {
+              item_type: values.itemType || 'goods',
               product_name: values.productName.trim(),
               category: values.category,
               sub_category: values.subCategory,
@@ -236,6 +241,7 @@ const AddProduct = () => {
               scenario_name: values.scenarioName || (isTileCategory ? 'Tile Metric' : ''),
               mrp: Number(values.mrp) || Number(values.retailPrice) || 0,
               retail_price: Number(values.retailPrice) || 0,
+              service_charges: values.itemType === 'service' ? Number(values.serviceCharges) || 0 : 0,
               min_stock_alert: values.minStockAlert !== '' && values.minStockAlert !== null ? Number(values.minStockAlert) : 0,
               pieces_per_box: pcs,
               pcs_per_box: pcs,
@@ -313,11 +319,13 @@ const AddProduct = () => {
             const purchasePerSqm = (numPurchase / numSqm).toFixed(2);
             const purchasePerPiece = (numPurchase / tilePcs).toFixed(2);
 
-            const profit = numSale - numPurchase;
+            const numServiceCharges = values.itemType === 'service' ? (Number(values.serviceCharges) || 0) : 0;
+            const totalRevenue = numSale + numServiceCharges;
+            const profit = totalRevenue - numPurchase;
             const profitMarginPercent = numPurchase > 0 ? ((profit / numPurchase) * 100).toFixed(1) : '0';
 
             useEffect(() => {
-              setFieldValue('profit', (numSale - numPurchase).toFixed(2));
+              setFieldValue('profit', profit.toFixed(2));
               if (isTileCategory && !values.uom) {
                 setFieldValue('uom', 'BOX');
               }
@@ -325,6 +333,26 @@ const AddProduct = () => {
 
             return (
               <Form className="p-6.5 text-xs text-slate-700 dark:text-slate-200 space-y-6">
+
+                {/* ITEM TYPE TAB SWITCHER */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
+                  {(['goods', 'service'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setFieldValue('itemType', type)}
+                      className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
+                        values.itemType === type
+                          ? type === 'goods'
+                            ? 'bg-emerald-500 text-white shadow-sm'
+                            : 'bg-indigo-500 text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {type === 'goods' ? '📦 Goods Item' : '🛠️ Service Item'}
+                    </button>
+                  ))}
+                </div>
                 
                 {/* 1. CORE PRODUCT ATTRIBUTES (Always visible) */}
                 <div className="bg-slate-50/50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4">
@@ -831,6 +859,28 @@ const AddProduct = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* Service Charges Input - only for service items */}
+                    {values.itemType === 'service' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
+                          Service Charges *
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          name="serviceCharges"
+                          onKeyDown={blockInvalidChar}
+                          value={values.serviceCharges}
+                          onChange={handleChange}
+                          placeholder="0.00"
+                          className="w-full rounded-xl border p-3 bg-indigo-50/20 dark:bg-indigo-950/20 outline-none focus:border-indigo-500 text-sm font-mono font-black text-indigo-700 dark:text-indigo-300 border-indigo-400/50 dark:border-indigo-500/50"
+                        />
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
+                          Rate charged to the customer for this service.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Minimum Stock Alert Input (Optional) */}
                     <div>

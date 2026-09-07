@@ -131,6 +131,21 @@ const SalesHistory = () => {
       return;
     }
 
+    const invKey = String(targetInv?.invoice_no || `INV-${String(id).padStart(4, '0')}`).trim().toLowerCase();
+    const linkedDcs = deliveryChallansMap[invKey] || [];
+    const hasDispatchedItems = linkedDcs.some(dc => {
+      if (['Dispatched', 'Partially Dispatched', 'Fully Dispatched'].includes(dc.status)) return true;
+      if (dc.items) {
+        return dc.items.some((item: any) => Number(item.dispatchedQty || 0) > 0);
+      }
+      return false;
+    });
+
+    if (hasDispatchedItems) {
+      toast.error('Cannot delete: Goods have already been dispatched. Please process a Sales Return instead.');
+      return;
+    }
+
     if (!window.confirm('Are you certain you want to permanently delete this invoice record?')) return;
 
     try {

@@ -308,6 +308,62 @@ const ProductList = () => {
     setSortConfig({ key, direction });
   };
 
+  const goodsItems = paginatedProducts.filter(p => (p.item_type || 'goods') === 'goods');
+  const serviceItems = paginatedProducts.filter(p => p.item_type === 'service');
+
+  const renderProductRow = (product: any, serialNumber: number) => {
+    const isLowStock = Number(product.current_stock) <= Number(product.min_stock_alert || 0);
+    return (
+      <tr
+        key={product.id}
+        className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 text-xs"
+      >
+        <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 font-mono">{serialNumber}</td>
+        <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{product.item_sr_no || '-'}</td>
+        <td
+          className="py-3.5 px-4 font-bold text-primary dark:text-blue-400 cursor-pointer hover:underline"
+          onClick={() => setSelectedQuickViewProduct(product)}
+        >
+          {product.product_name}
+        </td>
+        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">
+          {product.category || 'General'}
+          {product.sub_category && <span className="opacity-70 text-[10px] ml-1 block text-emerald-600 dark:text-emerald-400">&darr; {product.sub_category}</span>}
+          {product.sub_sub_category && <span className="opacity-50 text-[10px] ml-2 block text-teal-600 dark:text-teal-400">&darr; {product.sub_sub_category}</span>}
+        </td>
+        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.bin || 'General'}</td>
+        <td className="py-3.5 px-4 text-center">
+          <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+            {product.uom}
+          </span>
+        </td>
+        <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
+          {Number(product.purchase_price || 0).toFixed(2)}
+        </td>
+        <td className="py-3.5 px-4 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+          {Number(product.retail_price || product.mrp || 0).toFixed(2)}
+        </td>
+        <td className="py-3.5 px-4 text-center">
+          <span className={`font-black text-xs px-2.5 py-0.5 rounded-full ${
+            isLowStock ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
+          }`}>
+            {Number(product.current_stock || 0).toLocaleString()} {product.uom || 'PCS'}
+          </span>
+          {isLowStock && <MdWarning size={14} className="text-rose-500 inline ml-1" />}
+          <button onClick={() => { setSelectedStockBreakdown(product); setSelectedModalWarehouse('ALL'); }} className="text-[9px] font-sans text-emerald-600 hover:underline cursor-pointer block mx-auto mt-0.5">View Breakdown</button>
+        </td>
+        <td className="py-3.5 px-4 text-center">
+          <TableActions
+            onEdit={() => navigate('/Administration/Products/Add', { state: { product } })}
+            onDelete={() => handleDeleteProduct(product.id)}
+            editTitle="Edit Product"
+            deleteTitle="Delete Product"
+          />
+        </td>
+      </tr>
+    );
+  };
+
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 relative text-slate-800 dark:text-slate-100">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -397,116 +453,32 @@ const ProductList = () => {
                   </td>
                 </tr>
               ) : (
-                paginatedProducts.map((product, idx) => {
-                  const serialNumber = startIndex + idx + 1;
-                  const isLowStock = Number(product.current_stock) <= Number(product.min_stock_alert || 0);
-                  return (
-                    <tr
-                      key={product.id}
-                      className="border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 duration-150 text-xs"
-                    >
-                      <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400 font-mono">{serialNumber}</td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">{product.item_sr_no || '-'}</td>
-                      <td 
-                        className="py-3.5 px-4 font-bold text-primary dark:text-blue-400 cursor-pointer hover:underline"
-                        onClick={() => setSelectedQuickViewProduct(product)}
-                      >
-                        {product.product_name}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">
-                        {product.category || 'General'}
-                        {product.sub_category && <span className="opacity-70 text-[10px] ml-1 block text-emerald-600 dark:text-emerald-400">↳ {product.sub_category}</span>}
-                        {product.sub_sub_category && <span className="opacity-50 text-[10px] ml-2 block text-teal-600 dark:text-teal-400">↳ {product.sub_sub_category}</span>}
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
-                        {product.bin || 'General'}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
-                          {product.uom}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
-                        {Number(product.purchase_price || 0).toFixed(2)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        {Number(product.retail_price || product.mrp || 0).toFixed(2)}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        {(() => {
-                          const rawPcs = Number(product.pieces_per_box || product.pcs_per_box || product.pieces_per_packing || 0);
-                          const isTile = Boolean(
-                            (String(product.category || '').toLowerCase().includes('tile') ||
-                              String(product.scenario_name || '').toLowerCase().includes('tile')) &&
-                            (rawPcs > 1 || String(product.scenario_name || '').toLowerCase().includes('tile'))
-                          );
-
-                          const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
-                          const totalStock = Number(product.current_stock || 0);
-
-                          // If it's a tile product with fractional / loose breakdown
-                          if (isTile && pcsPerBox > 1) {
-                            const totalPieces = Math.round(totalStock * pcsPerBox);
-                            const wholeBoxes = Math.floor(totalPieces / pcsPerBox);
-                            const loosePieces = totalPieces % pcsPerBox;
-
-                            return (
-                              <div className="flex flex-col items-center justify-center gap-1 font-mono">
-                                <div className="flex items-center gap-1.5">
-                                  <span
-                                    className={`font-extrabold text-xs px-2.5 py-0.5 rounded-md border ${isLowStock
-                                      ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/20 dark:text-rose-400 dark:border-rose-800'
-                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                      }`}
-                                  >
-                                    {wholeBoxes.toLocaleString()} Boxes
-                                  </span>
-                                  {isLowStock && <MdWarning size={14} className="text-rose-500" />}
-                                </div>
-                                {loosePieces > 0 ? (
-                                  <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                                    +{loosePieces} Pcs loose
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500">
-                                    (0 loose pcs)
-                                  </span>
-                                )}
-                                <button onClick={() => { setSelectedStockBreakdown(product); setSelectedModalWarehouse('ALL'); }} className="text-[9px] font-sans text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer mt-0.5">View Breakdown</button>
-                              </div>
-                            );
-                          }
-
-                          // Standard non-tile product display
-                          return (
-                            <div className="flex flex-col items-center justify-center gap-1 font-mono">
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`font-black text-xs px-2.5 py-0.5 rounded-full ${isLowStock
-                                    ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400'
-                                    : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-                                    }`}
-                                >
-                                  {totalStock.toLocaleString()} {product.uom || 'PCS'}
-                                </span>
-                                {isLowStock && <MdWarning size={14} className="text-rose-500" />}
-                              </div>
-                              <button onClick={() => { setSelectedStockBreakdown(product); setSelectedModalWarehouse('ALL'); }} className="text-[9px] font-sans text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer">View Breakdown</button>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <TableActions
-                          onEdit={() => navigate('/Administration/Products/Add', { state: { product } })}
-                          onDelete={() => handleDeleteProduct(product.id)}
-                          editTitle="Edit Product"
-                          deleteTitle="Delete Product"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
+                <>
+                  {goodsItems.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={9} className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950/30 border-y border-emerald-200/60 dark:border-emerald-900/60">
+                          <span className="text-[11px] font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                            📦 Goods Items <span className="font-normal opacity-60">({goodsItems.length})</span>
+                          </span>
+                        </td>
+                      </tr>
+                      {goodsItems.map((product, idx) => renderProductRow(product, startIndex + idx + 1))}
+                    </>
+                  )}
+                  {serviceItems.length > 0 && (
+                    <>
+                      <tr>
+                        <td colSpan={9} className="py-2 px-4 bg-indigo-50 dark:bg-indigo-950/30 border-y border-indigo-200/60 dark:border-indigo-900/60">
+                          <span className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                            🛠️ Service Items <span className="font-normal opacity-60">({serviceItems.length})</span>
+                          </span>
+                        </td>
+                      </tr>
+                      {serviceItems.map((product, idx) => renderProductRow(product, startIndex + goodsItems.length + idx + 1))}
+                    </>
+                  )}
+                </>
               )}
             </tbody>
           </table>

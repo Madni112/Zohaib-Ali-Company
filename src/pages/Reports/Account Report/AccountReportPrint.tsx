@@ -18,6 +18,7 @@ const AccountReportPrint = () => {
     const config = location.state || { tab: 1, criteria: {} };
     const { tab: activeTab, criteria: filters } = config;
 
+
     useEffect(() => {
         const compileAccountAuditingDataset = async () => {
             try {
@@ -25,21 +26,36 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 1: MASTER RECONCILED GENERAL LEDGER TWO-LINE TIMELINE ---
                 if (activeTab === 1) {
-                    const { data: ledgerData, error: ledgerErr } = await supabase.rpc('get_general_ledger', {
-                        p_customer: String(filters.customer || 'All'),
-                        p_start_date: filters.dateFrom || null,
-                        p_end_date: filters.dateTo || null
-                    });
+                    let combinedLedgerData: any[] = [];
+                    const customerList = (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) 
+                        ? filters.customer 
+                        : ['All'];
 
-                    if (ledgerErr) {
-                        console.error("RPC Error:", ledgerErr);
-                        toast.error("Failed to compile ledger data.");
-                        setReportRows([]);
-                        return;
+                    const promises = customerList.map((cust: string) => 
+                        supabase.rpc('get_general_ledger', {
+                            p_customer: cust,
+                            p_start_date: filters.dateFrom || null,
+                            p_end_date: filters.dateTo || null
+                        })
+                    );
+
+                    const results = await Promise.all(promises);
+                    for (const { data, error } of results) {
+                        if (error) {
+                            console.error("RPC Error:", error);
+                            toast.error("Failed to compile ledger data.");
+                            setReportRows([]);
+                            return;
+                        }
+                        if (data) {
+                            combinedLedgerData = combinedLedgerData.concat(data);
+                        }
                     }
 
+                    combinedLedgerData.sort((a, b) => new Date(a.raw_date).getTime() - new Date(b.raw_date).getTime());
+
                     let cumulativeBalance = 0;
-                    const finalPayload = (ledgerData || []).map((e: any) => {
+                    const finalPayload = combinedLedgerData.map((e: any) => {
                         cumulativeBalance += (Number(e.credit || 0) - Number(e.debit || 0));
                         return { ...e, balance: cumulativeBalance };
                     });
@@ -63,8 +79,8 @@ const AccountReportPrint = () => {
 
                     let pool = invoices || [];
 
-                    if (filters.customer && filters.customer !== 'All') {
-                        pool = pool.filter(row => row.customer_name === filters.customer);
+                    if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) {
+                        pool = pool.filter(row => filters.customer.includes(row.customer_name));
                     }
 
                     if (filters.dateFrom && filters.dateTo) {
@@ -122,7 +138,7 @@ const AccountReportPrint = () => {
                     (invoices || []).forEach(inv => {
                         const custName = inv.customer_name || 'General Customer';
 
-                        if (filters.customer && filters.customer !== 'All' && custName !== filters.customer) {
+                        if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All') && !filters.customer.includes(custName)) {
                             return;
                         }
 
@@ -178,7 +194,7 @@ const AccountReportPrint = () => {
                         .select('*')
                         .order('id', { ascending: true });
 
-                    if (filters.vendor && filters.vendor !== 'All') {
+                    if (filters.vendor && filters.vendor.length > 0 && !filters.vendor.includes('All')) {
                         query = query.eq('supplier_name', filters.vendor);
                     }
 
@@ -404,7 +420,7 @@ const AccountReportPrint = () => {
                         { code: '5020', title: 'Purchase Returns & Supplier Allowance Credits', category: 'CONTRA-EXPENSE', debit: 0, credit: purchaseReturnsSum },
                     ];
 
-                    if (filters.categoryCode && filters.categoryCode !== 'All') {
+                    if (filters.categoryCode && filters.categoryCode.length > 0 && !filters.categoryCode.includes('All')) {
                         const cFilter = String(filters.categoryCode).trim().toLowerCase();
                         trialBalanceRows = trialBalanceRows.filter(r => {
                             const rCat = String(r.category).trim().toLowerCase();
@@ -425,8 +441,8 @@ const AccountReportPrint = () => {
                         .eq('voucher_type', 'Cash Receipt Voucher')
                         .order('id', { ascending: true });
 
-                    if (filters.customer && filters.customer !== 'All') {
-                        query = query.eq('customer_name', filters.customer);
+                    if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) {
+                        query = query.in('customer_name', filters.customer);
                     }
 
                     const { data, error } = await query;
@@ -494,7 +510,7 @@ const AccountReportPrint = () => {
                         }
                     });
 
-                    if (filters.salesman && filters.salesman !== 'All') {
+                    if (filters.salesman && filters.salesman.length > 0 && !filters.salesman.includes('All')) {
                         unifiedRows = unifiedRows.filter(r => String(r.salesman).toLowerCase() === String(filters.salesman).toLowerCase());
                     }
 
@@ -573,9 +589,9 @@ const AccountReportPrint = () => {
             const tabTitle = tabTitles[activeTab] || 'Account Report';
             const filterMeta = {
                 'Report Tab': tabTitle,
-                'Customer': filters.customer || 'All',
-                'Vendor': filters.vendor || 'All',
-                'Salesman': filters.salesman || 'All',
+                'Customer': filters.customer?.length ? filters.customer.join(', ') : 'All',
+                'Vendor': filters.vendor?.length ? filters.vendor.join(', ') : 'All',
+                'Salesman': filters.salesman?.length ? filters.salesman.join(', ') : 'All',
                 'Voucher Type': filters.voucherType || 'All',
                 'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
             };

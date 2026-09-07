@@ -11,6 +11,10 @@ const DEFAULT_CATEGORIES = [
     '1. ASSETS', '2. LIABILITIES', '3. EQUITY', '4. REVENUE', '5. EXPENSES'
 ];
 
+const DEFAULT_SUB_CATEGORIES = [
+    'Current Assets', 'Fixed Assets', 'Current Liabilities', 'Long Term Liabilities', 'Capital & Equity', 'Operating Revenue', 'Non-Operating Revenue', 'Direct Expenses', 'Indirect Expenses'
+];
+
 const DEFAULT_CONTROLS = [
     'Cash', 'Banks', 'Customers', 'Inventory', 'Vendor', 'Payroll', 'Sales', 'Discounts', 'Other Income', 'Cost of Sales', 'Utility Bills', 'Rent Expenses', 'Logistics', 'General Expenses', 'Opening Balances', 'Capital'
 ];
@@ -20,8 +24,13 @@ const AddChartOfAccount = () => {
   const [metadataLoading, setMetadataLoading] = useState(true);
 
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [subCategoriesList, setSubCategoriesList] = useState<any[]>([]);
   const [controlsList, setControlsList] = useState<any[]>([]);
   const [bankAccountsList, setBankAccountsList] = useState<any[]>([]);
+
+  const [showSubCategoryModal, setShowSubCategoryModal] = useState(false);
+  const [newSubCategoryInput, setNewSubCategoryInput] = useState('');
+  const [modalSelectedCategoryForSub, setModalSelectedCategoryForSub] = useState('');
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
@@ -40,11 +49,11 @@ const AddChartOfAccount = () => {
   const fetchLiveCOAMetadata = async () => {
     try {
       const { data: catData } = await supabase.from('coa_categories').select('name').order('name', { ascending: true });
-      const { data: ctrlData } = await supabase.from('coa_controls').select('category_name, control_name').order('control_name', { ascending: true });
+      const { data: subCatData } = await supabase.from('coa_sub_categories').select('category_name, sub_category_name').order('sub_category_name', { ascending: true });
+      const { data: ctrlData } = await supabase.from('coa_controls').select('category_name, sub_category_name, control_name').order('control_name', { ascending: true });
       const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
       
-      // Also fetch legacy unique values from chart_of_accounts to ensure nothing is missing
-      const { data: legacyCOA } = await supabase.from('chart_of_accounts').select('category_code, control_code');
+      const { data: legacyCOA } = await supabase.from('chart_of_accounts').select('category_code, sub_category_code, control_code');
 
       // Merge Categories
       const mergedCats = new Set((catData || []).map(c => c.name));
@@ -53,16 +62,31 @@ const AddChartOfAccount = () => {
       });
       setCategoriesList(Array.from(mergedCats).sort().map(name => ({ name })));
 
+      // Merge Sub-Categories
+      const mergedSubCatsMap = new Map();
+      (subCatData || []).forEach(s => {
+        mergedSubCatsMap.set(`${s.category_name}::${s.sub_category_name}`, s);
+      });
+      (legacyCOA || []).forEach(row => {
+        if (row.category_code && row.sub_category_code) {
+          const key = `${row.category_code}::${row.sub_category_code}`;
+          if (!mergedSubCatsMap.has(key)) {
+            mergedSubCatsMap.set(key, { category_name: row.category_code, sub_category_name: row.sub_category_code });
+          }
+        }
+      });
+      setSubCategoriesList(Array.from(mergedSubCatsMap.values()).sort((a, b) => a.sub_category_name.localeCompare(b.sub_category_name)));
+
       // Merge Controls
       const mergedCtrlsMap = new Map();
       (ctrlData || []).forEach(c => {
-        mergedCtrlsMap.set(`${c.category_name}::${c.control_name}`, c);
+        mergedCtrlsMap.set(`${c.category_name}::${c.sub_category_name}::${c.control_name}`, c);
       });
       (legacyCOA || []).forEach(row => {
         if (row.category_code && row.control_code) {
-          const key = `${row.category_code}::${row.control_code}`;
+          const key = `${row.category_code}::${row.sub_category_code}::${row.control_code}`;
           if (!mergedCtrlsMap.has(key)) {
-            mergedCtrlsMap.set(key, { category_name: row.category_code, control_name: row.control_code });
+            mergedCtrlsMap.set(key, { category_name: row.category_code, sub_category_name: row.sub_category_code, control_name: row.control_code });
           }
         }
       });
@@ -101,17 +125,45 @@ const AddChartOfAccount = () => {
     }
   };
 
-  const handleAddNewControlDB = async (e: React.FormEvent) => {
+  const handleAddNewSubCategoryDB = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanCtrl = newControlInput.trim();
-    if (!modalSelectedCategory || !cleanCtrl) {
+    const cleanSub = newSubCategoryInput.trim();
+    if (!modalSelectedCategoryForSub || !cleanSub) {
       toast.error('Both parameters fields are mandatory');
       return;
     }
 
     try {
       setModalSubmitting(true);
-      const { error } = await supabase.from('coa_controls').insert([{ category_name: modalSelectedCategory, control_name: cleanCtrl }]);
+      const { error } = await supabase.from('coa_sub_categories').insert([{ category_name: modalSelectedCategoryForSub, sub_category_name: cleanSub }]);
+      if (error) throw error;
+
+      toast.success('Sub-Category profile added safely!');
+      setNewSubCategoryInput('');
+      setShowSubCategoryModal(false);
+      await fetchLiveCOAMetadata();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setModalSubmitting(false);
+    }
+  };
+
+  const handleAddNewControlDB = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCtrl = newControlInput.trim();
+    if (!modalSelectedCategory || !cleanCtrl) { // We can reuse modalSelectedCategory for Sub-Category now
+      toast.error('Both parameters fields are mandatory');
+      return;
+    }
+
+    try {
+      setModalSubmitting(true);
+      // We assume modalSelectedCategory holds sub_category_name for controls now
+      const subCat = subCategoriesList.find(s => s.sub_category_name === modalSelectedCategory);
+      if (!subCat) throw new Error("Invalid Sub-Category selected");
+
+      const { error } = await supabase.from('coa_controls').insert([{ category_name: subCat.category_name, sub_category_name: subCat.sub_category_name, control_name: cleanCtrl }]);
       if (error) throw error;
 
       toast.success('Control specification block appended safely!');
@@ -138,6 +190,27 @@ const AddChartOfAccount = () => {
       if (error) throw error;
       toast.success('Category option dropped successfully!');
       setFieldValue('categoryCode', '');
+      setFieldValue('subCategoryCode', '');
+      setFieldValue('controlCode', '');
+      await fetchLiveCOAMetadata();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDeleteSubCategoryRow = async (name: string, setFieldValue: any) => {
+    if (!name) return;
+    if (DEFAULT_SUB_CATEGORIES.includes(name)) {
+      toast.error('System default sub-categories cannot be deleted.');
+      return;
+    }
+    if (!window.confirm(`Are you certain you want to permanently delete "${name}" sub-category? All linked control parameters will drop.`)) return;
+
+    try {
+      const { error } = await supabase.from('coa_sub_categories').delete().eq('sub_category_name', name);
+      if (error) throw error;
+      toast.success('Sub-Category option dropped successfully!');
+      setFieldValue('subCategoryCode', '');
       setFieldValue('controlCode', '');
       await fetchLiveCOAMetadata();
     } catch (err: any) {
@@ -166,6 +239,7 @@ const AddChartOfAccount = () => {
 
   const validationSchema = Yup.object().shape({
     categoryCode: Yup.string().required('Required'),
+    subCategoryCode: Yup.string().required('Required'),
     controlCode: Yup.string().required('Required'),
     accountCode: Yup.string().required('Required'),
     accountTitle: Yup.string().required('Required'),
@@ -197,6 +271,7 @@ const AddChartOfAccount = () => {
         <Formik
           initialValues={isEditMode ? {
             categoryCode: editData.category_code || '',
+            subCategoryCode: editData.sub_category_code || '',
             controlCode: editData.control_code || '',
             accountCode: editData.account_code || '',
             accountTitle: editData.account_title || '',
@@ -204,6 +279,7 @@ const AddChartOfAccount = () => {
             linkedBankId: editData.linked_bank_id || ''
           } : {
             categoryCode: '',
+            subCategoryCode: '',
             controlCode: '',
             accountCode: '',
             accountTitle: '',
@@ -233,6 +309,7 @@ const AddChartOfAccount = () => {
 
               const databasePayload = {
                 category_code: values.categoryCode,
+                sub_category_code: values.subCategoryCode,
                 control_code: values.controlCode,
                 account_code: cleanCode,
                 account_title: values.accountTitle.trim(),
@@ -272,6 +349,7 @@ const AddChartOfAccount = () => {
                       value={values.categoryCode}
                       onChange={(e) => {
                         handleChange(e);
+                        setFieldValue('subCategoryCode', '');
                         setFieldValue('controlCode', '');
                         setFieldValue('linkedBankId', '');
                       }}
@@ -288,6 +366,33 @@ const AddChartOfAccount = () => {
                 </div>
 
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <label className="w-full md:w-48 block font-bold text-black dark:text-white text-xs uppercase tracking-wide">Sub-Category Code: *</label>
+                  <div className="w-full md:w-150 flex items-center gap-2">
+                    <select
+                      name="subCategoryCode"
+                      value={values.subCategoryCode}
+                      onChange={(e) => {
+                        handleChange(e);
+                        setFieldValue('controlCode', '');
+                        setFieldValue('linkedBankId', '');
+                      }}
+                      disabled={!values.categoryCode}
+                      className={`flex-1 rounded border px-3 h-10 bg-transparent text-xs font-semibold text-black dark:text-white outline-none focus:border-primary disabled:opacity-50 dark:bg-boxdark ${touched.subCategoryCode && errors.subCategoryCode ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
+                    >
+                      <option value="" className="dark:bg-boxdark text-gray-400">-- Select Sub-Category Code --</option>
+                      {subCategoriesList.filter(s => s.category_name === values.categoryCode).map(s => <option key={s.sub_category_name} value={s.sub_category_name} className="dark:bg-boxdark">{s.sub_category_name}</option>)}
+                    </select>
+                    {values.subCategoryCode && !DEFAULT_SUB_CATEGORIES.includes(values.subCategoryCode) && (
+                      <button type="button" onClick={() => handleDeleteSubCategoryRow(values.subCategoryCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected sub-category"><FiX size={16} /></button>
+                    )}
+                    <button type="button" onClick={() => {
+                      if (values.categoryCode) setModalSelectedCategoryForSub(values.categoryCode);
+                      setShowSubCategoryModal(true);
+                    }} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-stroke dark:border-strokedark bg-slate-50 dark:bg-meta-4/20 hover:bg-slate-100 text-gray-500 hover:text-black dark:hover:text-white font-bold transition"><FiPlus size={16} /></button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                   <label className="w-full md:w-48 block font-bold text-black dark:text-white text-xs uppercase tracking-wide">Control Code: *</label>
                   <div className="w-full md:w-150 flex items-center gap-2">
                     <select
@@ -296,24 +401,24 @@ const AddChartOfAccount = () => {
                       onChange={(e) => {
                         handleChange(e);
                         setFieldValue('linkedBankId', '');
-                        if (e.target.value !== 'Banks') setFieldValue('accountTitle', '');
+                        if (!e.target.value.toLowerCase().includes('bank')) setFieldValue('accountTitle', '');
                       }}
-                      disabled={!values.categoryCode}
+                      disabled={!values.subCategoryCode}
                       className={`flex-1 rounded border px-3 h-10 bg-transparent text-xs font-semibold text-black dark:text-white outline-none focus:border-primary disabled:opacity-50 dark:bg-boxdark ${touched.controlCode && errors.controlCode ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`}
                     >
                       <option value="" className="dark:bg-boxdark text-gray-400">-- Select Control Code --</option>
-                      {activeFilteredControls.map(c => <option key={c.control_name} value={c.control_name} className="dark:bg-boxdark">{c.control_name}</option>)}
+                      {controlsList.filter(c => c.sub_category_name === values.subCategoryCode).map(c => <option key={c.control_name} value={c.control_name} className="dark:bg-boxdark">{c.control_name}</option>)}
                     </select>
                     {values.controlCode && !DEFAULT_CONTROLS.includes(values.controlCode) && (
                       <button type="button" onClick={() => handleDeleteControlRow(values.controlCode, setFieldValue)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-red-500/30 bg-red-50 dark:bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white transition" title="Delete selected control subgroup"><FiX size={16} /></button>
                     )}
                     <button type="button" onClick={() => {
-                      if (values.categoryCode) setModalSelectedCategory(values.categoryCode);
+                      if (values.subCategoryCode) setModalSelectedCategory(values.subCategoryCode);
                       setShowControlModal(true);
                     }} className="h-10 w-10 shrink-0 flex items-center justify-center rounded border border-stroke dark:border-strokedark bg-slate-50 dark:bg-meta-4/20 hover:bg-slate-100 text-gray-500 hover:text-black dark:hover:text-white font-bold transition"><FiPlus size={16} /></button>
                   </div>
                 </div>
-                {values.controlCode === 'Banks' && (
+                {values.controlCode?.toLowerCase().includes('bank') && (
                   <div className="flex flex-col md:flex-row items-start md:items-center gap-4 bg-success/5 p-3 rounded border border-success/20 animate-fade-in">
                     <label className="w-full md:w-48 block font-bold text-success text-xs uppercase tracking-wide">Link Bank Account: *</label>
                     <div className="w-full md:w-150">
@@ -350,7 +455,7 @@ const AddChartOfAccount = () => {
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                   <label className="w-full md:w-48 block font-bold text-black dark:text-white text-xs uppercase tracking-wide">Account Title: *</label>
                   <div className="w-full md:w-150">
-                    <input type="text" name="accountTitle" readOnly={values.controlCode === 'Banks'} onChange={handleChange} value={values.accountTitle} className={`w-full rounded border px-3 h-10 font-bold text-xs text-black dark:text-white ${values.controlCode === 'Banks' ? 'bg-gray-100 dark:bg-meta-4/30 text-success' : 'bg-transparent'} ${touched.accountTitle && errors.accountTitle ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`} placeholder="Enter Ledger Title Name" />
+                    <input type="text" name="accountTitle" readOnly={values.controlCode?.toLowerCase().includes('bank')} onChange={handleChange} value={values.accountTitle} className={`w-full rounded border px-3 h-10 font-bold text-xs text-black dark:text-white ${values.controlCode?.toLowerCase().includes('bank') ? 'bg-gray-100 dark:bg-meta-4/30 text-success' : 'bg-transparent'} ${touched.accountTitle && errors.accountTitle ? 'border-red-500' : 'border-stroke dark:border-strokedark'}`} placeholder="Enter Ledger Title Name" />
                   </div>
                 </div>
 
@@ -403,6 +508,34 @@ const AddChartOfAccount = () => {
           </div>
         )}
 
+        {showSubCategoryModal && (
+          <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+            <div className="w-full max-w-sm rounded border border-stroke bg-white p-5 shadow-2xl dark:border-strokedark dark:bg-boxdark">
+              <div className="flex items-center justify-between border-b pb-2 mb-3">
+                <h4 className="font-bold text-black dark:text-white uppercase tracking-wide text-xs">Add Sub-Category Node</h4>
+                <button type="button" onClick={() => setShowSubCategoryModal(false)} className="text-gray-400 hover:text-black dark:hover:text-white cursor-pointer"><FiX size={18} /></button>
+              </div>
+              <form onSubmit={handleAddNewSubCategoryDB} className="space-y-4">
+                <div>
+                  <label className="block text-gray-500 mb-1 font-medium">Parent Category Pillar: *</label>
+                  <select value={modalSelectedCategoryForSub} onChange={(e) => setModalSelectedCategoryForSub(e.target.value)} className="w-full border rounded h-10 px-2 bg-transparent font-semibold dark:bg-boxdark text-black dark:text-white text-xs" required>
+                    <option value="">-- Choose Category --</option>
+                    {categoriesList.map(c => <option key={c.name} value={c.name} className="dark:bg-boxdark">{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-500 mb-1 font-medium">New Sub-Category Name: *</label>
+                  <input type="text" value={newSubCategoryInput} onChange={(e) => setNewSubCategoryInput(e.target.value)} className="w-full border rounded h-10 px-3 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white text-xs" placeholder="e.g., Current Assets" required />
+                </div>
+                <div className="flex justify-end gap-2 pt-2 border-t dark:border-strokedark">
+                  <button type="button" onClick={() => setShowSubCategoryModal(false)} className="rounded border px-4 h-9 font-medium hover:bg-gray-50 dark:hover:bg-meta-4 text-xs cursor-pointer">Cancel</button>
+                  <button type="submit" disabled={modalSubmitting} className="rounded bg-success px-5 h-9 font-medium text-white hover:bg-opacity-90 text-xs cursor-pointer">{modalSubmitting ? '...' : 'Add'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {showControlModal && (
           <div className="fixed inset-0 z-99999 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
             <div className="w-full max-w-sm rounded border border-stroke bg-white p-5 shadow-2xl dark:border-strokedark dark:bg-boxdark">
@@ -412,10 +545,10 @@ const AddChartOfAccount = () => {
               </div>
               <form onSubmit={handleAddNewControlDB} className="space-y-4">
                 <div>
-                  <label className="block text-gray-500 mb-1 font-medium">Parent Category Pillar: *</label>
+                  <label className="block text-gray-500 mb-1 font-medium">Parent Sub-Category: *</label>
                   <select value={modalSelectedCategory} onChange={(e) => setModalSelectedCategory(e.target.value)} className="w-full border rounded h-10 px-2 bg-transparent font-semibold dark:bg-boxdark text-black dark:text-white text-xs" required>
-                    <option value="">-- Choose Category --</option>
-                    {categoriesList.map(c => <option key={c.name} value={c.name} className="dark:bg-boxdark">{c.name}</option>)}
+                    <option value="">-- Choose Sub-Category --</option>
+                    {subCategoriesList.map(s => <option key={s.sub_category_name} value={s.sub_category_name} className="dark:bg-boxdark">{s.sub_category_name}</option>)}
                   </select>
                 </div>
                 <div>

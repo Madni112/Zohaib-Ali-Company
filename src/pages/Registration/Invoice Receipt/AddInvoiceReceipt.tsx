@@ -928,6 +928,18 @@ function AddInvoiceReceipt() {
                             setFieldValue('cashAmount', '');
                             setFieldValue('bankAmount', '');
                           }
+                          // Dynamically change voucher prefix
+                          let newPrefix = 'CR';
+                          if (val === 'By Bank') newPrefix = 'BR';
+                          else if (val === 'Split') newPrefix = 'CBR';
+                          
+                          const currentVoucherNo = values.voucherNo || '';
+                          const newVoucherNo = currentVoucherNo.replace(/^(CR|BR|CBR)-/, `${newPrefix}-`);
+                          if (newVoucherNo !== currentVoucherNo) {
+                            setFieldValue('voucherNo', newVoucherNo);
+                          } else if (!currentVoucherNo) {
+                            setFieldValue('voucherNo', `${newPrefix}-${Math.floor(100000 + Math.random() * 900000)}`);
+                          }
                         }}
                         value={values.voucherType}
                         className="w-full border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold outline-none text-xs focus:border-primary"

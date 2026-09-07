@@ -21,8 +21,17 @@ const BulkProductUpload = () => {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const parsedData = XLSX.utils.sheet_to_json(sheet);
-        setData(parsedData);
-        toast.success(`Parsed ${parsedData.length} rows successfully!`);
+        const normalizedData = parsedData.map((row: any) => {
+          const normalizedRow: any = {};
+          for (const key in row) {
+            if (Object.prototype.hasOwnProperty.call(row, key)) {
+              normalizedRow[key.trim().toUpperCase()] = row[key];
+            }
+          }
+          return normalizedRow;
+        });
+        setData(normalizedData);
+        toast.success(`Parsed ${normalizedData.length} rows successfully!`);
       } catch (err: any) {
         toast.error('Error parsing file: ' + err.message);
       }
@@ -46,7 +55,7 @@ const BulkProductUpload = () => {
       return {
         ...row,
         CODE: String(row['CODE'] || '').replace(suffixRegex, '').trim(),
-        DESCRIPTION: String(row['DESCRIPTION'] || '').replace(suffixRegex, '').trim()
+        DESCRIPTION: String(row['DESCRIPTION'] || row['PRODUCT NAME'] || '').replace(suffixRegex, '').trim()
       };
     });
 
@@ -61,19 +70,21 @@ const BulkProductUpload = () => {
     const uniqueData = Array.from(uniqueMap.values());
 
     const payload = uniqueData.map(row => ({
-      product_name: row['DESCRIPTION'],
-      item_sr_no: row['CODE'],
-      bin: String(row['Bin'] || '').trim(),
-      purchase_price: Number(row['Purchase Price']) || 0,
-      retail_price: Number(row['Sales Price']) || 0,
-      mrp: Number(row['Sales Price']) || 0,
+      product_name: String(row['DESCRIPTION'] || ''),
+      item_sr_no: row['CODE'] || '',
+      bin: String(row['BRAND'] || row['BIN'] || '').trim(),
+      purchase_price: Number(row['PURCHASE PRICE']) || 0,
+      retail_price: Number(row['SALES PRICE'] || row['RETAIL PRICE']) || 0,
+      mrp: Number(row['SALES PRICE'] || row['RETAIL PRICE']) || 0,
       uom: String(row['UOM'] || 'PCS').trim(),
-      min_stock_alert: Number(row['Minimum']) || 0,
-      category: 'General',
+      min_stock_alert: Number(row['MINIMUM']) || 0,
+      category: String(row['CATEGORY'] || '').trim(),
+      sub_category: String(row['SUB CATEGORY'] || row['SUB CAT'] || '').trim(),
+      sub_sub_category: String(row['PARENT CAT'] || row['SUB SUB CATEGORY'] || '').trim(),
       pieces_per_box: 1,
       pcs_per_box: 1,
       pieces_per_packing: 1,
-      profit: (Number(row['Sales Price']) || 0) - (Number(row['Purchase Price']) || 0)
+      profit: (Number(row['SALES PRICE'] || row['RETAIL PRICE']) || 0) - (Number(row['PURCHASE PRICE']) || 0)
     })).filter(p => p.product_name); // Only include rows with a description
 
     try {
@@ -126,6 +137,9 @@ const BulkProductUpload = () => {
       <div className="bg-white dark:bg-boxdark rounded-2xl shadow-sm border border-slate-200 dark:border-strokedark p-6 flex flex-col gap-6">
         <div>
           <label className="block text-sm font-semibold mb-2">Select Excel File (.xlsx, .csv)</label>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+            Expected Columns: <strong>Category</strong> | <strong>Sub Category</strong> | <strong>Parent Cat</strong> | <strong>CODE</strong> | <strong>DESCRIPTION</strong> | <strong>Brand</strong> | <strong>Purchase Price</strong> | <strong>Sales Price</strong> | <strong>UOM</strong> | <strong>Minimum</strong>
+          </div>
           <input 
             type="file" 
             accept=".xlsx, .xls, .csv" 
@@ -151,9 +165,12 @@ const BulkProductUpload = () => {
               <table className="w-full whitespace-nowrap text-left border-collapse">
                 <thead className="sticky top-0 bg-slate-100 dark:bg-meta-4 shadow-sm z-10">
                   <tr>
+                    <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">Category</th>
+                    <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">Sub Cat</th>
+                    <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">Parent Cat</th>
                     <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">CODE</th>
                     <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">DESCRIPTION</th>
-                    <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">Bin</th>
+                    <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">Brand</th>
                     <th className="py-3 px-4 text-xs font-black uppercase text-slate-500 text-right">Purchase Price</th>
                     <th className="py-3 px-4 text-xs font-black uppercase text-slate-500 text-right">Sales Price</th>
                     <th className="py-3 px-4 text-xs font-black uppercase text-slate-500">UOM</th>
@@ -163,13 +180,16 @@ const BulkProductUpload = () => {
                 <tbody>
                   {data.slice(0, 100).map((row, idx) => (
                     <tr key={idx} className="border-b border-slate-100 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/30 text-sm">
+                      <td className="py-2.5 px-4 truncate max-w-[120px]" title={row['CATEGORY']}>{row['CATEGORY'] || '-'}</td>
+                      <td className="py-2.5 px-4 truncate max-w-[120px]" title={row['SUB CATEGORY'] || row['SUB CAT']}>{row['SUB CATEGORY'] || row['SUB CAT'] || '-'}</td>
+                      <td className="py-2.5 px-4 truncate max-w-[120px]" title={row['PARENT CAT'] || row['SUB SUB CATEGORY']}>{row['PARENT CAT'] || row['SUB SUB CATEGORY'] || '-'}</td>
                       <td className="py-2.5 px-4 font-mono">{row['CODE'] || '-'}</td>
-                      <td className="py-2.5 px-4 font-semibold truncate max-w-xs" title={row['DESCRIPTION']}>{row['DESCRIPTION'] || '-'}</td>
-                      <td className="py-2.5 px-4">{row['Bin'] || '-'}</td>
-                      <td className="py-2.5 px-4 text-right font-mono">{Number(row['Purchase Price'] || 0).toFixed(2)}</td>
-                      <td className="py-2.5 px-4 text-right font-mono text-emerald-600">{Number(row['Sales Price'] || 0).toFixed(2)}</td>
+                      <td className="py-2.5 px-4 font-semibold truncate max-w-xs" title={row['DESCRIPTION'] || row['PRODUCT NAME']}>{row['DESCRIPTION'] || row['PRODUCT NAME'] || '-'}</td>
+                      <td className="py-2.5 px-4">{row['BRAND'] || row['BIN'] || '-'}</td>
+                      <td className="py-2.5 px-4 text-right font-mono">{Number(row['PURCHASE PRICE'] || 0).toFixed(2)}</td>
+                      <td className="py-2.5 px-4 text-right font-mono text-emerald-600">{Number(row['SALES PRICE'] || row['RETAIL PRICE'] || 0).toFixed(2)}</td>
                       <td className="py-2.5 px-4">{row['UOM'] || 'PCS'}</td>
-                      <td className="py-2.5 px-4 text-right font-mono">{row['Minimum'] || 0}</td>
+                      <td className="py-2.5 px-4 text-right font-mono">{row['MINIMUM'] || 0}</td>
                     </tr>
                   ))}
                 </tbody>

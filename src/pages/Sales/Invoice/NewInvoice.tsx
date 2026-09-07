@@ -39,8 +39,16 @@ const NewInvoice = () => {
   const [recordWalkinCustomer, setRecordWalkinCustomer] = useState<boolean>(true);
   const [selectedRecordedCustomer, setSelectedRecordedCustomer] = useState<string>('');
   const [pendingFormValues, setPendingFormValues] = useState<any>(null);
+  const [serverToday, setServerToday] = useState<Date | null>(null);
 
   useEffect(() => {
+    // Fetch server date so validation is not based on user's local clock
+    supabase.rpc('get_server_date').then(({ data }) => {
+      if (data) setServerToday(new Date(data));
+      else setServerToday(new Date());
+    }).catch(() => setServerToday(new Date()));
+
+  // Fetch enterprise catalog
     const fetchCompleteEnterpriseCatalog = async () => {
       try {
         setInitialLoading(true);
@@ -187,7 +195,17 @@ const NewInvoice = () => {
       return true;
     }),
     shippingAddress: Yup.string().nullable(),
-    saleDate: Yup.string().required('Required Field'),
+    saleDate: Yup.string().required('Required Field').test('valid-date', 'Date must be within last 2 days', function(value) {
+      if (!value) return false;
+      const selected = new Date(value);
+      selected.setHours(0,0,0,0);
+      const base = serverToday ? new Date(serverToday) : new Date();
+      const today = new Date(base);
+      today.setHours(0,0,0,0);
+      const minDate = new Date(today);
+      minDate.setDate(today.getDate() - 2);
+      return selected >= minDate && selected <= today;
+    }),
     taxScenario: Yup.string().required('Required Field'),
     salesman: Yup.string().required('Required Field'),
     settlementMode: Yup.string().oneOf(['Cash', 'Bank', 'Split']).required('Required Field'),
@@ -378,13 +396,191 @@ const NewInvoice = () => {
       let finalInvoiceId = editData?.id;
 
       if (editData && editData.id) {
+        const formattedInvCode = editData.invoice_no || values.invoiceNo;
+        
+        // 1. Fetch DCs associated with this invoice
+        const { data: dcs, error: dcErr } = await supabase
+          .from('delivery_challans')
+          .select('*')
+          .eq('invoice_no', formattedInvCode);
+        
+        if (dcErr) throw dcErr;
+
+        const activeDCs = (dcs || []).filter(dc => dc.status !== 'Pending Approval');
+        const pendingDCs = (dcs || []).filter(dc => dc.status === 'Pending Approval');
+
+        // Track covered quantities by sku_warehouse
+        const coveredQtys: Record<string, number> = {};
+        activeDCs.forEach(dc => {
+          (dc.items || []).forEach((i: any) => {
+            const key = `${i.skuCode}_${i.location}`;
+            coveredQtys[key] = (coveredQtys[key] || 0) + Number(i.orderQty || 0);
+          });
+        });
+
+        // Helper for error formatting
+        const formatErrorQty = (qty: number, skuCode: string, itemName?: string) => {
+          const matchedProd = productsList.find(p => p.product_name === itemName || (skuCode && (p.item_sr_no === skuCode || `SKU-${p.id}` === skuCode)));
+          let displayQty = String(qty);
+          if (matchedProd) {
+            const isTile = Boolean(String(matchedProd.category || '').toLowerCase().includes('tile'));
+            let pcsPerBox = Number(matchedProd.pieces_per_box || matchedProd.pcs_per_box || matchedProd.pieces_per_packing || 1);
+            if (isTile && pcsPerBox <= 1) pcsPerBox = 4;
+            if (pcsPerBox > 1) {
+              const totalPcs = Math.round(qty * pcsPerBox);
+              const b = Math.floor(totalPcs / pcsPerBox);
+              const p = totalPcs % pcsPerBox;
+              displayQty = p === 0 ? `${b} Boxes` : `${b} Boxes + ${p} Pcs`;
+            }
+          }
+          return displayQty;
+        };
+
+        // 2. Validate
+        for (const item of values.items) {
+          const wh = (item.warehouse || values.dispatchWarehouse || 'Main Warehouse').trim();
+          const key = `${item.skuCode}_${wh}`;
+          const covered = coveredQtys[key] || 0;
+          if (Number(item.qty) < covered) {
+             const fmt = formatErrorQty(covered, item.skuCode, item.itemName);
+             throw new Error(`Cannot decrease quantity for ${item.itemName} below the actively processed DC amount (${fmt}).`);
+          }
+        }
+        
+        for (const key of Object.keys(coveredQtys)) {
+          const covered = coveredQtys[key];
+          if (covered > 0) {
+            const found = values.items.find((i:any) => `${i.skuCode}_${(i.warehouse || values.dispatchWarehouse || 'Main Warehouse').trim()}` === key);
+            if (!found) {
+               const sku = key.split('_')[0];
+               const fmt = formatErrorQty(covered, sku);
+               throw new Error(`Cannot remove item with SKU ${sku} because it already has actively processed DCs (${fmt}).`);
+            }
+          }
+        }
+
+        // 3. Update Invoice
         const { error: invoiceUpdateError } = await supabase
           .from('sales_invoices')
           .update(databasePayload)
           .eq('id', editData.id);
 
         if (invoiceUpdateError) throw invoiceUpdateError;
-        toast.success('Sales Invoice changes compiled successfully!');
+
+        // 4. Update Inventory (Restore old, Deduct new)
+        const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
+        for (const oldItem of oldItems) {
+          const oldWh = (oldItem.warehouse || editData.dispatch_warehouse || 'Main Warehouse').trim();
+          const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', oldItem.itemName).ilike('warehouse_name', oldWh).maybeSingle();
+          if (p) {
+            await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) + Number(oldItem.qty || 0) }).eq('id', p.id);
+            const { data: prod } = await supabase.from('products').select('id, current_stock').eq('product_name', oldItem.itemName).maybeSingle();
+            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) + Number(oldItem.qty || 0) }).eq('id', prod.id);
+          }
+        }
+        for (const newItem of values.items) {
+          const newWh = (newItem.warehouse || values.dispatchWarehouse || 'Main Warehouse').trim();
+          const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', newItem.itemName).ilike('warehouse_name', newWh).maybeSingle();
+          if (p) {
+            await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(newItem.qty || 0) }).eq('id', p.id);
+            const { data: prod } = await supabase.from('products').select('id, current_stock').eq('product_name', newItem.itemName).maybeSingle();
+            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(newItem.qty || 0) }).eq('id', prod.id);
+          }
+        }
+
+        // 5. Sync DCs (Delete pending, create new for remaining quantities)
+        if (pendingDCs.length > 0) {
+          const pendingIds = pendingDCs.map(d => d.id);
+          const { error: delErr } = await supabase.from('delivery_challans').delete().in('id', pendingIds);
+          if (delErr) console.error('Error deleting pending DCs:', delErr);
+        }
+
+        const itemsByWarehouse: Record<string, any[]> = {};
+        for (const item of values.items) {
+          const wh = (item.warehouse || values.dispatchWarehouse || 'Main Warehouse').trim();
+          const key = `${item.skuCode}_${wh}`;
+          const covered = coveredQtys[key] || 0;
+          const remaining = Number(item.qty) - covered;
+
+          if (remaining > 0) {
+            if (!itemsByWarehouse[wh]) itemsByWarehouse[wh] = [];
+            
+            // Prorate discount if any
+            const origQty = Number(item.qty) || 1;
+            const proratedDisAmt = (Number(item.discountAmt) || 0) * (remaining / origQty);
+
+            itemsByWarehouse[wh].push({
+              poNoSub: values.clientPoNumber || '',
+              pDescription: item.itemName || 'Product',
+              skuCode: item.skuCode || '',
+              location: wh,
+              rate: Number(item.rp) || 0,
+              qty: remaining,
+              disAmt: Number(proratedDisAmt.toFixed(2)),
+              distPer: Number(item.discountPer) || 0,
+              discount: 0,
+              notes: item.notes || ''
+            });
+          }
+        }
+
+        const { data: existingDcs } = await supabase
+          .from('delivery_challans')
+          .select('id, challan_no, dispatch_warehouse')
+          .eq('invoice_no', formattedInvCode)
+          .order('id', { ascending: true });
+
+        for (const [whName, whItems] of Object.entries(itemsByWarehouse)) {
+          const whQty = whItems.reduce((acc, i) => acc + Number(i.qty || 0), 0);
+          const whBaseAmt = whItems.reduce((acc, i) => acc + (Number(i.rate || 0) * Number(i.qty || 0)), 0);
+          const whDiscAmt = whItems.reduce((acc, i) => acc + Number(i.disAmt || 0), 0);
+          const whNetAmt = whBaseAmt - whDiscAmt;
+
+          let nextChallanNo = undefined;
+          if (existingDcs && existingDcs.length > 0) {
+            const whDcs = existingDcs.filter(dc => dc.dispatch_warehouse === whName);
+            if (whDcs.length > 0) {
+              const baseDc = whDcs[0];
+              const baseCode = (baseDc.challan_no || `DC-${String(baseDc.id).padStart(4, '0')}`).replace(/-[A-Z]+$/, '');
+              const existingSubCount = existingDcs.filter(c => (c.challan_no || `DC-${String(c.id).padStart(4, '0')}`).startsWith(baseCode)).length;
+              let nextLetter = '';
+              if (existingSubCount < 26) {
+                nextLetter = String.fromCharCode(65 + existingSubCount);
+              } else {
+                nextLetter = String.fromCharCode(65 + (existingSubCount % 26)).repeat(Math.floor(existingSubCount / 26) + 1);
+              }
+              nextChallanNo = `${baseCode}-${nextLetter}`;
+            }
+          }
+
+          await supabase.from('delivery_challans').insert([{
+            challan_no: nextChallanNo,
+            invoice_no: formattedInvCode,
+            customer_name: customerFinalName,
+            challan_date: values.saleDate || new Date().toISOString().split('T')[0],
+            dispatch_warehouse: whName,
+            transport_name: values.transportType || 'By Road Transport',
+            transportation: values.transportType || 'By Road Transport',
+            po_no: values.clientPoNumber || '',
+            po_date: values.saleDate || null,
+            gate_pass_no: (values.gatePasses && values.gatePasses[whName]) || null,
+            vehicle_no: values.transportCharges ? `Pending Dispatch` : 'Counter Delivery',
+            remarks: `Awaiting warehouse approval for ${formattedInvCode} (${whName}) [EDITED]`,
+            total_quantity: whQty,
+            total_amount: whBaseAmt,
+            total_discount: whDiscAmt,
+            total_net_amount: whNetAmt,
+            status: 'Pending Approval',
+            items: whItems.map(i => ({
+              ...i,
+              orderQty: Number(i.qty || 0),
+              dispatchedQty: 0,
+              holdQty: Number(i.qty || 0)
+            }))
+          }]);
+        }
+
+        toast.success('Sales Invoice changes compiled and DCs synced successfully!');
       } else {
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('sales_invoices')
@@ -424,7 +620,29 @@ const NewInvoice = () => {
             const whDiscAmt = whItems.reduce((acc, i) => acc + Number(i.disAmt || 0), 0);
             const whNetAmt = whBaseAmt - whDiscAmt;
 
+            const safePrefix = whName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const { data: allDcs } = await supabase
+              .from('delivery_challans')
+              .select('challan_no')
+              .ilike('challan_no', `${safePrefix}-%`);
+
+            let nextNum = 1;
+            if (allDcs && allDcs.length > 0) {
+              const maxNum = allDcs.reduce((max, dc) => {
+                const match = (dc.challan_no || '').match(new RegExp(`^${safePrefix}-(\\d+)`));
+                if (match && match[1]) {
+                  const num = parseInt(match[1], 10);
+                  return num > max ? num : max;
+                }
+                return max;
+              }, 0);
+              nextNum = maxNum + 1;
+            }
+            
+            const newChallanNo = `${safePrefix}-${String(nextNum).padStart(4, '0')}`;
+
             await supabase.from('delivery_challans').insert([{
+              challan_no: newChallanNo,
               invoice_no: formattedInvCode,
               customer_name: customerFinalName,
               challan_date: values.saleDate || new Date().toISOString().split('T')[0],
@@ -462,7 +680,11 @@ const NewInvoice = () => {
             .ilike('product_name', item.itemName)
             .ilike('warehouse_name', itemWarehouse)
             .maybeSingle();
-          if (p) await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(item.qty) }).eq('id', p.id);
+          if (p) {
+            await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(item.qty) }).eq('id', p.id);
+            const { data: prod } = await supabase.from('products').select('id, current_stock').eq('product_name', item.itemName).maybeSingle();
+            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
+          }
         }
         toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
       }
@@ -623,7 +845,36 @@ const NewInvoice = () => {
 
                   <div>
                     <label className="block font-bold text-gray-500 mb-1">Billing Date: *</label>
-                    <input type="date" name="saleDate" value={values.saleDate} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.saleDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
+                    <input 
+                      type="date" 
+                      name="saleDate" 
+                      value={values.saleDate} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // If user typed only day number (e.g., "06")
+                        if (val && val.length <= 2 && !isNaN(Number(val))) {
+                          const day = Number(val);
+                          const now = new Date();
+                          const constructed = new Date(now.getFullYear(), now.getMonth(), day);
+                          const iso = constructed.toISOString().split('T')[0];
+                          const base = serverToday ? new Date(serverToday) : new Date();
+                          const today = new Date(base);
+                          today.setHours(0,0,0,0);
+                          const minDate = new Date(today);
+                          minDate.setDate(today.getDate() - 2);
+                          if (constructed >= minDate && constructed <= today) {
+                            setFieldValue('saleDate', iso);
+                            console.log('Date accepted');
+                          } else {
+                            toast.error('Invalid date');
+                          }
+                        } else {
+                          setFieldValue('saleDate', val);
+                        }
+                      }}
+                      min={new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0]}
+                      max={new Date().toISOString().split('T')[0]}
+                      className={`w-full rounded border p-2 text-sm bg-transparent font-bold outline-none text-black dark:text-white ${hasAttempted && errors.saleDate ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`} />
                   </div>
 
                   <div>
@@ -772,7 +1023,7 @@ const NewInvoice = () => {
                                 const availLoosePcs = isTile && pcsPerBox > 1 ? (totalPieces % pcsPerBox) : 0;
 
                                 return (
-                                  <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${isCurrentActive || isCurrentProdNameActive ? 'relative z-30' : 'relative z-10'} ${hasItemError ? 'bg-red-50/5' : ''}`}>
+                                  <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${isCurrentActive || isCurrentProdNameActive || activeWhIndex === idx ? 'relative z-30' : 'relative z-10'} ${hasItemError ? 'bg-red-50/5' : ''}`}>
                                     <td className="p-2 text-center font-sans text-gray-400">{idx + 1}</td>
 
                                     {/* Code REALTIME SEARCH / TYPEABLE INPUT IDENTICAL TO OPENING STOCK */}

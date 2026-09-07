@@ -252,8 +252,7 @@ const AddGRN = () => {
                       .insert([{
                         product_name: item.itemName,
                         warehouse_name: item.warehouseName,
-                        quantity: Number(item.qty),
-                        uom: item.uom
+                        quantity: Number(item.qty)
                       }]);
                   }
                 }

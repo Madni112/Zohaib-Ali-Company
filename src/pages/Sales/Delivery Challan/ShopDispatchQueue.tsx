@@ -268,9 +268,15 @@ const ShopDispatchQueue = () => {
       setLoading(true);
       
       // Calculate dynamic next sequence suffix (DC-0005-B, DC-0005-C, etc.)
-      const baseCode = (parentChallan.challan_no || `DC-${String(parentChallan.id).padStart(4, '0')}`).replace(/-[A-Z]$/, '');
+      const baseCode = (parentChallan.challan_no || `DC-${String(parentChallan.id).padStart(4, '0')}`).replace(/-[A-Z]+$/, '');
       const existingSubCount = challans.filter(c => (c.challan_no || '').startsWith(baseCode)).length;
-      const nextLetter = String.fromCharCode(65 + existingSubCount); // 1 existing -> B, 2 existing -> C, etc.
+      
+      let nextLetter = '';
+      if (existingSubCount < 26) {
+        nextLetter = String.fromCharCode(65 + existingSubCount); // 1 existing -> B, 2 existing -> C, etc.
+      } else {
+        nextLetter = String.fromCharCode(65 + (existingSubCount % 26)).repeat(Math.floor(existingSubCount / 26) + 1);
+      }
       const subChallanNo = `${baseCode}-${nextLetter}`;
 
       const whQty = holdItems.reduce((acc: number, i: any) => acc + Number(i.orderQty || 0), 0);
@@ -808,16 +814,28 @@ const ShopDispatchQueue = () => {
                                   const hld = Number(i.holdQty ?? 0);
 
                                   return (
-                                    <div key={itemIdx} className="flex items-center gap-2">
-                                      <span className="font-medium text-slate-800 dark:text-slate-200">{i.pDescription}:</span>
-                                      {isPending ? (
-                                        <span className="font-mono text-gray-500">{ord} Ordered (Pending Inspection)</span>
-                                      ) : (
-                                        <span className="font-mono text-xs">
-                                          <strong className="text-emerald-600 dark:text-emerald-400">{disp} Sent</strong>
-                                          {hld > 0 && <span className="text-amber-600 dark:text-amber-400 ml-1.5">({hld} on Hold)</span>}
-                                        </span>
-                                      )}
+                                    <div key={itemIdx} className="mb-2 last:mb-0 pb-2 last:pb-0 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                                      <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 leading-snug mb-1">
+                                        • {i.pDescription}
+                                      </p>
+                                      <div className="flex flex-wrap items-center gap-1.5 pl-3">
+                                        {isPending ? (
+                                          <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 dark:bg-gray-800 dark:text-gray-400">
+                                            {ord} Ordered (Pending)
+                                          </span>
+                                        ) : (
+                                          <>
+                                            <span className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                              {disp} Sent
+                                            </span>
+                                            {hld > 0 && (
+                                              <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-400">
+                                                {hld} on Hold
+                                              </span>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
                                     </div>
                                   );
                                 })}

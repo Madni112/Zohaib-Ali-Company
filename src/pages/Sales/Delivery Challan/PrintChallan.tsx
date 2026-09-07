@@ -39,6 +39,7 @@ const PrintChallan = () => {
   const { businessName, tenantId } = useAuth();
   const [challan, setChallan] = useState<ChallanData | null>(null);
 
+  const [productsMaster, setProductsMaster] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,6 +54,11 @@ const PrintChallan = () => {
 
         if (error) throw error;
         if (data) setChallan(data);
+
+        const { data: prodData } = await supabase
+          .from('products')
+          .select('product_name, category, scenario_name, pieces_per_box, pcs_per_box, pieces_per_packing');
+        if (prodData) setProductsMaster(prodData);
       } catch (err: any) {
         toast.error('Error loading print data: ' + err.message);
         navigate('/Delivery-Challan/List');
@@ -84,6 +90,9 @@ const PrintChallan = () => {
   };
 
   const challanTitle = challan.challan_no || `DC-${String(challan.id).padStart(4, '0')}`;
+
+  let totalBoxes = 0;
+  let totalPcs = 0;
 
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-8 bg-white text-black font-sans min-h-screen relative">
@@ -179,7 +188,7 @@ const PrintChallan = () => {
             <div>
               <span className="text-gray-500 block mb-0.5">Gate Pass #:</span>
               <strong className="text-sm font-black text-emerald-800 font-mono">
-                {challan.gate_pass_no || 'N/A'}
+                {challan.gate_pass_no || challanTitle}
               </strong>
             </div>
             <div>
@@ -223,7 +232,7 @@ const PrintChallan = () => {
                   <th className="border border-gray-300 p-2.5 w-12">S#</th>
                   <th className="border border-gray-300 p-2.5 w-32">Code</th>
                   <th className="border border-gray-300 p-2.5 text-left">Description</th>
-                  <th className="border border-gray-300 p-2.5 w-24">Qty</th>
+                  <th className="border border-gray-300 p-2.5 w-32">Qty</th>
                 </tr>
               </thead>
               <tbody>
@@ -233,6 +242,32 @@ const PrintChallan = () => {
                     <>
                       {printedItems.map((item: any, idx: number) => {
                         const dispatchedQty = Number(item.dispatchedQty ?? item.qty ?? 0);
+                        
+                        let pcsPerBox = 1;
+                        const prodName = String(item.pDescription || item.itemName || '').trim().toLowerCase();
+                        const prod = productsMaster.find(p => String(p?.product_name || '').trim().toLowerCase() === prodName);
+                        if (prod) {
+                           const rawPcs = Number(prod.pieces_per_box || prod.pcs_per_box || prod.pieces_per_packing || 0);
+                           const isTile = Boolean(String(prod.category || '').toLowerCase().includes('tile') || String(prod.scenario_name || '').toLowerCase().includes('tile'));
+                           if (isTile) {
+                             pcsPerBox = rawPcs > 1 ? rawPcs : 4;
+                           }
+                        }
+
+                        let displayQty = String(dispatchedQty);
+                        if (pcsPerBox > 1) {
+                          const totPcs = Math.round(dispatchedQty * pcsPerBox);
+                          const b = Math.floor(totPcs / pcsPerBox);
+                          const p = totPcs % pcsPerBox;
+                          totalBoxes += b;
+                          totalPcs += p;
+                          if (p === 0) displayQty = `${b} Boxes`;
+                          else if (b === 0) displayQty = `${p} Pcs`;
+                          else displayQty = `${b} Boxes + ${p} Pcs`;
+                        } else {
+                          totalBoxes += dispatchedQty;
+                          displayQty = String(dispatchedQty);
+                        }
 
                         return (
                           <tr key={idx} className="font-medium text-center">
@@ -240,7 +275,7 @@ const PrintChallan = () => {
                             <td className="border border-gray-300 p-2 text-center font-mono">{item.skuCode || item.pCode}</td>
                             <td className="border border-gray-300 p-2 text-black font-semibold text-left">{item.pDescription}</td>
                             <td className="border border-gray-300 p-2 text-center font-black text-sm text-black bg-gray-100 font-mono">
-                              {dispatchedQty}
+                              {displayQty}
                             </td>
                           </tr>
                         );
@@ -249,8 +284,8 @@ const PrintChallan = () => {
                         <td colSpan={3} className="border border-gray-300 p-2.5 text-right uppercase tracking-wider text-gray-600">
                           Total Qty:
                         </td>
-                        <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-200">
-                          {printedItems.reduce((sum: number, item: any) => sum + (Number(item.dispatchedQty ?? item.qty) || 0), 0).toLocaleString()}
+                        <td className="border border-gray-300 p-2.5 text-center text-sm font-black text-black bg-gray-200 whitespace-nowrap">
+                          {totalPcs > 0 ? `${totalBoxes} Boxes + ${totalPcs} Pcs` : `${totalBoxes}`}
                         </td>
                       </tr>
                     </>

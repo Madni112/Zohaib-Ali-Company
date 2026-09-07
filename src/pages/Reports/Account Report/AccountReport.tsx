@@ -4,7 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { useAuth } from '../../../Context/Auth';
-import SearchableDropdown from '../../../components/SearchableDropdown';
+import { SearchableMultiSelect } from '../../../components/SearchableMultiSelect';
 
 const AccountReport = () => {
   const navigate = useNavigate();
@@ -20,9 +20,9 @@ const AccountReport = () => {
   const [salesmen, setSalesmen] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
 
-  // Core Chart of Accounts Cache Array Lists
   const [chartOfAccounts, setChartOfAccounts] = useState<any[]>([]);
   const [uniqueCategoryCodes, setUniqueCategoryCodes] = useState<any[]>([]);
+  const [uniqueSubCategoryCodes, setUniqueSubCategoryCodes] = useState<any[]>([]);
   const [uniqueControlCodes, setUniqueControlCodes] = useState<any[]>([]);
 
   const getPastWeekDateString = () => {
@@ -36,15 +36,16 @@ const AccountReport = () => {
   };
 
   const [filters, setFilters] = useState(location.state?.filters || {
-    categoryCode: 'All',
-    controlCode: 'All',
-    chartOfAccountCode: 'All',
-    customer: 'All',
-    vendor: 'All',
-    company: 'All',
+    categoryCode: [],
+    subCategoryCode: [],
+    controlCode: [],
+    chartOfAccountCode: [],
+    customer: [],
+    vendor: [],
+    company: [],
     voucherType: 'All',
     saleType: 'Sale',
-    salesman: 'All',
+    salesman: [],
     dateFrom: getPastWeekDateString(),
     dateTo: getTodayDateString()
   });
@@ -62,7 +63,7 @@ const AccountReport = () => {
           supabase.from('vendors').select('id, vendor_name'),
           supabase.from('salesmen').select('id, name'),
           supabase.from('companies').select('id, name'),
-          supabase.from('chart_of_accounts').select('id, category_code, control_code, account_code, account_title')
+          supabase.from('chart_of_accounts').select('id, category_code, sub_category_code, control_code, account_code, account_title')
         ]);
 
         if (custRes.data) setCustomers(custRes.data);
@@ -74,6 +75,8 @@ const AccountReport = () => {
           setChartOfAccounts(coaRes.data);
           const cats = Array.from(new Set(coaRes.data.map((item: any) => item.category_code).filter(Boolean)));
           setUniqueCategoryCodes(cats);
+          const subs = Array.from(new Set(coaRes.data.map((item: any) => item.sub_category_code).filter(Boolean)));
+          setUniqueSubCategoryCodes(subs);
           const ctrls = Array.from(new Set(coaRes.data.map((item: any) => item.control_code).filter(Boolean)));
           setUniqueControlCodes(ctrls);
         }
@@ -90,20 +93,35 @@ const AccountReport = () => {
     setFilters(prev => {
       const updated = { ...prev, [field]: value };
       if (field === 'categoryCode') {
-        updated.controlCode = 'All';
-        updated.chartOfAccountCode = 'All';
+        updated.subCategoryCode = [];
+        updated.controlCode = [];
+        updated.chartOfAccountCode = [];
+      } else if (field === 'subCategoryCode') {
+        updated.controlCode = [];
+        updated.chartOfAccountCode = [];
       } else if (field === 'controlCode') {
-        updated.chartOfAccountCode = 'All';
+        updated.chartOfAccountCode = [];
       }
       return updated;
     });
   };
 
-  const getFilteredControlCodesPool = () => {
-    if (filters.categoryCode === 'All') return uniqueControlCodes;
+  const getFilteredSubCategoryCodesPool = () => {
+    if (!filters.categoryCode || filters.categoryCode.length === 0) return uniqueSubCategoryCodes;
     return Array.from(new Set(
       chartOfAccounts
-        .filter((item: any) => item.category_code === filters.categoryCode)
+        .filter((item: any) => filters.categoryCode.includes(item.category_code))
+        .map((item: any) => item.sub_category_code)
+        .filter(Boolean)
+    ));
+  };
+
+  const getFilteredControlCodesPool = () => {
+    if ((!filters.categoryCode || filters.categoryCode.length === 0) && (!filters.subCategoryCode || filters.subCategoryCode.length === 0)) return uniqueControlCodes;
+    return Array.from(new Set(
+      chartOfAccounts
+        .filter((item: any) => (filters.categoryCode?.length === 0 || filters.categoryCode?.includes(item.category_code)))
+        .filter((item: any) => (filters.subCategoryCode?.length === 0 || filters.subCategoryCode?.includes(item.sub_category_code)))
         .map((item: any) => item.control_code)
         .filter(Boolean)
     ));
@@ -111,18 +129,22 @@ const AccountReport = () => {
 
   const getFilteredChartOfAccountsPool = () => {
     let pool = chartOfAccounts;
-    if (filters.categoryCode !== 'All') {
+    if (filters.categoryCode && filters.categoryCode.length > 0) {
       pool = pool.filter((item: any) => item.category_code === filters.categoryCode);
     }
-    if (filters.controlCode !== 'All') {
-      pool = pool.filter((item: any) => item.control_code === filters.controlCode);
+    if (filters.subCategoryCode && filters.subCategoryCode.length > 0) {
+      pool = pool.filter((item: any) => filters.subCategoryCode.includes(item.sub_category_code));
+    }
+    if (filters.controlCode && filters.controlCode.length > 0) {
+      pool = pool.filter((item: any) => filters.controlCode.includes(item.control_code));
     }
     return pool;
   };
 
   const categoryCodeOptions = useMemo(() => uniqueCategoryCodes, [uniqueCategoryCodes]);
-  const controlCodeOptions = useMemo(() => getFilteredControlCodesPool(), [uniqueControlCodes, chartOfAccounts, filters.categoryCode]);
-  const chartOfAccountOptions = useMemo(() => getFilteredChartOfAccountsPool().map(c => `${c.account_code} - ${c.account_title}`), [chartOfAccounts, filters.categoryCode, filters.controlCode]);
+  const subCategoryCodeOptions = useMemo(() => getFilteredSubCategoryCodesPool(), [uniqueSubCategoryCodes, chartOfAccounts, filters.categoryCode]);
+  const controlCodeOptions = useMemo(() => getFilteredControlCodesPool(), [uniqueControlCodes, chartOfAccounts, filters.categoryCode, filters.subCategoryCode]);
+  const chartOfAccountOptions = useMemo(() => getFilteredChartOfAccountsPool().map(c => `${c.account_code} - ${c.account_title}`), [chartOfAccounts, filters.categoryCode, filters.subCategoryCode, filters.controlCode]);
   const customerOptions = useMemo(() => customers.map(c => c.customerName).filter(Boolean), [customers]);
   const vendorOptions = useMemo(() => vendors.map(v => v.vendor_name).filter(Boolean), [vendors]);
   const companyOptions = useMemo(() => companies.map(c => c.name).filter(Boolean), [companies]);
@@ -131,15 +153,16 @@ const AccountReport = () => {
   const handleTabChange = (tab: number) => {
     setActiveTab(tab);
     setFilters(prev => ({
-      categoryCode: 'All',
-      controlCode: 'All',
-      chartOfAccountCode: 'All',
-      customer: 'All',
-      vendor: 'All',
-      company: 'All',
+      categoryCode: [],
+      subCategoryCode: [],
+      controlCode: [],
+      chartOfAccountCode: [],
+      customer: [],
+      vendor: [],
+      company: [],
       voucherType: 'All',
       saleType: 'Sale',
-      salesman: 'All',
+      salesman: [],
       dateFrom: prev.dateFrom,
       dateTo: prev.dateTo
     }));
@@ -194,27 +217,29 @@ const AccountReport = () => {
 
           {activeTab === 1 && (
             <>
-              <SearchableDropdown label="Category Code:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
-              <SearchableDropdown label="Control Code:" placeholder="Control Code" options={controlCodeOptions} value={filters.controlCode} onChange={(val) => handleInputChange('controlCode', val)} />
-              <SearchableDropdown
+              <SearchableMultiSelect label="Category Code:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
+              <SearchableMultiSelect label="Sub-Category:" placeholder="Sub-Category" options={subCategoryCodeOptions} value={filters.subCategoryCode} onChange={(val) => handleInputChange('subCategoryCode', val)} />
+              <SearchableMultiSelect label="Control Code:" placeholder="Control Code" options={controlCodeOptions} value={filters.controlCode} onChange={(val) => handleInputChange('controlCode', val)} />
+              <SearchableMultiSelect
                 label="Chart of Account Code:"
                 placeholder="Account"
                 options={chartOfAccountOptions}
                 value={filters.chartOfAccountCode}
                 onChange={(val) => {
-                  const cleanCode = val === 'All' ? 'All' : val.split(' - ')[0];
+                  const cleanCode = val.map((v: string) => v.split(' - ')[0]);
                   handleInputChange('chartOfAccountCode', cleanCode);
                 }}
               />
+              <SearchableMultiSelect label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
             </>
           )}
 
           {activeTab === 2 && (
-            <SearchableDropdown label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
+            <SearchableMultiSelect label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
           )}
 
           {activeTab === 3 && (
-            <SearchableDropdown label="Select Procurement Vendor:" placeholder="Vendor" options={vendorOptions} value={filters.vendor} onChange={(val) => handleInputChange('vendor', val)} />
+            <SearchableMultiSelect label="Select Procurement Vendor:" placeholder="Vendor" options={vendorOptions} value={filters.vendor} onChange={(val) => handleInputChange('vendor', val)} />
           )}
 
           {activeTab === 4 && (
@@ -222,17 +247,17 @@ const AccountReport = () => {
           )}
 
           {activeTab === 5 && (
-            <SearchableDropdown label="Category Code Selection:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
+            <SearchableMultiSelect label="Category Code Selection:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
           )}
 
           {activeTab === 6 && (
-            <SearchableDropdown label="Select Procurement Vendor:" placeholder="Vendor" options={vendorOptions} value={filters.vendor} onChange={(val) => handleInputChange('vendor', val)} />
+            <SearchableMultiSelect label="Select Procurement Vendor:" placeholder="Vendor" options={vendorOptions} value={filters.vendor} onChange={(val) => handleInputChange('vendor', val)} />
           )}
 
           {activeTab === 7 && (
             <>
-              <SearchableDropdown label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
-              {/* <SearchableDropdown label="Linked Principal Company:" placeholder="Company" options={companyOptions} value={filters.company} onChange={(val) => handleInputChange('company', val)} /> */}
+              <SearchableMultiSelect label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
+              {/* <SearchableMultiSelect label="Linked Principal Company:" placeholder="Company" options={companyOptions} value={filters.company} onChange={(val) => handleInputChange('company', val)} /> */}
             </>
           )}
 
@@ -262,15 +287,15 @@ const AccountReport = () => {
           )}
 
           {activeTab === 10 && (
-            <SearchableDropdown label="Linked Salesman Agent:" placeholder="Salesman" options={salesmanOptions} value={filters.salesman} onChange={(val) => handleInputChange('salesman', val)} />
+            <SearchableMultiSelect label="Linked Salesman Agent:" placeholder="Salesman" options={salesmanOptions} value={filters.salesman} onChange={(val) => handleInputChange('salesman', val)} />
           )}
 
           {activeTab === 11 && (
-            <SearchableDropdown label="Category Code Selection:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
+            <SearchableMultiSelect label="Category Code Selection:" placeholder="Category Code" options={categoryCodeOptions} value={filters.categoryCode} onChange={(val) => handleInputChange('categoryCode', val)} />
           )}
 
           {activeTab === 12 && (
-            <SearchableDropdown label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
+            <SearchableMultiSelect label="Select Customer Title:" placeholder="Customer" options={customerOptions} value={filters.customer} onChange={(val) => handleInputChange('customer', val)} />
           )}
 
           {activeTab !== 5 && activeTab !== 11 && activeTab !== 12 && (

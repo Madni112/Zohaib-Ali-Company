@@ -3,7 +3,7 @@ import { supabase } from '../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../ui/Spinner';
 import TableActions from '../../ui/TableActions';
-import { MdDelete, MdAdd, MdCategory, MdClose, MdChevronRight, MdFolder, MdSave } from 'react-icons/md';
+import { MdDelete, MdAdd, MdCategory, MdClose, MdChevronRight, MdFolder, MdSave, MdEdit } from 'react-icons/md';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { useAuth } from '../../Context/Auth';
 
@@ -17,6 +17,7 @@ const Categories = () => {
     const [selectedSubId, setSelectedSubId] = useState<string | number>('');
     const [categoryName, setCategoryName] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [editCategoryId, setEditCategoryId] = useState<string | number | null>(null);
 
     // Modal states
     const [isParentModalOpen, setIsParentModalOpen] = useState(false);
@@ -71,10 +72,7 @@ const Categories = () => {
     }, [categories]);
 
     // Handle cascading resets
-    useEffect(() => {
-        setSelectedSubId('');
-    }, [selectedParentId]);
-
+    // (Removed useEffect to prevent clearing during edit mode auto-fill)
 
     // --- Actions ---
     const handleCreateParent = async (e: React.FormEvent) => {
@@ -139,23 +137,53 @@ const Categories = () => {
 
         try {
             setSubmitting(true);
-            const isDuplicate = categories.filter(c => c.parent_id === Number(selectedSubId)).some(c => c.name?.toLowerCase() === categoryName.trim().toLowerCase());
+            const isDuplicate = categories
+                .filter(c => c.parent_id === Number(selectedSubId) && c.id !== editCategoryId)
+                .some(c => c.name?.toLowerCase() === categoryName.trim().toLowerCase());
             if (isDuplicate) return toast.error('Category already exists under this sub category');
 
             const payload: any = { name: categoryName.trim(), parent_id: selectedSubId };
             if (tenantId) payload.tenant_id = tenantId;
 
-            const { error } = await supabase.from('inventory_categories').insert([payload]);
-            if (error) throw error;
+            if (editCategoryId) {
+                const { error } = await supabase.from('inventory_categories').update(payload).eq('id', editCategoryId);
+                if (error) throw error;
+                toast.success('Category updated successfully!');
+            } else {
+                const { error } = await supabase.from('inventory_categories').insert([payload]);
+                if (error) throw error;
+                toast.success('Category created successfully!');
+            }
 
-            toast.success('Category created successfully!');
             setCategoryName('');
+            setEditCategoryId(null);
             fetchCategories();
         } catch (err: any) {
             toast.error(err.message);
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const handleEditCategory = (cat: any) => {
+        setEditCategoryId(cat.id);
+        setCategoryName(cat.name);
+        
+        const subCat = categories.find(c => c.id === cat.parent_id);
+        if (subCat) {
+            setSelectedSubId(subCat.id);
+            const parentCat = categories.find(c => c.id === subCat.parent_id);
+            if (parentCat) {
+                setSelectedParentId(parentCat.id);
+            } else {
+                setSelectedParentId('');
+            }
+        } else {
+            setSelectedSubId('');
+            setSelectedParentId('');
+        }
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleDelete = async (id: string | number, type: 'Parent' | 'Sub' | 'Category') => {
@@ -203,7 +231,7 @@ const Categories = () => {
                 <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white text-sm">
                         <MdCategory className="text-emerald-600 text-lg" />
-                        <span>Register New Category Structure</span>
+                        <span>{editCategoryId ? 'Edit Category Structure' : 'Register New Category Structure'}</span>
                     </div>
                 </div>
 
@@ -220,6 +248,7 @@ const Categories = () => {
                                 onChange={(val) => {
                                     const cat = parentCategories.find(c => c.name === val);
                                     setSelectedParentId(cat ? cat.id.toString() : '');
+                                    setSelectedSubId(''); // Manually cascade reset
                                 }}
                                 options={parentCategories.map(c => c.name)}
                                 placeholder="Parent Category"
@@ -284,13 +313,29 @@ const Categories = () => {
                                 required
                             />
                         </div>
-                        <button
-                            type="submit"
-                            disabled={!selectedSubId || submitting}
-                            className="h-[42px] px-6 mt-[22px] flex shrink-0 items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm gap-2"
-                        >
-                            {submitting ? <Spinner /> : <><MdSave size={16} /> Save</>}
-                        </button>
+                        <div className="flex items-center gap-2 mt-[22px]">
+                            <button
+                                type="submit"
+                                disabled={!selectedSubId || submitting}
+                                className="h-[42px] px-6 flex shrink-0 items-center justify-center bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm gap-2"
+                            >
+                                {submitting ? <Spinner /> : <><MdSave size={16} /> {editCategoryId ? 'Update' : 'Save'}</>}
+                            </button>
+                            {editCategoryId && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setEditCategoryId(null);
+                                        setCategoryName('');
+                                        setSelectedSubId('');
+                                        setSelectedParentId('');
+                                    }}
+                                    className="h-[42px] px-4 flex shrink-0 items-center justify-center bg-slate-200 hover:bg-slate-300 dark:bg-meta-4 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-bold text-xs rounded-lg transition shadow-sm"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
                     </form>
 
                 </div>
@@ -361,13 +406,22 @@ const Categories = () => {
                                             <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300 uppercase tracking-tight">{subCat?.name || '-'}</td>
                                             <td className="py-3.5 px-4 text-gray-500 dark:text-gray-400 uppercase tracking-tight">{parentCat?.name || '-'}</td>
                                             <td className="py-3.5 px-4 text-center">
-                                                <button
-                                                    onClick={() => handleDelete(cat.id, 'Category')}
-                                                    className="inline-flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-500 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 p-1.5 rounded transition"
-                                                    title="Delete Category"
-                                                >
-                                                    <MdDelete size={16} />
-                                                </button>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEditCategory(cat)}
+                                                        className="inline-flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-500 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 p-1.5 rounded transition"
+                                                        title="Edit Category"
+                                                    >
+                                                        <MdEdit size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(cat.id, 'Category')}
+                                                        className="inline-flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-500 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 p-1.5 rounded transition"
+                                                        title="Delete Category"
+                                                    >
+                                                        <MdDelete size={16} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );

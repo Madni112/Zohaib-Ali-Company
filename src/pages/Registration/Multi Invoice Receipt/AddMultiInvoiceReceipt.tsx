@@ -28,7 +28,7 @@ const AddMultiInvoiceReceipt = () => {
     const [highlightedCustIdx, setHighlightedCustIdx] = useState(0);
 
     const [formInitValues, setFormInitValues] = useState({
-        receiptNo: `MRV-${Date.now().toString().slice(-6)}`,
+        receiptNo: `CR-${Date.now().toString().slice(-6)}`,
         receiptDate: new Date().toISOString().split('T')[0],
         customerName: '',
         paymentMethod: 'Cash',

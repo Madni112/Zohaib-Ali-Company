@@ -210,9 +210,29 @@ const AddDeliveryChallan = () => {
                 if (error) throw error;
                 toast.success(`Challan updated: ${computedStatus}`);
               } else {
+                const safePrefix = (values.dispatchWarehouse || 'Main Warehouse').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                const { data: allDcs } = await supabase
+                  .from('delivery_challans')
+                  .select('challan_no')
+                  .ilike('challan_no', `${safePrefix}-%`);
+
+                let nextNum = 1;
+                if (allDcs && allDcs.length > 0) {
+                  const maxNum = allDcs.reduce((max, dc) => {
+                    const match = (dc.challan_no || '').match(new RegExp(`^${safePrefix}-(\\d+)`));
+                    if (match && match[1]) {
+                      const num = parseInt(match[1], 10);
+                      return num > max ? num : max;
+                    }
+                    return max;
+                  }, 0);
+                  nextNum = maxNum + 1;
+                }
+                const newChallanNo = `${safePrefix}-${String(nextNum).padStart(4, '0')}`;
+
                 const { error } = await supabase
                   .from('delivery_challans')
-                  .insert([databasePayload]);
+                  .insert([{ ...databasePayload, challan_no: newChallanNo }]);
 
                 if (error) throw error;
                 toast.success('Challan logged successfully!');

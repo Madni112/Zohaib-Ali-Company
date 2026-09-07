@@ -164,8 +164,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
               .insert([{
                 product_name: item.product_name,
                 warehouse_name: item.warehouse_name,
-                quantity: Number(item.acceptedQty),
-                uom: item.uom
+                quantity: Number(item.acceptedQty)
               }]);
           }
         }
