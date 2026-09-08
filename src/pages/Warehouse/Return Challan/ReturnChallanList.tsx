@@ -116,6 +116,7 @@ const ReturnChallanList: React.FC<ReturnChallanListProps> = ({ locationFilter = 
               <tr className="bg-slate-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
                 <th className="py-3.5 px-4 whitespace-nowrap">Return Note #</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">Invoice #</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Gate Pass #</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">Return Date</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">Customer Name</th>
                 <th className="py-3.5 px-4 whitespace-nowrap text-center">Location</th>
@@ -135,6 +136,7 @@ const ReturnChallanList: React.FC<ReturnChallanListProps> = ({ locationFilter = 
                       <span className="text-primary">{ret.return_no || `SR-${String(ret.id).padStart(4, '0')}`}</span>
                     </td>
                     <td className="py-3 px-4 font-mono text-gray-500 whitespace-nowrap">{ret.invoice_no || '-'}</td>
+                    <td className="py-3 px-4 font-mono text-emerald-600 dark:text-emerald-400 whitespace-nowrap font-bold">{ret.gate_pass_no || '-'}</td>
                     <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{ret.return_date}</td>
                     <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{ret.customer_name}</td>
                     <td className="py-3 px-4 text-center whitespace-nowrap">{ret.warehouse_name}</td>

@@ -203,7 +203,8 @@ const PrintPurchase = () => {
   });
 
   const computedTotalSqFt = computedTotalSqm * 10.7639;
-  const grandTotal = computedTotalNet > 0 ? computedTotalNet : Number(purchase.total_amount || 0);
+  const additionalCharges = Number(purchase.additional_charges || 0);
+  const grandTotal = (computedTotalNet > 0 ? computedTotalNet : Number(purchase.total_amount || 0)) + additionalCharges;
   const cashPaid = Number(purchase.cash_amount_paid || 0);
   const bankPaid = Number(purchase.bank_amount_paid || 0);
   const totalPaid = (cashPaid > 0 || bankPaid > 0) ? (cashPaid + bankPaid) : Number(purchase.amount_paid || 0);
@@ -530,8 +531,22 @@ const PrintPurchase = () => {
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-300 space-y-2 font-mono text-xs">
             <div className="flex justify-between items-center text-slate-700">
               <span className="font-sans font-bold">Gross Total Bill:</span>
-              <strong className="font-black text-sm text-slate-950">Rs. {formatMoney(grandTotal)}</strong>
+              <strong className="font-black text-sm text-slate-950">Rs. {formatMoney(grandTotal - additionalCharges)}</strong>
             </div>
+
+            {additionalCharges > 0 && (
+              <div className="flex justify-between items-center text-blue-700 pt-1.5 border-t border-slate-200 font-bold">
+                <span className="font-sans text-[11px]">Additional Charges:</span>
+                <strong className="font-black text-xs text-blue-950 font-mono">Rs. {formatMoney(additionalCharges)}</strong>
+              </div>
+            )}
+            
+            {additionalCharges > 0 && (
+               <div className="flex justify-between items-center text-slate-700 pt-1.5 border-t border-slate-200 font-bold">
+                 <span className="font-sans text-[11px]">Net Payable Total:</span>
+                 <strong className="font-black text-sm text-slate-950 font-mono">Rs. {formatMoney(grandTotal)}</strong>
+               </div>
+            )}
 
             {computedTotalSqm > 0 && (
               <div className="flex justify-between items-center text-teal-900 pt-1.5 border-t border-slate-200 font-bold">

@@ -133,62 +133,109 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
           <table className="w-full table-auto border-collapse text-left">
             <thead>
               <tr className="bg-slate-100 dark:bg-meta-4 text-[10px] font-black uppercase tracking-wider border-b border-stroke text-slate-700 dark:text-white">
-                <th className="py-3.5 px-4 whitespace-nowrap">Purchase No</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Receipt Date</th>
-                <th className="py-3.5 px-4 whitespace-nowrap">Vendor Name</th>
-                <th className="py-3.5 px-4 whitespace-nowrap text-center">Status</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Purchase #</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Date</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Vendor</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Items Summary</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap text-emerald-700">Received</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap text-amber-700">Remaining</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">Status</th>
                 <th className="py-3.5 px-4 text-center w-28 whitespace-nowrap">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={5} className="text-center py-12"><Spinner /></td></tr>
+                <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-12 text-slate-500 font-bold italic">No pending inwards for the warehouse.</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-slate-500 font-bold italic">No pending inwards for this location.</td></tr>
               ) : (
-                currentData.map((rec) => (
-                  <tr key={rec.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
-                    <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
-                      {rec.purchase_no ? (
-                        <div className="flex flex-col">
-                          <span className="text-primary">PUR-{rec.purchase_no}</span>
+                currentData.map((rec) => {
+                  const items = rec.grn_items || [];
+                  // Filter items by location if needed
+                  const visibleItems = locationFilter === 'ALL' ? items : items.filter((item: any) => {
+                    const isShop = String(item.warehouse_name || '').toUpperCase() === 'SHOP';
+                    return locationFilter === 'SHOP' ? isShop : !isShop;
+                  });
+
+                  const totalOrdered = visibleItems.reduce((s: number, i: any) => s + Number(i.qty || 0), 0);
+                  const totalReceived = visibleItems.reduce((s: number, i: any) => s + Number(i.accepted_qty || 0), 0);
+                  const totalRemaining = Math.max(0, totalOrdered - totalReceived);
+                  const receivedPct = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
+
+                  return (
+                    <tr key={rec.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150 font-semibold text-xs text-black dark:text-white">
+                      <td className="py-3 px-4 font-bold font-mono whitespace-nowrap">
+                        <span className="text-primary">{rec.purchase_no ? `PUR-${rec.purchase_no}` : '—'}</span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{rec.receipt_date}</td>
+                      <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{rec.vendor_name}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col gap-0.5 max-w-[200px]">
+                          {visibleItems.slice(0, 3).map((item: any, idx: number) => {
+                            const acc = Number(item.accepted_qty || 0);
+                            const rem = Math.max(0, Number(item.qty || 0) - acc);
+                            return (
+                              <div key={idx} className="text-[9px] text-slate-600 dark:text-slate-300 truncate">
+                                <span className="font-bold">{item.product_name}</span>
+                                <span className="ml-1 text-emerald-600">✓{acc}</span>
+                                {rem > 0 && <span className="ml-1 text-amber-600">⏳{rem}</span>}
+                              </div>
+                            );
+                          })}
+                          {visibleItems.length > 3 && (
+                            <span className="text-[9px] text-slate-400">+{visibleItems.length - 3} more items</span>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-primary">{rec.grn_no}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{rec.receipt_date}</td>
-                    <td className="py-3 px-4 font-sans font-bold whitespace-nowrap">{rec.vendor_name}</td>
-                    <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <span className="inline-flex rounded-md py-0.5 px-2.5 text-[9px] font-black uppercase tracking-wide bg-amber-100 text-amber-800 border border-amber-300">
-                        {rec.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => {
-                          showModal(
-                            <VerifyInward 
-                              inwardId={rec.id} 
-                              locationFilter={locationFilter}
-                              onSuccess={() => {
-                                hideModal();
-                                fetchPendingInwards();
-                              }} 
-                              onCancel={() => hideModal()}
-                            />,
-                            "Verify Inward Challan",
-                            undefined,
-                            "max-w-5xl"
-                          );
-                        }}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-bold transition shadow-sm cursor-pointer"
-                      >
-                        Verify & Receive
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <span className="font-black text-emerald-600">{totalReceived}</span>
+                        <span className="text-slate-400 ml-0.5 text-[9px]">/ {totalOrdered}</span>
+                        <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-1 mt-1">
+                          <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${receivedPct}%` }} />
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        {totalRemaining > 0 ? (
+                          <span className="font-black text-amber-600">{totalRemaining}</span>
+                        ) : (
+                          <span className="font-black text-emerald-500">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <span className={`inline-flex rounded-md py-0.5 px-2.5 text-[9px] font-black uppercase tracking-wide ${
+                          rec.status === 'Partially Received'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                            : 'bg-amber-100 text-amber-800 border border-amber-300'
+                        }`}>
+                          {rec.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            showModal(
+                              <VerifyInward 
+                                inwardId={rec.id} 
+                                locationFilter={locationFilter}
+                                onSuccess={() => {
+                                  hideModal();
+                                  fetchPendingInwards();
+                                }} 
+                                onCancel={() => hideModal()}
+                              />,
+                              "Receive Stock",
+                              undefined,
+                              "max-w-5xl"
+                            );
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-bold transition shadow-sm cursor-pointer"
+                        >
+                          Receive Stock
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

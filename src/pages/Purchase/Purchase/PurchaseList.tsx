@@ -286,6 +286,16 @@ const PurchaseList = () => {
 
             if (gItem) {
               const acceptedQty = Number(gItem.accepted_qty ?? 0);
+
+              // Block deletion if any items have already been approved in inward
+              if (acceptedQty > 0) {
+                toast.error(
+                  `Cannot Delete Purchase\n\nProduct: "${pName}" has ${acceptedQty} units already approved in Inward Challan.\n\nPlease raise a Purchase Return instead.`,
+                  { duration: 7000 }
+                );
+                return;
+              }
+
               const grnRejected = Number(gItem.rejected_qty ?? 0);
               const billQty     = Number(item.qty || item.quantity || 0);
               const expectedRej = billQty - acceptedQty;
@@ -306,8 +316,8 @@ const PurchaseList = () => {
                 }
               }
 
-              // Check 2: GRN rejected qty must exactly match expected rejection from bill
-              if (expectedRej > 0 && grnRejected !== expectedRej) {
+              // Check 2: GRN rejected qty mismatch — only relevant if GRN was actually verified (acceptedQty > 0)
+              if (acceptedQty > 0 && expectedRej > 0 && grnRejected !== expectedRej) {
                 toast.error(
                   `Cannot Delete Purchase\n\nProduct: "${pName}"\nExpected QC Rejection: ${expectedRej}\nActual GRN Rejection: ${grnRejected}\n\nThe current physical breakdown doesn't match the original purchase bill.`,
                   { duration: 6000 }

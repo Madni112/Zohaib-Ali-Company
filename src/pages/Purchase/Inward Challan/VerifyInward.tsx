@@ -63,6 +63,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
           ...item,
           acceptedQty: isUnverified ? item.qty : item.accepted_qty,
           rejectedQty: isUnverified ? 0 : item.rejected_qty,
+          holdQty: isUnverified ? 0 : (item.hold_qty || 0),
           rejectReason: item.reject_reason || '',
           isVerified: !isUnverified,
           isTile,
@@ -100,22 +101,23 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
       return;
     }
     
-    // For quantity fields, prevent invalid or negative inputs
     let val = Number(value);
     if (isNaN(val) || val < 0) val = 0;
-    
-    // Strictly cap the input value at the maximum expected quantity
-    if (val > newItems[index].qty) {
-      val = newItems[index].qty;
-    }
+    const maxQty = Number(newItems[index].qty);
+    if (val > maxQty) val = maxQty;
 
     newItems[index][field] = val;
 
-    // Auto-balance Accepted and Rejected quantities
+    // Auto-balance: accepted + rejected + hold = total
     if (field === 'acceptedQty') {
-      newItems[index].rejectedQty = Number((newItems[index].qty - val).toFixed(2));
+      const rem = Number((maxQty - val - Number(newItems[index].rejectedQty)).toFixed(3));
+      newItems[index].holdQty = Math.max(0, rem);
     } else if (field === 'rejectedQty') {
-      newItems[index].acceptedQty = Number((newItems[index].qty - val).toFixed(2));
+      const rem = Number((maxQty - val - Number(newItems[index].acceptedQty)).toFixed(3));
+      newItems[index].holdQty = Math.max(0, rem);
+    } else if (field === 'holdQty') {
+      const rem = Number((maxQty - val - Number(newItems[index].rejectedQty)).toFixed(3));
+      newItems[index].acceptedQty = Math.max(0, rem);
     }
     
     setItems(newItems);
@@ -138,6 +140,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
           .update({
             accepted_qty: Number(item.acceptedQty),
             rejected_qty: Number(item.rejectedQty),
+            hold_qty: Number(item.holdQty || 0),
             reject_reason: item.rejectReason
           })
           .eq('id', item.id);
@@ -222,7 +225,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
             <MdCheckCircle className="text-emerald-600" size={24} />
-            {readonly ? 'View GRN Details' : 'Verify Inward Challan (QC)'}
+            {readonly ? 'View Stock Receipt Details' : 'Receive Inward Stock (QC)'}
           </h2>
           <button
             onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Inward-Challan/List`)}
@@ -237,8 +240,8 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
         {/* Header Info */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 pb-6 border-b border-stroke dark:border-strokedark">
           <div>
-            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Challan / GRN #</p>
-            <p className="text-lg font-mono font-bold text-black dark:text-white">{challan.grn_no}</p>
+            <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Purchase #</p>
+            <p className="text-lg font-mono font-bold text-black dark:text-white">{challan.purchase_no || challan.grn_no}</p>
           </div>
           <div>
             <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Vendor Name</p>
@@ -260,6 +263,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark">Destination Warehouse</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center">Expected Qty</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center text-emerald-600 dark:text-emerald-400">Accepted Qty</th>
+                <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center text-amber-500 dark:text-amber-400">On Hold</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center text-rose-600 dark:text-rose-400">Rejected Qty</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark">Reject Reason</th>
               </tr>
@@ -358,6 +362,24 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
                         value={item.acceptedQty === 0 ? '' : item.acceptedQty}
                         onChange={(e) => handleItemChange(index, 'acceptedQty', e.target.value)}
                         className="w-24 rounded-lg border border-emerald-300 dark:border-emerald-700 py-1.5 px-3 bg-white dark:bg-boxdark outline-none focus:border-emerald-500 font-mono font-bold text-emerald-700 text-sm shadow-sm text-center mx-auto block"
+                        placeholder="0"
+                      />
+                    )}
+                  </td>
+                  {/* ── ON HOLD ── */}
+                  <td className="py-2 px-2 text-center">
+                    {readonly ? (
+                      <div className={`font-mono font-bold ${Number(item.holdQty) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {Number(item.holdQty) > 0 ? item.holdQty : '—'}
+                      </div>
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.qty}
+                        value={item.holdQty === 0 ? '' : item.holdQty}
+                        onChange={(e) => handleItemChange(index, 'holdQty', e.target.value)}
+                        className="w-24 rounded-lg border border-amber-300 dark:border-amber-700 py-1.5 px-3 bg-white dark:bg-boxdark outline-none focus:border-amber-500 font-mono font-bold text-amber-600 text-sm shadow-sm text-center mx-auto block"
                         placeholder="0"
                       />
                     )}

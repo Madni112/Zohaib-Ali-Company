@@ -205,7 +205,8 @@ const PrintInvoice = () => {
   });
 
   const freightCharges = Number(invoice.transport_charges || 0);
-  const grandTotal = computedTotalNet + freightCharges;
+  const additionalCharges = Number(invoice.additional_charges || 0);
+  const grandTotal = computedTotalNet + freightCharges + additionalCharges;
   const cashPaid = Number(invoice.cash_amount_paid || 0);
   const bankPaid = Number(invoice.bank_amount || 0);
   const totalPaid = (cashPaid > 0 && bankPaid > 0) ? (cashPaid + bankPaid) : (cashPaid > 0 ? cashPaid : (bankPaid > 0 ? bankPaid : Number(invoice.cash_amount_paid || invoice.bank_amount || 0)));
@@ -477,6 +478,13 @@ const PrintInvoice = () => {
               <div className="flex justify-between text-slate-600">
                 <span>Freight / Delivery Charges:</span>
                 <span className="font-bold text-slate-900">Rs. {freightCharges.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            )}
+
+            {additionalCharges > 0 && (
+              <div className="flex justify-between text-blue-700">
+                <span>Additional Charges:</span>
+                <span className="font-bold text-blue-900">Rs. {additionalCharges.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
             )}
 

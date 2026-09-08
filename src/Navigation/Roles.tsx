@@ -244,6 +244,18 @@ export const adminRoutes = [
         path: '/Sales/Shop-Dispatch/List',
         component: <ShopDispatchQueue />,
         icon: MdEmojiTransportation,
+      },
+      {
+        label: 'Return Challan',
+        path: '/Warehouse/Return-Challan',
+        component: <ReturnChallanList locationFilter="WAREHOUSE" />,
+        icon: MdAssignmentReturn
+      },
+      {
+        label: 'Shop Return Queue',
+        path: '/Warehouse/Shop-Return',
+        component: <ReturnChallanList locationFilter="SHOP" />,
+        icon: MdAssignmentReturn
       }
     ],
   },
@@ -270,18 +282,7 @@ export const adminRoutes = [
         component: <InwardChallanList locationFilter="SHOP" />,
         icon: MdInbox
       },
-      {
-        label: 'Return Challan (Warehouse)',
-        path: '/Warehouse/Return-Challan',
-        component: <ReturnChallanList locationFilter="WAREHOUSE" />,
-        icon: MdAssignmentReturn
-      },
-      {
-        label: 'Shop Return Queue',
-        path: '/Warehouse/Shop-Return',
-        component: <ReturnChallanList locationFilter="SHOP" />,
-        icon: MdAssignmentReturn
-      },
+
       {
         label: 'Purchase Receipt',
         path: '/Purchase/Purchase-Receipt/List',

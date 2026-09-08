@@ -196,6 +196,8 @@ const AddPurchases = () => {
       purchaseDate: new Date().toISOString().split('T')[0],
       applyTax: false,
       showDiscount: false,
+      showAdditionalCharges: false,
+      additionalCharges: 0,
       settlementMode: 'Cash',
       selectedBankTitle: '',
       cashAmountPaid: 0,
@@ -265,11 +267,18 @@ const AddPurchases = () => {
 
               const totalBillAmount = values.items.reduce((acc: any, item: any) => {
                 return acc + calculatePurchaseLineTotals(item, values.applyTax).netTotal;
-              }, 0);
+              }, 0) + Number(values.additionalCharges || 0);
 
               const totalPaid = (values.settlementMode === 'Cash' ? Number(values.cashAmountPaid || 0) : 0) +
                 (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : 0) +
                 (values.settlementMode === 'Split' ? (Number(values.cashAmountPaid || 0) + Number(values.bankAmountPaid || 0)) : 0);
+
+              // Block overpayment
+              if (totalPaid > totalBillAmount + 0.01) {
+                toast.error(`Overpayment detected! Total paid (Rs. ${totalPaid.toLocaleString()}) exceeds bill total (Rs. ${totalBillAmount.toLocaleString()}). Please correct the payment amount.`);
+                setLoading(false);
+                return;
+              }
 
               const remainingBalance = Math.max(0, totalBillAmount - totalPaid);
 
@@ -278,6 +287,36 @@ const AddPurchases = () => {
               else if (values.settlementMode === 'Split') paymentTermLabel = 'Cash & Bank Combined';
 
               let grnIdToUse = values.grnId || null;
+
+              // On edit: validate new qty >= already accepted qty in GRN
+              if (isEditMode) {
+                const linkedGrnId = values.grnId || editData?.metadata?.grn_id || editData?.grn_id || null;
+                if (linkedGrnId) {
+                  const { data: existingGrnItems } = await supabase
+                    .from('grn_items')
+                    .select('product_name, accepted_qty')
+                    .eq('grn_id', linkedGrnId);
+
+                  if (existingGrnItems && existingGrnItems.length > 0) {
+                    for (const grnItem of existingGrnItems) {
+                      const acceptedQty = Number(grnItem.accepted_qty || 0);
+                      if (acceptedQty <= 0) continue; // not yet verified, skip
+                      const matchingNewItem = values.items.find((i: any) =>
+                        String(i.itemName || '').toLowerCase() === String(grnItem.product_name || '').toLowerCase()
+                      );
+                      const newQty = Number(matchingNewItem?.qty || 0);
+                      if (!matchingNewItem || newQty < acceptedQty) {
+                        toast.error(
+                          `Cannot reduce below approved qty!\n\nProduct: "${grnItem.product_name}"\nAlready Approved in GRN: ${acceptedQty}\nYour New Qty: ${newQty}\n\nMinimum allowed qty is ${acceptedQty}.`,
+                          { duration: 6000 }
+                        );
+                        setLoading(false);
+                        return;
+                      }
+                    }
+                  }
+                }
+              }
 
               if (!isEditMode && !grnIdToUse) {
                 // Auto-generate a Pending Inward GRN for direct purchases so it goes to the approval queue
@@ -320,6 +359,7 @@ const AddPurchases = () => {
                 cash_amount_paid: values.settlementMode === 'Bank' ? 0 : Number(values.cashAmountPaid || 0),
                 bank_amount_paid: values.settlementMode === 'Cash' ? 0 : Number(values.bankAmountPaid || 0),
                 selected_bank_title: values.selectedBankTitle || null,
+                additional_charges: Number(values.additionalCharges || 0),
                 total_amount: totalBillAmount,
                 remaining_balance: remainingBalance,
                 remarks: values.remarks.trim() || null,
@@ -338,6 +378,27 @@ const AddPurchases = () => {
               if (isEditMode) {
                 const { error } = await supabase.from('supplier_purchases').update(databasePayload).eq('id', editData.id);
                 if (error) throw error;
+
+                // Sync updated items back to linked GRN so Inward Challan stays accurate
+                const linkedGrnId = values.grnId || editData?.metadata?.grn_id || editData?.grn_id || null;
+                if (linkedGrnId) {
+                  // Delete old grn_items and re-insert updated ones
+                  await supabase.from('grn_items').delete().eq('grn_id', linkedGrnId);
+                  const updatedGrnItems = values.items.map((item: any) => ({
+                    grn_id: linkedGrnId,
+                    product_name: item.itemName,
+                    warehouse_name: item.warehouse || values.targetWarehouse || locations[0]?.name || 'Main Warehouse',
+                    qty: Number(item.qty),
+                    uom: item.uom || 'EACH'
+                  }));
+                  await supabase.from('grn_items').insert(updatedGrnItems);
+                  // Also update GRN header date/vendor
+                  await supabase.from('grn_receipts').update({
+                    vendor_name: values.supplierName,
+                    receipt_date: values.purchaseDate,
+                  }).eq('id', linkedGrnId);
+                }
+
                 toast.success('Procurement inventory batch updated successfully!');
                 if (submitAction === 'print') {
                   navigate(`${tenantId ? `/${tenantId}` : ''}/Purchase/Purchases/Print/${editData.id}`);
@@ -371,7 +432,7 @@ const AddPurchases = () => {
           {({ handleChange, values, errors, touched, setFieldValue, submitForm }) => {
             const totalBillAmount = values.items.reduce((acc: any, item: any) => {
               return acc + calculatePurchaseLineTotals(item, values.applyTax).netTotal;
-            }, 0);
+            }, 0) + Number(values.additionalCharges || 0);
 
             const totalPaid = (values.settlementMode === 'Cash' ? Number(values.cashAmountPaid || 0) : 0) +
               (values.settlementMode === 'Bank' ? Number(values.bankAmountPaid || 0) : 0) +
@@ -555,6 +616,22 @@ const AddPurchases = () => {
                       }`}
                     >
                       Discounts
+                    </div>
+
+                    {/* Additional Charges Toggle */}
+                    <div
+                      onClick={() => {
+                        const isChecked = !values.showAdditionalCharges;
+                        setFieldValue('showAdditionalCharges', isChecked);
+                        if (!isChecked) setFieldValue('additionalCharges', 0);
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                        values.showAdditionalCharges
+                          ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800'
+                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                      }`}
+                    >
+                      Additional Charges
                     </div>
                   </div>
 
@@ -1293,6 +1370,21 @@ const AddPurchases = () => {
                         </strong>
                       </div>
 
+                      {values.showAdditionalCharges && (
+                        <div className="flex justify-between items-center text-sm text-blue-600 dark:text-blue-400">
+                          <span className="font-sans font-bold text-xs">Additional Charges:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            name="additionalCharges"
+                            value={values.additionalCharges}
+                            onChange={handleChange}
+                            placeholder="0.00"
+                            className="w-28 text-right font-black bg-blue-50/40 dark:bg-blue-900/10 border border-blue-300 dark:border-blue-700 rounded p-1 text-xs outline-none focus:border-blue-500 text-blue-700 dark:text-blue-300"
+                          />
+                        </div>
+                      )}
+
                       <div className="flex justify-between items-center text-sm text-emerald-600">
                         <span className="font-sans font-bold">Paid Upfront:</span>
                         <strong className="font-black text-base">
@@ -1306,6 +1398,14 @@ const AddPurchases = () => {
                           Rs. {remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </strong>
                       </div>
+
+                      {totalPaid > totalBillAmount + 0.01 && (
+                        <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700">
+                          <span className="text-[11px] font-black text-red-600 dark:text-red-400">
+                            ⚠ Overpayment of Rs. {(totalPaid - totalBillAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} — Cannot save!
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center justify-end gap-3 mt-6 pt-4 border-t border-stroke dark:border-strokedark">

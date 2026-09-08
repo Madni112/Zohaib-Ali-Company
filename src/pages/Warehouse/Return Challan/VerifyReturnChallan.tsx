@@ -56,6 +56,7 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
           idx,
           acceptedQty: isUnverified ? Number(item.qty || 0) : Number(recItem.acceptedQty || 0),
           rejectedQty: isUnverified ? 0 : Number(recItem.rejectedQty || 0),
+          holdQty: isUnverified ? 0 : Number(recItem.holdQty || 0),
           rejectReason: recItem?.rejectReason || '',
           isVerified: !isUnverified,
           isTile,
@@ -99,9 +100,12 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
     newItems[index][field] = val;
 
     if (field === 'acceptedQty') {
-      newItems[index].rejectedQty = Number((maxQty - val).toFixed(3));
+      newItems[index].rejectedQty = Number((maxQty - val - Number(newItems[index].holdQty)).toFixed(3));
     } else if (field === 'rejectedQty') {
-      newItems[index].acceptedQty = Number((maxQty - val).toFixed(3));
+      newItems[index].acceptedQty = Number((maxQty - val - Number(newItems[index].holdQty)).toFixed(3));
+    } else if (field === 'holdQty') {
+      const remaining = Number((maxQty - val - Number(newItems[index].rejectedQty)).toFixed(3));
+      newItems[index].acceptedQty = Math.max(0, remaining);
     }
     
     setItems(newItems);
@@ -125,6 +129,7 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
         itemName: uiItem.itemName,
         acceptedQty: uiItem.acceptedQty,
         rejectedQty: uiItem.rejectedQty,
+        holdQty: uiItem.holdQty,
         rejectReason: uiItem.rejectReason,
         warehouse: uiItem.warehouse || returnChallan.warehouse_name,
         verified_at: new Date().toISOString()
@@ -253,6 +258,12 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
             <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Return Date</p>
             <p className="text-sm font-bold text-black dark:text-white">{returnChallan.return_date}</p>
           </div>
+          {returnChallan.gate_pass_no && (
+            <div>
+              <p className="text-gray-400 font-medium uppercase tracking-wide mb-1">Return Gate Pass #</p>
+              <p className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400">{returnChallan.gate_pass_no}</p>
+            </div>
+          )}
         </div>
 
         <h3 className="font-bold text-sm mb-4">Verification Checklist</h3>
@@ -265,6 +276,7 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center">Returned Qty</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center text-emerald-600 dark:text-emerald-400">Accepted Qty</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center text-rose-600 dark:text-rose-400">Rejected Qty</th>
+                <th className="py-3 px-4 border-b border-stroke dark:border-strokedark text-center text-amber-500 dark:text-amber-400">On Hold</th>
                 <th className="py-3 px-4 border-b border-stroke dark:border-strokedark">Reject Reason</th>
               </tr>
             </thead>

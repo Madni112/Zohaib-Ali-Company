@@ -17,8 +17,8 @@ const ProductList = () => {
   const [masterLocations, setMasterLocations] = useState<string[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
-  
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -266,16 +266,16 @@ const ProductList = () => {
 
   let filteredProducts = products.filter(p => {
     return p.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           p.product_description?.toLowerCase().includes(searchTerm.toLowerCase());
+      p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.product_description?.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   if (sortConfig !== null) {
     filteredProducts.sort((a, b) => {
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
-      
+
       // Handle numeric values
       if (['purchase_price', 'retail_price', 'mrp', 'current_stock'].includes(sortConfig.key)) {
         aVal = Number(aVal || 0);
@@ -290,7 +290,7 @@ const ProductList = () => {
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }  const totalEntries = filteredProducts.length;
+  } const totalEntries = filteredProducts.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
@@ -326,27 +326,21 @@ const ProductList = () => {
         >
           {product.product_name}
         </td>
-        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">
-          {product.category || 'General'}
-          {product.sub_category && <span className="opacity-70 text-[10px] ml-1 block text-emerald-600 dark:text-emerald-400">&darr; {product.sub_category}</span>}
-          {product.sub_sub_category && <span className="opacity-50 text-[10px] ml-2 block text-teal-600 dark:text-teal-400">&darr; {product.sub_sub_category}</span>}
-        </td>
-        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.bin || 'General'}</td>
+        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 font-medium">{product.category || '-'}</td>
+        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.sub_category || '-'}</td>
+        <td className="py-3.5 px-4 text-slate-500 dark:text-slate-500 text-[11px]">{product.sub_sub_category || '-'}</td>
+        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{product.bin || '-'}</td>
         <td className="py-3.5 px-4 text-center">
           <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
             {product.uom}
           </span>
         </td>
-        <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
-          {Number(product.purchase_price || 0).toFixed(2)}
-        </td>
         <td className="py-3.5 px-4 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
           {Number(product.retail_price || product.mrp || 0).toFixed(2)}
         </td>
         <td className="py-3.5 px-4 text-center">
-          <span className={`font-black text-xs px-2.5 py-0.5 rounded-full ${
-            isLowStock ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
-          }`}>
+          <span className={`font-black text-xs px-2.5 py-0.5 rounded-full ${isLowStock ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400'
+            }`}>
             {Number(product.current_stock || 0).toLocaleString()} {product.uom || 'PCS'}
           </span>
           {isLowStock && <MdWarning size={14} className="text-rose-500 inline ml-1" />}
@@ -431,9 +425,10 @@ const ProductList = () => {
                 <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('item_sr_no')}>Code <span className={sortConfig?.key === 'item_sr_no' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'item_sr_no' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('product_name')}>Description <span className={sortConfig?.key === 'product_name' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'product_name' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('category')}>Category <span className={sortConfig?.key === 'category' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'category' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('sub_category')}>Sub Cat <span className={sortConfig?.key === 'sub_category' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'sub_category' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
+                <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('sub_sub_category')}>Parent Cat <span className={sortConfig?.key === 'sub_sub_category' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'sub_sub_category' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('bin')}>Brand <span className={sortConfig?.key === 'bin' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'bin' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 w-24 text-center cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('uom')}>UOM <span className={sortConfig?.key === 'uom' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'uom' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
-                <th className="py-3.5 px-4 text-right cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('purchase_price')}>Purchase Price <span className={sortConfig?.key === 'purchase_price' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'purchase_price' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 text-right cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('retail_price')}>Sale Price <span className={sortConfig?.key === 'retail_price' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'retail_price' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 text-center w-36 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort('current_stock')}>Available Stock <span className={sortConfig?.key === 'current_stock' ? 'opacity-100' : 'opacity-0'}>{sortConfig?.key === 'current_stock' && sortConfig.direction === 'desc' ? '↓' : '↑'}</span></th>
                 <th className="py-3.5 px-4 w-24 text-center whitespace-nowrap">Actions</th>
@@ -442,13 +437,13 @@ const ProductList = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-sm">
+                  <td colSpan={11} className="text-center py-12 text-sm">
                     <Spinner />
                   </td>
                 </tr>
               ) : paginatedProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-xs text-slate-400 italic">
+                  <td colSpan={11} className="text-center py-12 text-xs text-slate-400 italic">
                     No product items registered.
                   </td>
                 </tr>
@@ -457,7 +452,7 @@ const ProductList = () => {
                   {goodsItems.length > 0 && (
                     <>
                       <tr>
-                        <td colSpan={9} className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950/30 border-y border-emerald-200/60 dark:border-emerald-900/60">
+                        <td colSpan={11} className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950/30 border-y border-emerald-200/60 dark:border-emerald-900/60">
                           <span className="text-[11px] font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                             📦 Goods Items <span className="font-normal opacity-60">({goodsItems.length})</span>
                           </span>
@@ -469,7 +464,7 @@ const ProductList = () => {
                   {serviceItems.length > 0 && (
                     <>
                       <tr>
-                        <td colSpan={9} className="py-2 px-4 bg-indigo-50 dark:bg-indigo-950/30 border-y border-indigo-200/60 dark:border-indigo-900/60">
+                        <td colSpan={11} className="py-2 px-4 bg-indigo-50 dark:bg-indigo-950/30 border-y border-indigo-200/60 dark:border-indigo-900/60">
                           <span className="text-[11px] font-extrabold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                             🛠️ Service Items <span className="font-normal opacity-60">({serviceItems.length})</span>
                           </span>
@@ -606,6 +601,19 @@ const ProductList = () => {
                       </div>
                       {formatVal(bData.purchased || 0)}
                     </div>
+                    {/* Hold (yellow badge) */}
+                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-yellow-50/50 dark:bg-yellow-900/10 px-3 -mx-3 rounded-lg mb-1">
+                      <span className="text-[9px] font-bold text-yellow-800 dark:text-yellow-600 mt-0.5 tracking-wide">Hold (Committed)</span>
+                      <div className="text-yellow-700 dark:text-yellow-500">{formatVal(bData.hold || 0)}</div>
+                    </div>
+
+                    {/* Rejected (QC Failed) */}
+                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-rose-50/50 dark:bg-rose-900/10 px-3 -mx-3 rounded-lg mb-1">
+                      <span className="text-[9px] font-bold text-rose-700 dark:text-yellow-600 mt-0.5 tracking-wide">Rejected (QC Failed)</span>
+                      <div className="text-rose-700 dark:text-rose-500">{formatVal(bData.rejected || 0)}</div>
+                    </div>
+
+                    {/* Total Sales */}
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50">
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
@@ -615,13 +623,11 @@ const ProductList = () => {
                       </div>
                       {formatVal(bData.sold || 0)}
                     </div>
-                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-rose-50/50 dark:bg-rose-900/10 px-3 -mx-3 rounded-lg mb-1">
-                      <span className="text-xs font-bold text-rose-700 dark:text-rose-500">Rejected (QC Failed)</span>
-                      <div className="text-rose-700 dark:text-rose-500">{formatVal(bData.rejected || 0)}</div>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-amber-50/50 dark:bg-amber-900/10 px-3 -mx-3 rounded-lg">
-                      <span className="text-xs font-bold text-amber-700 dark:text-amber-500">Committed (Hold)</span>
-                      <div className="text-amber-700 dark:text-amber-500">{formatVal(bData.hold || 0)}</div>
+
+                    {/* Hold (yellow badge) for Sales */}
+                    <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-yellow-50/50 dark:bg-yellow-900/10 px-3 -mx-3 rounded-lg mb-1">
+                      <span className="text-[9px] font-bold text-yellow-800 dark:text-yellow-600 mt-0.5 tracking-wide">Hold (Committed)</span>
+                      <div className="text-yellow-700 dark:text-yellow-500">{formatVal(bData.hold || 0)}</div>
                     </div>
 
                     <div className="flex justify-between items-center py-2 mt-1 bg-blue-50 dark:bg-blue-900/20 px-3 -mx-3 rounded-xl border border-blue-100 dark:border-blue-800/50 shadow-sm">

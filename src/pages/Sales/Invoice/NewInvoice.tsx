@@ -53,7 +53,7 @@ const NewInvoice = () => {
       try {
         setInitialLoading(true);
         const { data: cust } = await supabase.from('customers').select('id, customerName, primaryPhone');
-        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, item_sr_no, category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin');
+        const { data: prod } = await supabase.from('products').select('id, product_name, current_stock, retail_price, item_sr_no, category, hs_code, uom, pieces_per_box, pcs_per_box, pieces_per_packing, product_description, bin, item_type, service_charges');
         const { data: sm } = await supabase.from('salesmen').select('id, name');
         const { data: trans } = await supabase.from('logistics_transportation').select('id, name, base_charges');
         const { data: locMaster } = await supabase.from('inventory_locations').select('name');
@@ -147,13 +147,13 @@ const NewInvoice = () => {
     }
     return {
       invoiceNo: '', customerName: '', saleDate: new Date().toISOString().split('T')[0], paymentTerm: 'Cash',
-      dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
+      dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, showAdditionalCharges: false, additionalCharges: 0, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
       transportType: 'No Transport (Handover)', transportCharges: 0, settlementMode: 'Cash',
       selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0, dcNo: '',
       dcNo: '',
       gatePasses: {},
       shippingAddress: '',
-      items: [{ skuCode: '', itemName: '', warehouse: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0 }]
+      items: [{ skuCode: '', itemName: '', warehouse: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 0, fTaxPer: 0, amount: 0, availableQty: 0, itemServiceCharges: 0 }]
     };
   };
 
@@ -254,10 +254,13 @@ const NewInvoice = () => {
       setFieldValue(`items.${index}.availableQty`, 0);
       return;
     }
-    const newRp = Number(selectedProduct.retail_price) || 0;
+    const serviceCharges = Number(selectedProduct.service_charges || 0);
+    const isService = selectedProduct.item_type === 'service';
+    const newRp = (Number(selectedProduct.retail_price) || 0) + (isService ? serviceCharges : 0);
     setFieldValue(`items.${index}.itemName`, selectedProduct.product_name);
     setFieldValue(`items.${index}.skuCode`, selectedProduct.item_sr_no || '');
     setFieldValue(`items.${index}.rp`, newRp);
+    setFieldValue(`items.${index}.itemServiceCharges`, isService ? serviceCharges : 0);
     setFieldValue(`items.${index}.hsCode`, selectedProduct.hs_code || '');
 
     if (currentItem && currentItem.discountPer) {
@@ -353,7 +356,7 @@ const NewInvoice = () => {
       setLoading(true);
       let calculatedGrandTotal = values.items.reduce((acc: number, item: any) => {
         return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
-      }, 0) + Number(values.transportCharges || 0);
+      }, 0) + Number(values.transportCharges || 0) + Number(values.additionalCharges || 0);
 
       let paidCash = 0;
       let paidBank = 0;
@@ -381,6 +384,7 @@ const NewInvoice = () => {
         salesman: values.salesman,
         transport_name: values.transportType,
         transport_charges: Number(values.transportCharges || 0),
+        additional_charges: Number(values.additionalCharges || 0),
         selected_bank: (values.settlementMode === 'Bank' || values.settlementMode === 'Split') ? values.selectedBankTitle : null,
         bank_amount: String(paidBank),
         cash_amount_paid: paidCash,
@@ -832,7 +836,7 @@ const NewInvoice = () => {
             const hasAttempted = submitCount > 0;
             const currentSubtotalValue = values.items.reduce((acc: number, item: any) => {
               return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
-            }, 0) + Number(values.transportCharges || 0);
+            }, 0) + Number(values.transportCharges || 0) + Number(values.additionalCharges || 0);
 
             return (
               <Form className="space-y-6">
@@ -941,6 +945,22 @@ const NewInvoice = () => {
                       }`}
                     >
                       Discounts
+                    </div>
+
+                    {/* Additional Charges Toggle */}
+                    <div
+                      onClick={() => {
+                        const isChecked = !values.showAdditionalCharges;
+                        setFieldValue('showAdditionalCharges', isChecked);
+                        if (!isChecked) setFieldValue('additionalCharges', 0);
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 text-xs font-bold rounded-full transition select-none flex items-center justify-center border ${
+                        values.showAdditionalCharges
+                          ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800'
+                          : 'bg-white text-slate-500 border-stroke dark:bg-boxdark dark:text-slate-400 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4'
+                      }`}
+                    >
+                      Additional Charges
                     </div>
                   </div>
 
@@ -1568,6 +1588,11 @@ const NewInvoice = () => {
                                         }}
                                         className={`w-full bg-transparent text-right font-bold outline-none border rounded p-1 ${hasAttempted && (errors.items as any)?.[idx] && (!item.rp || item.rp < 0) ? 'border-red-500 bg-red-50/10' : 'border-transparent'}`}
                                       />
+                                      {Number(item.itemServiceCharges) > 0 && (
+                                        <div className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold text-right mt-0.5 whitespace-nowrap">
+                                          Svc: Rs.{Number(item.itemServiceCharges).toFixed(0)}
+                                        </div>
+                                      )}
                                     </td>
 
                                     {showDiscount && (
@@ -1795,6 +1820,21 @@ const NewInvoice = () => {
                       <span>Net Invoice Value Total:</span>
                       <span>Rs. {currentSubtotalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
+
+                    {values.showAdditionalCharges && (
+                      <div className="flex justify-between items-center border-b pb-1 dark:border-strokedark text-blue-600 dark:text-blue-400">
+                        <span className="text-xs">Additional Charges:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          name="additionalCharges"
+                          value={values.additionalCharges}
+                          onChange={handleChange}
+                          placeholder="0.00"
+                          className="w-28 text-right font-black bg-blue-50/40 dark:bg-blue-900/10 border border-blue-300 dark:border-blue-700 rounded p-1 text-xs outline-none focus:border-blue-500 text-blue-700 dark:text-blue-300"
+                        />
+                      </div>
+                    )}
 
                     {(values.settlementMode === 'Cash' || values.settlementMode === 'Split') && (
                       <div className="flex justify-between border-b pb-1 dark:border-strokedark text-emerald-600">
