@@ -174,6 +174,7 @@ const StockTransferList = () => {
               <tr className="bg-gray-2 text-left dark:bg-meta-4 text-xs font-bold uppercase tracking-wider text-black dark:text-white border-b border-stroke dark:border-strokedark">
                 <th className="py-4 px-4 font-semibold w-16">S#</th>
                 <th className="py-4 px-4 font-semibold">Transfer Slip No</th>
+                <th className="py-4 px-4 font-semibold">Code</th>
                 <th className="py-4 px-4 font-semibold">Source Warehouse (From)</th>
                 <th className="py-4 px-4 font-semibold">Destination Warehouse (To)</th>
                 <th className="py-4 px-4 font-semibold">Transfer Date</th>
@@ -183,9 +184,9 @@ const StockTransferList = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12"><Spinner /></td></tr>
+                <tr><td colSpan={8} className="text-center py-12"><Spinner /></td></tr>
               ) : paginatedTransfers.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-10 text-gray-400">No stock transfer log rows documented.</td></tr>
+                <tr><td colSpan={8} className="text-center py-10 text-gray-400">No stock transfer log rows documented.</td></tr>
               ) : (
                 paginatedTransfers.map((item, idx) => {
                   const serialNumber = startIndex + idx + 1;
@@ -195,6 +196,7 @@ const StockTransferList = () => {
                     <tr key={item.id} className="border-b border-stroke dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4/10 duration-150">
                       <td className="py-3.5 px-4 font-medium text-black dark:text-white">{serialNumber}</td>
                       <td className="py-3.5 px-4 font-bold text-primary tracking-wide">{item.transfer_no || `TRF-${String(item.id).padStart(4, '0')}`}</td>
+                      <td className="py-3.5 px-4 text-gray-700 dark:text-white font-semibold">{item.code || ''}</td>
                       <td className="py-3.5 px-4 text-gray-700 dark:text-white font-semibold">{item.from_location}</td>
                       <td className="py-3.5 px-4 text-gray-700 dark:text-white font-semibold flex items-center gap-1.5"><MdCompareArrows size={14} className="text-gray-400" /> {item.to_location}</td>
                       <td className="py-3.5 px-4 text-gray-500 font-medium">{item.transfer_date}</td>

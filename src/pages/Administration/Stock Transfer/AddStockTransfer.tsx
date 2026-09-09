@@ -14,6 +14,7 @@ const AddStockTransfer = () => {
   const [locations, setLocations] = useState<any[]>([]);
   const [productList, setProductList] = useState<any[]>([]);
   const [openDropdownRowIndex, setOpenDropdownRowIndex] = useState<number | null>(null);
+  const [activeDropdownType, setActiveDropdownType] = useState<'name' | 'code' | null>(null);
   const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
 
   const location = useLocation();
@@ -32,6 +33,7 @@ const AddStockTransfer = () => {
       remarks: editData.remarks || '',
       items: (editData.items || []).map((item: any) => ({
         itemName: item.itemName || '',
+        itemCode: item.itemCode || '',
         qty: item.qty || 1,
         uom: item.uom || 'Nos',
         availableQty: item.availableQty || 0
@@ -43,7 +45,7 @@ const AddStockTransfer = () => {
       transferDate: new Date().toISOString().split('T')[0],
       status: 'Confirm',
       remarks: '',
-      items: [{ itemName: '', qty: 1, uom: 'Nos', availableQty: 0 }]
+      items: [{ itemName: '', itemCode: '', qty: 1, uom: 'Nos', availableQty: 0 }]
     };
   }, [isEditMode, editData]);
 
@@ -52,7 +54,7 @@ const AddStockTransfer = () => {
       try {
         setMetadataLoading(true);
         const { data: locData } = await supabase.from('inventory_locations').select('id, name').order('name', { ascending: true });
-        const { data: prodData } = await supabase.from('products').select('id, product_name, current_stock, uom');
+        const { data: prodData } = await supabase.from('products').select('id, product_name, item_sr_no, current_stock, uom');
 
         if (locData) setLocations(locData);
         if (prodData) setProductList(prodData);
@@ -306,6 +308,7 @@ const AddStockTransfer = () => {
                   <thead>
                     <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white text-xs uppercase border-b border-stroke dark:border-strokedark">
                       <th className="p-2 border border-stroke dark:border-strokedark w-12">S#</th>
+                      <th className="p-2 border border-stroke dark:border-strokedark w-40 text-left">Code (SKU)</th>
                       <th className="p-2 border border-stroke dark:border-strokedark text-left">Select Product Item Designation Label</th>
                       <th className="p-2 border border-stroke dark:border-strokedark w-36">Live Available WH Bal</th>
                       <th className="p-2 border border-stroke dark:border-strokedark w-28">UOM</th>
@@ -328,26 +331,32 @@ const AddStockTransfer = () => {
                                   <input
                                     type="text"
                                     disabled={isEditMode}
-                                    name={`items.${index}.itemName`}
-                                    value={item.itemName}
+                                    name={`items.${index}.itemCode`}
+                                    value={item.itemCode || matchedProdObject?.item_sr_no || ''}
                                     autoComplete="new-password"
                                     onChange={(e) => {
-                                      setFieldValue(`items.${index}.itemName`, e.target.value);
+                                      setFieldValue(`items.${index}.itemCode`, e.target.value);
                                       setOpenDropdownRowIndex(index);
+                                      setActiveDropdownType('code');
                                       setHighlightedProductIndex(0);
                                     }}
                                     onFocus={() => {
                                       if (!isEditMode) {
                                         setOpenDropdownRowIndex(index);
+                                        setActiveDropdownType('code');
                                         setHighlightedProductIndex(0);
                                       }
                                     }}
                                     onBlur={() => {
-                                      setTimeout(() => setOpenDropdownRowIndex(null), 200);
+                                      setTimeout(() => {
+                                        if (activeDropdownType === 'code') setOpenDropdownRowIndex(null);
+                                      }, 200);
                                     }}
                                     onKeyDown={(e) => {
-                                      const availableProducts = productList.map((p: any) => p.product_name);
-                                      const filteredProducts = availableProducts.filter((p: string) => p.toLowerCase().includes(String(item.itemName || '').toLowerCase()));
+                                      const searchQuery = String(item.itemCode || '').toLowerCase();
+                                      const filteredProducts = productList.filter((p: any) => 
+                                        (p.item_sr_no || '').toLowerCase().includes(searchQuery)
+                                      );
                                       
                                       if (e.key === 'ArrowDown') {
                                         e.preventDefault();
@@ -358,18 +367,133 @@ const AddStockTransfer = () => {
                                       } else if (e.key === 'Enter') {
                                         e.preventDefault();
                                         if (filteredProducts.length > 0) {
-                                          const selectedValue = filteredProducts[highlightedProductIndex] || filteredProducts[0];
-                                          const selectObj = productList.find(p => p.product_name === selectedValue);
+                                          const selectedObj = filteredProducts[highlightedProductIndex] || filteredProducts[0];
                                           
                                           const updatedItems = [...values.items];
                                           updatedItems[index] = {
                                             ...updatedItems[index],
-                                            itemName: selectedValue,
-                                            uom: selectObj ? selectObj.uom : 'Nos'
+                                            itemName: selectedObj.product_name,
+                                            itemCode: selectedObj.item_sr_no,
+                                            uom: selectedObj.uom || 'Nos'
                                           };
                                           setFieldValue('items', updatedItems);
                                           
-                                          handleProductSelectionWithWarehouseBalance(selectedValue, index, values.fromLocation, setFieldValue);
+                                          handleProductSelectionWithWarehouseBalance(selectedObj.product_name, index, values.fromLocation, setFieldValue);
+                                          setOpenDropdownRowIndex(null);
+                                        }
+                                      } else if (e.key === 'Tab' || e.key === 'Escape') {
+                                        setOpenDropdownRowIndex(null);
+                                      }
+                                    }}
+                                    className="w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left font-mono"
+                                    placeholder="Search Code..."
+                                  />
+                                  {openDropdownRowIndex === index && activeDropdownType === 'code' && (
+                                    <div className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[250px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
+                                      {(() => {
+                                      const searchQuery = String(item.itemCode || '').toLowerCase();
+                                        const filteredProducts = productList.filter((p: any) => 
+                                          (p.item_sr_no || '').toLowerCase().includes(searchQuery)
+                                        );
+                                        
+                                        return filteredProducts.length > 0 ? (
+                                          filteredProducts.map((p, idx) => {
+                                            const isHighlighted = idx === highlightedProductIndex;
+                                            return (
+                                              <div
+                                                key={p.id}
+                                                onMouseEnter={() => setHighlightedProductIndex(idx)}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  
+                                                  const updatedItems = [...values.items];
+                                                  updatedItems[index] = {
+                                                    ...updatedItems[index],
+                                                    itemName: p.product_name,
+                                                    itemCode: p.item_sr_no,
+                                                    uom: p.uom || 'Nos'
+                                                  };
+                                                  setFieldValue('items', updatedItems);
+                                                  
+                                                  handleProductSelectionWithWarehouseBalance(p.product_name, index, values.fromLocation, setFieldValue);
+                                                  setOpenDropdownRowIndex(null);
+                                                }}
+                                                className={`p-2.5 cursor-pointer transition text-xs font-semibold text-black dark:text-white flex flex-col gap-0.5 ${
+                                                  isHighlighted 
+                                                    ? 'bg-primary/10 border-l-4 border-primary' 
+                                                    : 'hover:bg-gray-100 dark:hover:bg-meta-4'
+                                                }`}
+                                              >
+                                                <span className={isHighlighted ? 'text-primary font-mono' : 'font-mono'}>{p.item_sr_no || 'N/A'}</span>
+                                                <span className="text-[10px] text-slate-500">{p.product_name}</span>
+                                              </div>
+                                            );
+                                          })
+                                        ) : (
+                                          <div className="p-4 text-center text-xs text-gray-400 italic">
+                                            No matching codes found.
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-2 border border-stroke dark:border-strokedark">
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    disabled={isEditMode}
+                                    name={`items.${index}.itemName`}
+                                    value={item.itemName}
+                                    autoComplete="new-password"
+                                    onChange={(e) => {
+                                      setFieldValue(`items.${index}.itemName`, e.target.value);
+                                      setOpenDropdownRowIndex(index);
+                                      setActiveDropdownType('name');
+                                      setHighlightedProductIndex(0);
+                                    }}
+                                    onFocus={() => {
+                                      if (!isEditMode) {
+                                        setOpenDropdownRowIndex(index);
+                                        setActiveDropdownType('name');
+                                        setHighlightedProductIndex(0);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      setTimeout(() => {
+                                        if (activeDropdownType === 'name') setOpenDropdownRowIndex(null);
+                                      }, 200);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      const searchQuery = String(item.itemName || '').toLowerCase();
+                                      const filteredProducts = productList.filter((p: any) => 
+                                        (p.product_name || '').toLowerCase().includes(searchQuery) ||
+                                        (p.item_sr_no || '').toLowerCase().includes(searchQuery)
+                                      );
+                                      
+                                      if (e.key === 'ArrowDown') {
+                                        e.preventDefault();
+                                        setHighlightedProductIndex((prev) => prev < filteredProducts.length - 1 ? prev + 1 : 0);
+                                      } else if (e.key === 'ArrowUp') {
+                                        e.preventDefault();
+                                        setHighlightedProductIndex((prev) => prev > 0 ? prev - 1 : filteredProducts.length - 1);
+                                      } else if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        if (filteredProducts.length > 0) {
+                                          const selectedObj = filteredProducts[highlightedProductIndex] || filteredProducts[0];
+                                          
+                                          const updatedItems = [...values.items];
+                                          updatedItems[index] = {
+                                            ...updatedItems[index],
+                                            itemName: selectedObj.product_name,
+                                            itemCode: selectedObj.item_sr_no,
+                                            uom: selectedObj.uom || 'Nos'
+                                          };
+                                          setFieldValue('items', updatedItems);
+                                          
+                                          handleProductSelectionWithWarehouseBalance(selectedObj.product_name, index, values.fromLocation, setFieldValue);
                                           setOpenDropdownRowIndex(null);
                                         }
                                       } else if (e.key === 'Tab' || e.key === 'Escape') {
@@ -379,14 +503,18 @@ const AddStockTransfer = () => {
                                     className="w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left"
                                     placeholder="Search Product..."
                                   />
-                                  {openDropdownRowIndex === index && (
+                                  {openDropdownRowIndex === index && activeDropdownType === 'name' && (
                                     <div className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[300px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
                                       {(() => {
-                                        const availableProducts = productList.map((p: any) => p.product_name);
-                                        const filteredProducts = availableProducts.filter((p: string) => p.toLowerCase().includes(String(item.itemName || '').toLowerCase()));
+                                      const searchQuery = String(item.itemName || '').toLowerCase();
+                                        const filteredProducts = productList.filter((p: any) => 
+                                          (p.product_name || '').toLowerCase().includes(searchQuery) ||
+                                          (p.item_sr_no || '').toLowerCase().includes(searchQuery)
+                                        );
                                         
                                         return filteredProducts.length > 0 ? (
-                                          filteredProducts.map((pName, idx) => {
+                                          filteredProducts.map((p, idx) => {
+                                            const pName = p.product_name;
                                             const isHighlighted = idx === highlightedProductIndex;
                                             return (
                                               <div
@@ -395,26 +523,29 @@ const AddStockTransfer = () => {
                                                 onMouseDown={(e) => {
                                                   e.preventDefault();
                                                   e.stopPropagation();
-                                                  const selectObj = productList.find(p => p.product_name === pName);
                                                   
                                                   const updatedItems = [...values.items];
                                                   updatedItems[index] = {
                                                     ...updatedItems[index],
                                                     itemName: pName,
-                                                    uom: selectObj ? selectObj.uom : 'Nos'
+                                                    itemCode: p.item_sr_no,
+                                                    uom: p.uom || 'Nos'
                                                   };
                                                   setFieldValue('items', updatedItems);
                                                   
                                                   handleProductSelectionWithWarehouseBalance(pName, index, values.fromLocation, setFieldValue);
                                                   setOpenDropdownRowIndex(null);
                                                 }}
-                                                className={`p-2.5 cursor-pointer transition text-xs font-semibold text-black dark:text-white flex items-center ${
+                                                className={`p-2.5 cursor-pointer transition text-xs font-semibold text-black dark:text-white flex flex-col gap-0.5 ${
                                                   isHighlighted 
-                                                    ? 'bg-primary/10 border-l-4 border-primary text-primary' 
+                                                    ? 'bg-primary/10 border-l-4 border-primary' 
                                                     : 'hover:bg-gray-100 dark:hover:bg-meta-4'
                                                 }`}
                                               >
-                                                {pName}
+                                                <span className={isHighlighted ? 'text-primary' : ''}>{pName}</span>
+                                                {p.item_sr_no && (
+                                                  <span className="text-[10px] font-mono text-slate-500">Code: {p.item_sr_no}</span>
+                                                )}
                                               </div>
                                             );
                                           })

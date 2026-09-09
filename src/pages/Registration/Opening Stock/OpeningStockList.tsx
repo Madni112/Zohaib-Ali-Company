@@ -46,10 +46,45 @@ const OpeningStockList = () => {
         return;
       }
 
-      const activeProductLabel = targetRecord.itemName;
+      const activeProductLabel = targetRecord.itemName || targetRecord.product_name;
       const amountToDeduct = Number(targetRecord.quantity || targetRecord.qty || 0);
+      const targetLocation = targetRecord.location || targetRecord.warehouse_name;
 
-      if (activeProductLabel && amountToDeduct > 0) {
+      if (!activeProductLabel || !targetLocation) {
+        toast.error('Missing product name or location in the record.');
+        return;
+      }
+
+      if (amountToDeduct > 0) {
+        // 1. Check stock in specific location
+        const { data: locationStockMatch, error: locationStockError } = await supabase
+          .from('warehouse_inventory')
+          .select('id, quantity')
+          .eq('product_name', activeProductLabel)
+          .eq('warehouse_name', targetLocation)
+          .single();
+
+        if (locationStockError && locationStockError.code !== 'PGRST116') {
+          throw locationStockError;
+        }
+
+        const availableInLocation = locationStockMatch ? Number(locationStockMatch.quantity) || 0 : 0;
+
+        // 2. Error if not enough stock
+        if (availableInLocation < amountToDeduct) {
+          toast.error(`Cannot delete! Only ${availableInLocation} qty left in ${targetLocation}, but you are trying to remove ${amountToDeduct} qty.`);
+          return;
+        }
+
+        // 3. Deduct from location
+        const freshlyCalculatedLocationStock = availableInLocation - amountToDeduct;
+        if (freshlyCalculatedLocationStock === 0) {
+          await supabase.from('warehouse_inventory').delete().eq('id', locationStockMatch.id);
+        } else {
+          await supabase.from('warehouse_inventory').update({ quantity: freshlyCalculatedLocationStock }).eq('id', locationStockMatch.id);
+        }
+
+        // 4. Deduct from total products stock
         const { data: currentProductMatch } = await supabase
           .from('products')
           .select('current_stock')

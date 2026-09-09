@@ -49,6 +49,7 @@ const ProductList = () => {
         const { data: pReturns } = await supabase.from('purchase_returns').select('*');
         const { data: deliveryChallans } = await supabase.from('delivery_challans').select('*').order('created_at', { ascending: false });
         const { data: grnReceipts } = await supabase.from('grn_receipts').select('*, grn_items(*)');
+        const { data: stockTransfers } = await supabase.from('stock_transfers').select('items, from_location, to_location, status');
         const { data: locationsMaster } = await supabase.from('inventory_locations').select('name');
 
         if (locationsMaster) {
@@ -174,6 +175,25 @@ const ProductList = () => {
                   const qty = Number(item.qty || item.quantity || 0);
                   totalPurchaseReturned += qty;
                   getWh(item.warehouse || item.location || pr.dispatch_warehouse || pr.warehouse || 'Global / Unassigned').purchaseReturned += qty;
+                }
+              });
+            }
+          });
+
+          // 7. Stock Transfers
+          (stockTransfers || []).forEach((st: any) => {
+            const statusClean = String(st.status || '').trim().toLowerCase();
+            if (statusClean === 'completed' || statusClean === 'success' || !st.status) {
+              const itemsArray = Array.isArray(st.items) ? st.items : (typeof st.items === 'string' ? JSON.parse(st.items || '[]') : []);
+              itemsArray.forEach((item: any) => {
+                const stName = String(item.product_name || item.itemName || '').trim().toLowerCase();
+                if (stName === name || stName.includes(name)) {
+                  const qty = Number(item.qty || item.quantity || item.transfer_qty || 0);
+                  const srcWh = String(st.from_location || item.from_location || 'Global / Unassigned').trim();
+                  const destWh = String(st.to_location || item.to_location || 'Global / Unassigned').trim();
+                  
+                  getWh(srcWh).transferredOut = (getWh(srcWh).transferredOut || 0) + qty;
+                  getWh(destWh).transferredIn = (getWh(destWh).transferredIn || 0) + qty;
                 }
               });
             }
@@ -592,6 +612,20 @@ const ProductList = () => {
                       <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Opening Stock</span>
                       {formatVal(bData.opening || 0)}
                     </div>
+                    {(bData.transferredIn > 0 || bData.transferredOut > 0) && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400 pl-2">
+                        Transfer: {bData.transferredIn > 0 ? `+${formatVal(bData.transferredIn)}` : ''}{bData.transferredOut > 0 ? ` -${formatVal(bData.transferredOut)}` : ''}
+                      </div>
+                    )}
+                    {(bData.transferredIn > 0 || bData.transferredOut > 0) && (
+                      <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-strokedark/50 px-3 -mx-3 bg-slate-50/50 dark:bg-meta-4/20">
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Transfers (In / Out)</span>
+                        <div className="flex gap-2 text-[10px] font-bold">
+                          <span className="text-emerald-500">+{formatVal(bData.transferredIn || 0)}</span>
+                          <span className="text-rose-400">-{formatVal(bData.transferredOut || 0)}</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50">
                       <div className="flex flex-col">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Purchases</span>
