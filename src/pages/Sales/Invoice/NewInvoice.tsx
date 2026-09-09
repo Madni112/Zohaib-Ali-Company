@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAvailableStock, getTotalAvailableStock, fetchStockDataset } from '../../../utils/stockCalculator';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
@@ -24,6 +25,7 @@ const NewInvoice = () => {
   const [salesmenList, setSalesmenList] = useState<any[]>([]);
   const [transportList, setTransportList] = useState<any[]>([]);
   const [warehousesList, setWarehousesList] = useState<any[]>([]);
+  const [stockDataset, setStockDataset] = useState<any>(null);
   const [banksList, setBanksList] = useState<any[]>([]);
   const [activeSkuIndex, setActiveSkuIndex] = useState<number | null>(null);
   const [highlightedSkuIndex, setHighlightedSkuIndex] = useState<number>(0);
@@ -60,6 +62,9 @@ const NewInvoice = () => {
         const { data: wh } = await supabase.from('opening_stocks').select('location');
         const { data: invWh } = await supabase.from('warehouse_inventory').select('warehouse_name');
         const { data: bnk } = await supabase.from('banks').select('id, bankName, accountTitle');
+
+        // Load the stock ledger snapshot once (reused for every row's availability check)
+        fetchStockDataset().then(setStockDataset).catch(() => setStockDataset(null));
 
         if (cust) setCustomersList(cust);
         if (prod) setProductsList(prod);
@@ -231,18 +236,18 @@ const NewInvoice = () => {
   });
 
   const fetchStockForWarehouse = async (productName: string, chosenWarehouse: string) => {
-    if (!productName || !chosenWarehouse) return 0;
+    if (!productName) return 0;
     try {
-      const { data: whStock, error } = await supabase
-        .from('warehouse_inventory')
-        .select('quantity')
-        .ilike('product_name', productName)
-        .ilike('warehouse_name', chosenWarehouse)
-        .maybeSingle();
-
-      if (error) throw error;
-      return whStock ? Number(whStock.quantity) : 0;
-    } catch (err: any) {
+      if (!chosenWarehouse) {
+        const t = await getTotalAvailableStock(productName, stockDataset);
+        console.log(`[Invoice] No WH. Total stock for ${productName}:`, t);
+        return t;
+      }
+      const s = await getAvailableStock(productName, chosenWarehouse, stockDataset);
+      console.log(`[Invoice] WH selected (${chosenWarehouse}). Stock for ${productName}:`, s);
+      return s;
+    } catch (err) {
+      console.error("[Invoice] Error fetching stock:", err);
       return 0;
     }
   };
@@ -471,25 +476,16 @@ const NewInvoice = () => {
 
         if (invoiceUpdateError) throw invoiceUpdateError;
 
-        // 4. Update Inventory (Restore old, Deduct new)
+        // 4. Update products.current_stock (Restore old, Deduct new)
+        // warehouse_inventory is no longer the source of truth — formula-based
         const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
         for (const oldItem of oldItems) {
-          const oldWh = (oldItem.warehouse || editData.dispatch_warehouse || 'Main Warehouse').trim();
-          const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', oldItem.itemName).ilike('warehouse_name', oldWh).maybeSingle();
-          if (p) {
-            await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) + Number(oldItem.qty || 0) }).eq('id', p.id);
-            const { data: prod } = await supabase.from('products').select('id, current_stock').eq('product_name', oldItem.itemName).maybeSingle();
-            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) + Number(oldItem.qty || 0) }).eq('id', prod.id);
-          }
+          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', oldItem.itemName).maybeSingle();
+          if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) + Number(oldItem.qty || 0) }).eq('id', prod.id);
         }
         for (const newItem of values.items) {
-          const newWh = (newItem.warehouse || values.dispatchWarehouse || 'Main Warehouse').trim();
-          const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', newItem.itemName).ilike('warehouse_name', newWh).maybeSingle();
-          if (p) {
-            await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(newItem.qty || 0) }).eq('id', p.id);
-            const { data: prod } = await supabase.from('products').select('id, current_stock').eq('product_name', newItem.itemName).maybeSingle();
-            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(newItem.qty || 0) }).eq('id', prod.id);
-          }
+          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', newItem.itemName).maybeSingle();
+          if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(newItem.qty || 0) }).eq('id', prod.id);
         }
 
         // 5. Sync DCs (Delete pending, create new for remaining quantities)
@@ -676,19 +672,10 @@ const NewInvoice = () => {
           toast.error(`DC Auto-generation failed: ${dcErr.message || 'Unknown error'}`);
         }
 
+        // Update products.current_stock only — warehouse_inventory retired
         for (const item of values.items) {
-          const itemWarehouse = item.warehouse || values.dispatchWarehouse;
-          const { data: p } = await supabase
-            .from('warehouse_inventory')
-            .select('id, quantity')
-            .ilike('product_name', item.itemName)
-            .ilike('warehouse_name', itemWarehouse)
-            .maybeSingle();
-          if (p) {
-            await supabase.from('warehouse_inventory').update({ quantity: Number(p.quantity) - Number(item.qty) }).eq('id', p.id);
-            const { data: prod } = await supabase.from('products').select('id, current_stock').eq('product_name', item.itemName).maybeSingle();
-            if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
-          }
+          const { data: prod } = await supabase.from('products').select('id, current_stock').ilike('product_name', item.itemName).maybeSingle();
+          if (prod) await supabase.from('products').update({ current_stock: Number(prod.current_stock) - Number(item.qty) }).eq('id', prod.id);
         }
         toast.success('Sales Invoice & Delivery Challan(s) logged successfully!');
       }

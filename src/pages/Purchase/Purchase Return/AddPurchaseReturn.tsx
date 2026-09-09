@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getAvailableStock, fetchStockDataset } from '../../../utils/stockCalculator';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
@@ -65,6 +66,7 @@ const AddPurchaseReturn = () => {
   const [vendors, setVendors] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [productList, setProductList] = useState<any[]>([]);
+  const [stockDataset, setStockDataset] = useState<any>(null);
   const [bankAccountsList, setBankAccountsList] = useState<any[]>([]);
   const [purchaseOrdersList, setPurchaseOrdersList] = useState<any[]>([]);
 
@@ -176,6 +178,9 @@ const AddPurchaseReturn = () => {
         // 3. Fetch Products
         const { data: prodData } = await supabase.from('products').select('*').order('product_name', { ascending: true });
         setProductList(prodData || []);
+
+        // Load the stock ledger snapshot once (reused for every row's availability check)
+        fetchStockDataset().then(setStockDataset).catch(() => setStockDataset(null));
 
         // 4. Fetch Banks
         const { data: bankData } = await supabase.from('banks').select('id, bankName, accountTitle, accountNumber');
@@ -483,20 +488,13 @@ const AddPurchaseReturn = () => {
                 }
               }
 
-              // 1. Verify and check warehouse stock
+              // 1. Verify stock using formula-based calculator (same as ProductList breakdown)
               for (const item of values.items) {
                 const reqQty = Number(item.qty || 0);
                 const pName = item.itemName;
                 const effectiveWh = item.warehouse || values.sourceWarehouse;
 
-                const { data: whStock } = await supabase
-                  .from('warehouse_inventory')
-                  .select('id, quantity')
-                  .ilike('product_name', pName)
-                  .ilike('warehouse_name', effectiveWh)
-                  .maybeSingle();
-
-                const availableQty = Number(whStock?.quantity || 0);
+                const availableQty = await getAvailableStock(pName, effectiveWh, stockDataset);
 
                 if (!isEditMode && reqQty > availableQty) {
                   toast.error(`Stock Shortage Alert: '${pName}' only has ${availableQty} units available in ${effectiveWh}.`);
@@ -645,11 +643,7 @@ const AddPurchaseReturn = () => {
                       await supabase.from('products').update({ current_stock: (Number(prod.current_stock) || 0) + oQty }).ilike('product_name', oName);
                     }
 
-                    // Restore warehouse stock
-                    const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', oName).ilike('warehouse_name', oWh).maybeSingle();
-                    if (whRow) {
-                      await supabase.from('warehouse_inventory').update({ quantity: (Number(whRow.quantity) || 0) + oQty }).eq('id', whRow.id);
-                    }
+                    // warehouse_inventory retired — formula-based stock is source of truth
                   }
                 }
 
@@ -671,10 +665,7 @@ const AddPurchaseReturn = () => {
                     await supabase.from('products').update({ current_stock: Math.max(0, (Number(prod.current_stock) || 0) - nQty) }).ilike('product_name', nName);
                   }
 
-                  const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', nName).ilike('warehouse_name', nWh).maybeSingle();
-                  if (whRow) {
-                    await supabase.from('warehouse_inventory').update({ quantity: Math.max(0, (Number(whRow.quantity) || 0) - nQty) }).eq('id', whRow.id);
-                  }
+                  // warehouse_inventory retired — formula-based stock is source of truth
                 }
 
               } else {
@@ -698,10 +689,7 @@ const AddPurchaseReturn = () => {
                     await supabase.from('products').update({ current_stock: Math.max(0, (Number(prod.current_stock) || 0) - qty) }).ilike('product_name', pName);
                   }
 
-                  const { data: whRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', effWh).maybeSingle();
-                  if (whRow) {
-                    await supabase.from('warehouse_inventory').update({ quantity: Math.max(0, (Number(whRow.quantity) || 0) - qty) }).eq('id', whRow.id);
-                  }
+                  // warehouse_inventory retired — formula-based stock is source of truth
                 }
               }
 

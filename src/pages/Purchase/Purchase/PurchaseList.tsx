@@ -362,14 +362,7 @@ const PurchaseList = () => {
                 await supabase.from('products').update({ current_stock: newStock }).ilike('product_name', pName);
               }
 
-              // 2. Decrease Target Location Warehouse Stock (-)
-              if (targetRecord.target_warehouse) {
-                const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', targetRecord.target_warehouse).maybeSingle();
-                if (p) {
-                  const newWhStock = Math.max(0, (Number(p.quantity) || 0) - qty);
-                  await supabase.from('warehouse_inventory').update({ quantity: newWhStock }).eq('id', p.id);
-                }
-              }
+              // warehouse_inventory retired — formula-based stock is source of truth
             }
           }
         }

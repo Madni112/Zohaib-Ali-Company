@@ -84,15 +84,7 @@ const PurchaseReturnList = () => {
               await supabase.from('products').update({ current_stock: (Number(prod.current_stock) || 0) + qty }).ilike('product_name', pName);
             }
 
-            // 2. Increase Source Location Warehouse Stock (+)
-            if (targetRecord.source_warehouse) {
-              const { data: p } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', pName).ilike('warehouse_name', targetRecord.source_warehouse).maybeSingle();
-              if (p) {
-                await supabase.from('warehouse_inventory').update({ quantity: (Number(p.quantity) || 0) + qty }).eq('id', p.id);
-              } else {
-                await supabase.from('warehouse_inventory').insert([{ product_name: pName, warehouse_name: targetRecord.source_warehouse, quantity: qty }]);
-              }
-            }
+            // warehouse_inventory retired — formula-based stock is source of truth
           }
         }
       }

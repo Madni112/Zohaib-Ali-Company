@@ -276,13 +276,7 @@ const StockReportPrint = () => {
                                     calculated_valuation: qty * rate
                                 });
 
-                                try {
-                                    await supabase.from('warehouse_inventory').upsert({
-                                        product_name: product.product_name,
-                                        warehouse_name: locName,
-                                        quantity: qty
-                                    }, { onConflict: 'product_name,warehouse_name' });
-                                } catch (e) {}
+                                // warehouse_inventory retired — formula-based stock is source of truth
                             }
                         }
                     }

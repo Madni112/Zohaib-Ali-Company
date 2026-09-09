@@ -181,22 +181,20 @@ const ProductList = () => {
           });
 
           // 7. Stock Transfers
+          // Every recorded transfer is a real movement (the app never saves drafts)
           (stockTransfers || []).forEach((st: any) => {
-            const statusClean = String(st.status || '').trim().toLowerCase();
-            if (statusClean === 'completed' || statusClean === 'success' || !st.status) {
-              const itemsArray = Array.isArray(st.items) ? st.items : (typeof st.items === 'string' ? JSON.parse(st.items || '[]') : []);
-              itemsArray.forEach((item: any) => {
-                const stName = String(item.product_name || item.itemName || '').trim().toLowerCase();
-                if (stName === name || stName.includes(name)) {
-                  const qty = Number(item.qty || item.quantity || item.transfer_qty || 0);
-                  const srcWh = String(st.from_location || item.from_location || 'Global / Unassigned').trim();
-                  const destWh = String(st.to_location || item.to_location || 'Global / Unassigned').trim();
-                  
-                  getWh(srcWh).transferredOut = (getWh(srcWh).transferredOut || 0) + qty;
-                  getWh(destWh).transferredIn = (getWh(destWh).transferredIn || 0) + qty;
-                }
-              });
-            }
+            const itemsArray = Array.isArray(st.items) ? st.items : (typeof st.items === 'string' ? JSON.parse(st.items || '[]') : []);
+            itemsArray.forEach((item: any) => {
+              const stName = String(item.product_name || item.itemName || '').trim().toLowerCase();
+              if (stName === name) {
+                const qty = Number(item.qty || item.quantity || item.transfer_qty || 0);
+                const srcWh = String(st.from_location || item.from_location || 'Global / Unassigned').trim();
+                const destWh = String(st.to_location || item.to_location || 'Global / Unassigned').trim();
+                
+                getWh(srcWh).transferredOut = (getWh(srcWh).transferredOut || 0) + qty;
+                getWh(destWh).transferredIn = (getWh(destWh).transferredIn || 0) + qty;
+              }
+            });
           });
 
           // 6. Committed Stock (Hold Units from Delivery Challans)
@@ -233,11 +231,15 @@ const ProductList = () => {
           const finalWhBreakdowns: Record<string, any> = {};
           Object.keys(whBreakdowns).forEach(key => {
             const w = whBreakdowns[key];
-            const wAvailable = (w.opening + w.purchased + w.salesReturned) - w.sold - w.purchaseReturned - (w.rejected || 0);
+            const transferredIn = w.transferredIn || 0;
+            const transferredOut = w.transferredOut || 0;
+            const wAvailable = (w.opening + w.purchased + w.salesReturned + transferredIn) - w.sold - w.purchaseReturned - (w.rejected || 0) - transferredOut;
             const wOnHand = wAvailable + w.hold;
             finalWhBreakdowns[key] = {
               ...w,
               opening: w.opening, // This is the actual opening_stocks table value
+              transferredIn,
+              transferredOut,
               available: wAvailable,
               onHand: wOnHand,
               rejected: w.rejected || 0
@@ -530,7 +532,7 @@ const ProductList = () => {
       {/* Stock Breakdown Modal */}
       {selectedStockBreakdown && (
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-boxdark rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-strokedark overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-boxdark rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] border border-slate-200 dark:border-strokedark overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-strokedark bg-slate-50 dark:bg-meta-4/30">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-lg">
@@ -577,52 +579,47 @@ const ProductList = () => {
               </div>
             </div>
 
-            <div className="p-5 flex flex-col gap-3 font-sans">
-              {(() => {
-                const isTile = Boolean(
-                  (String(selectedStockBreakdown.category || '').toLowerCase().includes('tile') ||
-                    String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile')) &&
-                  (Number(selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0) > 1 || String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile'))
-                );
-                const rawPcs = Number(selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0);
-                const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
+            {(() => {
+              const isTile = Boolean(
+                (String(selectedStockBreakdown.category || '').toLowerCase().includes('tile') ||
+                  String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile')) &&
+                (Number(selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0) > 1 || String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile'))
+              );
+              const rawPcs = Number(selectedStockBreakdown.pieces_per_box || selectedStockBreakdown.pcs_per_box || 0);
+              const pcsPerBox = rawPcs > 1 ? rawPcs : (isTile ? 4 : 1);
 
-                const formatVal = (val: number) => {
-                  if (isTile && pcsPerBox > 1) {
-                    const totalPieces = Math.round(val * pcsPerBox);
-                    const b = Math.floor(totalPieces / pcsPerBox);
-                    const p = totalPieces % pcsPerBox;
-                    return (
-                      <div className="text-right flex flex-col items-end">
-                        <span className="font-bold text-slate-700 dark:text-slate-200">{b} Boxes</span>
-                        {p > 0 && <span className="text-[9px] font-bold text-slate-400">+{p} Pcs</span>}
-                      </div>
-                    );
-                  }
-                  return <span className="font-bold text-slate-700 dark:text-slate-200">{val.toLocaleString()} {selectedStockBreakdown.uom || 'PCS'}</span>;
-                };
+              const formatVal = (val: number) => {
+                if (isTile && pcsPerBox > 1) {
+                  const totalPieces = Math.round(val * pcsPerBox);
+                  const b = Math.floor(totalPieces / pcsPerBox);
+                  const p = totalPieces % pcsPerBox;
+                  return (
+                    <div className="text-right flex flex-col items-end">
+                      <span className="font-bold text-slate-700 dark:text-slate-200">{b} Boxes</span>
+                      {p > 0 && <span className="text-[9px] font-bold text-slate-400">+{p} Pcs</span>}
+                    </div>
+                  );
+                }
+                return <span className="font-bold text-slate-700 dark:text-slate-200">{val.toLocaleString()} {selectedStockBreakdown.uom || 'PCS'}</span>;
+              };
 
-                const bData = selectedModalWarehouse === 'ALL'
-                  ? selectedStockBreakdown.breakdown || {}
-                  : selectedStockBreakdown.warehouseBreakdowns?.[selectedModalWarehouse] || { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0, available: 0, onHand: 0 };
+              const bData = selectedModalWarehouse === 'ALL'
+                ? selectedStockBreakdown.breakdown || {}
+                : selectedStockBreakdown.warehouseBreakdowns?.[selectedModalWarehouse] || { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0, available: 0, onHand: 0 };
 
-                return (
-                  <>
+              return (
+                <>
+                  <div className="p-5 flex flex-col gap-3 font-sans overflow-y-auto flex-1 min-h-0">
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50">
                       <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Opening Stock</span>
                       {formatVal(bData.opening || 0)}
                     </div>
-                    {(bData.transferredIn > 0 || bData.transferredOut > 0) && (
-                      <div className="text-xs text-slate-500 dark:text-slate-400 pl-2">
-                        Transfer: {bData.transferredIn > 0 ? `+${formatVal(bData.transferredIn)}` : ''}{bData.transferredOut > 0 ? ` -${formatVal(bData.transferredOut)}` : ''}
-                      </div>
-                    )}
-                    {(bData.transferredIn > 0 || bData.transferredOut > 0) && (
-                      <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-strokedark/50 px-3 -mx-3 bg-slate-50/50 dark:bg-meta-4/20">
-                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">Transfers (In / Out)</span>
-                        <div className="flex gap-2 text-[10px] font-bold">
-                          <span className="text-emerald-500">+{formatVal(bData.transferredIn || 0)}</span>
-                          <span className="text-rose-400">-{formatVal(bData.transferredOut || 0)}</span>
+                    
+                    {selectedModalWarehouse !== 'ALL' && (
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-strokedark/50">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-bold text-slate-400">Transfer Received: <span className="text-emerald-500">+{bData.transferredIn || 0}</span></span>
+                          <span className="text-[10px] font-bold text-slate-400">Transfer Sent: <span className="text-rose-400">-{bData.transferredOut || 0}</span></span>
                         </div>
                       </div>
                     )}
@@ -664,23 +661,27 @@ const ProductList = () => {
                       <div className="text-yellow-700 dark:text-yellow-500">{formatVal(bData.hold || 0)}</div>
                     </div>
 
-                    <div className="flex justify-between items-center py-2 mt-1 bg-blue-50 dark:bg-blue-900/20 px-3 -mx-3 rounded-xl border border-blue-100 dark:border-blue-800/50 shadow-sm">
+                  </div>
+
+                  {/* Sticky Footer for Available Stock & Close Button */}
+                  <div className="p-4 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex flex-col gap-4 shrink-0">
+                    <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 px-4 py-3 rounded-xl border border-blue-100 dark:border-blue-800/50 shadow-sm">
                       <span className="text-sm font-black tracking-tight text-blue-800 dark:text-blue-400">Available Stock <span className="text-[10px] font-bold opacity-70">(To Sell)</span></span>
                       <div className="text-blue-700 dark:text-blue-400">{formatVal(bData.available || 0)}</div>
                     </div>
-                  </>
-                );
-              })()}
-            </div>
-
-            <div className="p-4 bg-slate-50 dark:bg-meta-4/30 border-t border-slate-100 dark:border-strokedark flex justify-end">
-              <button
-                onClick={() => setSelectedStockBreakdown(null)}
-                className="px-4 py-2 bg-white dark:bg-boxdark border border-slate-200 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-lg transition shadow-sm"
-              >
-                Close
-              </button>
-            </div>
+                    
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setSelectedStockBreakdown(null)}
+                        className="px-6 py-2 bg-white dark:bg-boxdark border border-slate-200 dark:border-strokedark hover:bg-slate-50 dark:hover:bg-meta-4 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-lg transition shadow-sm w-full sm:w-auto"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

@@ -40,7 +40,6 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       purchaseReturnReceiptsRes,
       vouchersRes,
       banksRes,
-      inventoryRes,
       productsRes,
       customerReceiptsRes
     ] = await Promise.allSettled([
@@ -52,7 +51,6 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
       supabase.from('purchase_return_receipts').select('*'),
       supabase.from('financial_vouchers').select('*'),
       supabase.from('banks').select('*'),
-      supabase.from('warehouse_inventory').select('*'),
       supabase.from('products').select('*'),
       supabase.from('customer_recoveries').select('*')
     ]);
@@ -65,7 +63,7 @@ export const fetchFinancialMetrics = async (): Promise<FinancialSummary> => {
     const purchaseReturnRecList = (purchaseReturnReceiptsRes.status === 'fulfilled' && Array.isArray(purchaseReturnReceiptsRes.value.data)) ? purchaseReturnReceiptsRes.value.data : [];
     const vouchersList = (vouchersRes.status === 'fulfilled' && Array.isArray(vouchersRes.value.data)) ? vouchersRes.value.data : [];
     const banksList = (banksRes.status === 'fulfilled' && Array.isArray(banksRes.value.data)) ? banksRes.value.data : [];
-    const inventoryList = (inventoryRes.status === 'fulfilled' && Array.isArray(inventoryRes.value.data)) ? inventoryRes.value.data : [];
+
     const productsList = (productsRes.status === 'fulfilled' && Array.isArray(productsRes.value.data)) ? productsRes.value.data : [];
     const customerRecList = (customerReceiptsRes.status === 'fulfilled' && Array.isArray(customerReceiptsRes.value.data)) ? customerReceiptsRes.value.data : [];
 

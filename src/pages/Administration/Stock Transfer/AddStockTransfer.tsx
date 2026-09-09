@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAvailableStock, fetchStockDataset } from '../../../utils/stockCalculator';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
@@ -13,6 +14,7 @@ const AddStockTransfer = () => {
   const [metadataLoading, setMetadataLoading] = useState(true);
   const [locations, setLocations] = useState<any[]>([]);
   const [productList, setProductList] = useState<any[]>([]);
+  const [stockDataset, setStockDataset] = useState<any>(null);
   const [openDropdownRowIndex, setOpenDropdownRowIndex] = useState<number | null>(null);
   const [activeDropdownType, setActiveDropdownType] = useState<'name' | 'code' | null>(null);
   const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
@@ -58,6 +60,9 @@ const AddStockTransfer = () => {
 
         if (locData) setLocations(locData);
         if (prodData) setProductList(prodData);
+
+        // Load the stock ledger snapshot once (reused for every row's availability check)
+        fetchStockDataset().then(setStockDataset).catch(() => setStockDataset(null));
       } catch (err: any) {
         toast.error('Failed to load system metadata setup list vectors');
       } finally {
@@ -79,15 +84,8 @@ const AddStockTransfer = () => {
     }
 
     try {
-      const { data: stockRecord, error } = await supabase
-        .from('warehouse_inventory')
-        .select('quantity')
-        .ilike('product_name', selectedName)
-        .ilike('warehouse_name', sourceWarehouse)
-        .maybeSingle();
-
-      if (error) throw error;
-      setFieldValue(`items.${index}.availableQty`, stockRecord ? Number(stockRecord.quantity) : 0);
+      const available = await getAvailableStock(selectedName, sourceWarehouse, stockDataset);
+      setFieldValue(`items.${index}.availableQty`, available);
     } catch (err: any) {
       console.error(err.message);
       setFieldValue(`items.${index}.availableQty`, 0);
@@ -138,68 +136,30 @@ const AddStockTransfer = () => {
             try {
               setLoading(true);
 
-              for (const item of values.items) {
-                const { data: sourceStock } = await supabase
-                  .from('warehouse_inventory')
-                  .select('quantity')
-                  .eq('product_name', item.itemName)
-                  .eq('warehouse_name', values.fromLocation)
-                  .maybeSingle();
-
-                let availablePoolFunds = 0;
-                if (sourceStock) {
-                  availablePoolFunds = Number(sourceStock.quantity);
-                } else {
-                  const localMatch = productList.find(p => p.product_name === item.itemName);
-                  availablePoolFunds = localMatch ? Number(localMatch.current_stock) : 0;
+              // Block duplicates: same product in more than one row
+              const seen: Record<string, number> = {};
+              for (let i = 0; i < values.items.length; i++) {
+                const key = String(values.items[i].itemName || '').trim().toLowerCase();
+                if (!key) continue;
+                if (seen[key] !== undefined) {
+                  toast.error(`Cannot save — "${values.items[i].itemName}" is added in both row ${seen[key] + 1} and row ${i + 1}. Please remove the duplicate line.`);
+                  setLoading(false);
+                  return;
                 }
+                seen[key] = i;
+              }
 
-                if (availablePoolFunds < Number(item.qty)) {
-                  toast.error(`Insufficient Balance: "${item.itemName}" only has ${availablePoolFunds} items left in "${values.fromLocation}" warehouse partition.`);
+              // Validate available stock using formula (same as ProductList breakdown)
+              for (const item of values.items) {
+                const available = await getAvailableStock(item.itemName, values.fromLocation, stockDataset);
+                if (available < Number(item.qty)) {
+                  toast.error(`Insufficient Balance: "${item.itemName}" only has ${available} items left in "${values.fromLocation}" warehouse.`);
                   setLoading(false);
                   return;
                 }
               }
 
-              for (const item of values.items) {
-                const { data: sourceStock } = await supabase
-                  .from('warehouse_inventory')
-                  .select('id, quantity')
-                  .ilike('product_name', item.itemName)
-                  .ilike('warehouse_name', values.fromLocation)
-                  .maybeSingle();
-
-                if (sourceStock) {
-                  await supabase
-                    .from('warehouse_inventory')
-                    .update({ quantity: Number(sourceStock.quantity) - Number(item.qty) })
-                    .eq('id', sourceStock.id);
-                } else {
-                  const localMatch = productList.find(p => p.product_name === item.itemName);
-                  const baseGlobalStock = localMatch ? Number(localMatch.current_stock) : 0;
-                  await supabase
-                    .from('warehouse_inventory')
-                    .insert([{ product_name: item.itemName, warehouse_name: values.fromLocation, quantity: Math.max(0, baseGlobalStock - Number(item.qty)) }]);
-                }
-
-                const { data: destStock } = await supabase
-                  .from('warehouse_inventory')
-                  .select('id, quantity')
-                  .ilike('product_name', item.itemName)
-                  .ilike('warehouse_name', values.toLocation)
-                  .maybeSingle();
-
-                if (destStock) {
-                  await supabase
-                    .from('warehouse_inventory')
-                    .update({ quantity: Number(destStock.quantity) + Number(item.qty) })
-                    .eq('id', destStock.id);
-                } else {
-                  await supabase
-                    .from('warehouse_inventory')
-                    .insert([{ product_name: item.itemName, warehouse_name: values.toLocation, quantity: Number(item.qty) }]);
-                }
-              }
+              // warehouse_inventory retired — stock_transfers table is the source of truth for transfers
 
               const databasePayload = {
                 transfer_no: values.transferNo,
@@ -251,14 +211,8 @@ const AddStockTransfer = () => {
                             if (!selectedWH) {
                               setFieldValue(`items.${idx}.availableQty`, 0);
                             } else {
-                              const { data: stockRecord } = await supabase
-                                .from('warehouse_inventory')
-                                .select('quantity')
-                                .ilike('product_name', rowItem.itemName)
-                                .ilike('warehouse_name', selectedWH)
-                                .maybeSingle();
-
-                              setFieldValue(`items.${idx}.availableQty`, stockRecord ? Number(stockRecord.quantity) : 0);
+                              const available = await getAvailableStock(rowItem.itemName, selectedWH, stockDataset);
+                              setFieldValue(`items.${idx}.availableQty`, available);
                             }
                           }
                         }
@@ -323,6 +277,18 @@ const AddStockTransfer = () => {
                           const matchedProdObject = productList.find(p => p.product_name === item.itemName);
                           const currentUomString = matchedProdObject ? matchedProdObject.uom : 'Nos';
 
+                          // Duplicate product detection (case-insensitive, trimmed)
+                          const rowProductKey = String(item.itemName || '').trim().toLowerCase();
+                          const isDuplicateRow = !!rowProductKey && (values.items || []).some(
+                            (x: any, j: number) => j !== index && String(x.itemName || '').trim().toLowerCase() === rowProductKey
+                          );
+                          const firstDupRowIndex = isDuplicateRow
+                            ? (values.items || []).findIndex(
+                                (x: any, j: number) => j !== index && String(x.itemName || '').trim().toLowerCase() === rowProductKey
+                              )
+                            : -1;
+                          const dupInputBorder = isDuplicateRow ? ' border-rose-500' : '';
+
                           return (
                             <tr key={index} className="bg-white dark:bg-boxdark text-xs border-b border-stroke dark:border-strokedark text-black dark:text-white">
                               <td className="p-2 border border-stroke dark:border-strokedark font-medium">{index + 1}</td>
@@ -385,7 +351,7 @@ const AddStockTransfer = () => {
                                         setOpenDropdownRowIndex(null);
                                       }
                                     }}
-                                    className="w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left font-mono"
+                                    className={`w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left font-mono${dupInputBorder}`}
                                     placeholder="Search Code..."
                                   />
                                   {openDropdownRowIndex === index && activeDropdownType === 'code' && (
@@ -500,9 +466,14 @@ const AddStockTransfer = () => {
                                         setOpenDropdownRowIndex(null);
                                       }
                                     }}
-                                    className="w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left"
+                                    className={`w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left${dupInputBorder}`}
                                     placeholder="Search Product..."
                                   />
+                                  {isDuplicateRow && (
+                                    <p className="text-rose-500 text-[10px] mt-1 font-bold">
+                                      Duplicate product — already added in row {firstDupRowIndex + 1}. Remove it from one of these rows.
+                                    </p>
+                                  )}
                                   {openDropdownRowIndex === index && activeDropdownType === 'name' && (
                                     <div className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[300px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
                                       {(() => {

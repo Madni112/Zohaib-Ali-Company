@@ -57,48 +57,7 @@ const StockTransferList = () => {
         const toLoc = targetRecord.to_location;
 
 
-        for (const item of itemsArr) {
-          const qty = Number(item.qty || item.quantity || 0);
-          const pName = item.itemName || item.product_name;
-
-          if (pName && qty > 0) {
-            // 1. Revert Destination Warehouse (TO) -> DECREASE (-)
-            if (toLoc) {
-              const { data: destStock } = await supabase
-                .from('warehouse_inventory')
-                .select('id, quantity')
-                .ilike('product_name', pName)
-                .ilike('warehouse_name', toLoc)
-                .maybeSingle();
-
-              if (destStock) {
-                const newDestStock = Math.max(0, (Number(destStock.quantity) || 0) - qty);
-                await supabase.from('warehouse_inventory').update({ quantity: newDestStock }).eq('id', destStock.id);
-              }
-            }
-
-            // 2. Revert Source Warehouse (FROM) -> INCREASE (+)
-            if (fromLoc) {
-              const { data: sourceStock } = await supabase
-                .from('warehouse_inventory')
-                .select('id, quantity')
-                .ilike('product_name', pName)
-                .ilike('warehouse_name', fromLoc)
-                .maybeSingle();
-
-              if (sourceStock) {
-                const newSourceStock = (Number(sourceStock.quantity) || 0) + qty;
-                await supabase.from('warehouse_inventory').update({ quantity: newSourceStock }).eq('id', sourceStock.id);
-              } else {
-                await supabase.from('warehouse_inventory').insert([{
-                  product_name: pName,
-                  warehouse_name: fromLoc,
-                  quantity: qty
-                }]);
-              }
-            }
-          }
-        }
+        // warehouse_inventory retired — deleting the stock_transfers row auto-adjusts formula-based stock
       }
 
       const { error: deleteError } = await supabase.from('stock_transfers').delete().eq('id', id);

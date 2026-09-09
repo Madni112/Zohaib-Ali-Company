@@ -87,23 +87,7 @@ const SalesReturnList = () => {
                   .eq('id', currentProduct.id || '');
               }
 
-              // 2. Decrease Partition Warehouse Inventory (-)
-              if (dispatchLoc) {
-                const { data: localPartitionRow } = await supabase
-                  .from('warehouse_inventory')
-                  .select('id, quantity')
-                  .ilike('product_name', pName)
-                  .ilike('warehouse_name', dispatchLoc)
-                  .maybeSingle();
-
-                if (localPartitionRow) {
-                  const reducedPartitionStockCount = Math.max(0, (Number(localPartitionRow.quantity) || 0) - qty);
-                  await supabase
-                    .from('warehouse_inventory')
-                    .update({ quantity: reducedPartitionStockCount })
-                    .eq('id', localPartitionRow.id);
-                }
-              }
+              // warehouse_inventory retired — formula-based stock is source of truth
             }
           }
         }

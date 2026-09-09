@@ -142,33 +142,10 @@ const VerifyReturnChallan = ({ returnId, locationFilter, onSuccess, onCancel, re
         else existingReceived.push(newRec);
       });
 
-      // Update Inventory only for the currently processed UI items
+      // warehouse_inventory retired — formula-based stock is source of truth
+      // Update products.current_stock for accepted items
       for (const item of items) {
         if (!item.isVerified && Number(item.acceptedQty) > 0) {
-          const effectiveWh = item.warehouse || returnChallan.warehouse_name;
-          
-          const { data: existingStock } = await supabase
-            .from('warehouse_inventory')
-            .select('id, quantity')
-            .ilike('product_name', item.itemName)
-            .ilike('warehouse_name', effectiveWh)
-            .maybeSingle();
-
-          if (existingStock) {
-            await supabase
-              .from('warehouse_inventory')
-              .update({ quantity: Number(existingStock.quantity) + Number(item.acceptedQty) })
-              .eq('id', existingStock.id);
-          } else {
-            await supabase
-              .from('warehouse_inventory')
-              .insert([{
-                product_name: item.itemName,
-                warehouse_name: effectiveWh,
-                quantity: Number(item.acceptedQty)
-              }]);
-          }
-
           const { data: currentMasterProd } = await supabase
             .from('products')
             .select('id, current_stock')

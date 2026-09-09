@@ -165,21 +165,7 @@ const AddGRN = () => {
                 // EDIT MODE
                 // 1. Revert Old Inventory if original was Confirm
                 if (originalGrn?.status === 'Confirm') {
-                  for (const oldItem of originalGrn.grn_items) {
-                    const { data: oldStock, error: errStk } = await supabase
-                      .from('warehouse_inventory')
-                      .select('id, quantity')
-                      .ilike('product_name', oldItem.product_name)
-                      .ilike('warehouse_name', oldItem.warehouse_name)
-                      .maybeSingle();
-
-                    if (!errStk && oldStock) {
-                      await supabase
-                        .from('warehouse_inventory')
-                        .update({ quantity: Math.max(0, Number(oldStock.quantity) - Number(oldItem.qty)) })
-                        .eq('id', oldStock.id);
-                    }
-                  }
+                  // warehouse_inventory retired — formula-based stock is source of truth
                 }
 
                 // 2. Update Header
@@ -230,33 +216,7 @@ const AddGRN = () => {
               const { error: itemsError } = await supabase.from('grn_items').insert(itemsToInsert);
               if (itemsError) throw itemsError;
 
-              // 5. Apply New Warehouse Inventory if Confirmed (and NOT Pending Inward)
-              if (finalStatus === 'Confirm') {
-                for (const item of values.items) {
-                  const { data: existingStock, error: stockCheckErr } = await supabase
-                    .from('warehouse_inventory')
-                    .select('id, quantity')
-                    .ilike('product_name', item.itemName)
-                    .ilike('warehouse_name', item.warehouseName)
-                    .maybeSingle();
-
-                  if (stockCheckErr) throw stockCheckErr;
-
-                  if (existingStock) {
-                    await supabase
-                      .from('warehouse_inventory')
-                      .update({ quantity: Number(existingStock.quantity) + Number(item.qty) })
-                      .eq('id', existingStock.id);
-                  } else {
-                    await supabase.from('warehouse_inventory')
-                      .insert([{
-                        product_name: item.itemName,
-                        warehouse_name: item.warehouseName,
-                        quantity: Number(item.qty)
-                      }]);
-                  }
-                }
-              }
+              // warehouse_inventory retired — formula-based stock is source of truth
 
               if (finalStatus === 'Confirm') {
                 toast.success(`GRN ${id ? 'Updated' : 'Confirmed'}! Stock updated instantly.`);

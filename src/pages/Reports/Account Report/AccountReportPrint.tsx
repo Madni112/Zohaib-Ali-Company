@@ -352,8 +352,7 @@ const AccountReportPrint = () => {
                     const { data: pReturns } = await supabase.from('purchase_returns').select('total_amount, amount_received');
                     const { data: vouchers } = await supabase.from('financial_vouchers').select('total_amount, voucher_type, mode_of_payment');
                     const { data: banks } = await supabase.from('banks').select('bankName, accountTitle, openingBalance');
-                    const { data: inventory } = await supabase.from('warehouse_inventory').select('product_name, quantity');
-                    const { data: products } = await supabase.from('products').select('product_name, retail_price, purchase_price');
+                    const { data: products } = await supabase.from('products').select('product_name, retail_price, purchase_price, current_stock');
 
                     // 1. Gross Sales & Returns
                     const grossSalesSum = (sales || []).reduce((acc, s) => acc + Number(s.total_amount || 0), 0);
@@ -394,13 +393,12 @@ const AccountReportPrint = () => {
                     // 5. Bank Accounts Total
                     const totalBankLedgers = (banks || []).reduce((acc, b) => acc + Number(b.openingBalance || 0), 0);
 
-                    // 6. Inventory Valuation Asset
-                    const pPriceMap: Record<string, number> = {};
-                    (products || []).forEach(p => { pPriceMap[p.product_name] = Number(p.retail_price || p.purchase_price || 0); });
+                    // 6. Inventory Valuation Asset (uses products.current_stock — formula-based source of truth)
                     let totalInventoryValue = 0;
-                    (inventory || []).forEach(item => {
-                        const qty = Number(item.quantity || 0);
-                        totalInventoryValue += (qty * (pPriceMap[item.product_name] || 0));
+                    (products || []).forEach(p => {
+                        const qty = Number(p.current_stock || 0);
+                        const price = Number(p.retail_price || p.purchase_price || 0);
+                        totalInventoryValue += qty * price;
                     });
 
                     const totalDebitsWithoutEquity = netCashBox + totalBankLedgers + totalReceivables + totalInventoryValue + salesReturnsSum + grossPurchasesSum;

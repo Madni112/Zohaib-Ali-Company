@@ -161,23 +161,16 @@ const SalesHistory = () => {
       if (targetInvoice && targetInvoice.items) {
         for (const item of targetInvoice.items) {
           const itemQuantityToRestore = Number(item.qty) || 0;
-          const { data: currentProduct } = await supabase.from('products').select('current_stock').eq('product_name', item.itemName).single();
+          const { data: currentProduct } = await supabase.from('products').select('current_stock').ilike('product_name', item.itemName).maybeSingle();
 
           if (currentProduct) {
             const restoredMasterStockCount = (Number(currentProduct.current_stock) || 0) + itemQuantityToRestore;
-            await supabase.from('products').update({ current_stock: restoredMasterStockCount }).eq('product_name', item.itemName);
+            await supabase.from('products').update({ current_stock: restoredMasterStockCount }).ilike('product_name', item.itemName);
           }
 
           const actualRowWarehouse = item.warehouse || targetInvoice.dispatch_warehouse || '';
-          if (actualRowWarehouse) {
-            const { data: localPartitionRow } = await supabase.from('warehouse_inventory').select('id, quantity').ilike('product_name', item.itemName).ilike('warehouse_name', actualRowWarehouse.trim()).maybeSingle();
-            if (localPartitionRow) {
-              const restoredPartitionStockCount = (Number(localPartitionRow.quantity) || 0) + itemQuantityToRestore;
-              await supabase.from('warehouse_inventory').update({ quantity: restoredPartitionStockCount }).eq('id', localPartitionRow.id);
-            } else {
-              await supabase.from('warehouse_inventory').insert([{ product_name: item.itemName, warehouse_name: actualRowWarehouse.trim(), quantity: itemQuantityToRestore }]);
-            }
-          }
+          // warehouse_inventory retired — formula-based stock is now the source of truth
+          void actualRowWarehouse; // kept for reference only
         }
       }
 

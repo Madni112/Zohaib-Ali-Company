@@ -145,32 +145,7 @@ const VerifyInward = ({ inwardId, locationFilter, onSuccess, onCancel, readonly 
           })
           .eq('id', item.id);
 
-        // 2. Update Live Inventory (Only for Accepted Qty)
-        if (Number(item.acceptedQty) > 0) {
-          const { data: existingStock, error: stockCheckErr } = await supabase
-            .from('warehouse_inventory')
-            .select('id, quantity')
-            .ilike('product_name', item.product_name)
-            .ilike('warehouse_name', item.warehouse_name)
-            .maybeSingle();
-
-          if (stockCheckErr) throw stockCheckErr;
-
-          if (existingStock) {
-            await supabase
-              .from('warehouse_inventory')
-              .update({ quantity: Number(existingStock.quantity) + Number(item.acceptedQty) })
-              .eq('id', existingStock.id);
-          } else {
-            await supabase
-              .from('warehouse_inventory')
-              .insert([{
-                product_name: item.product_name,
-                warehouse_name: item.warehouse_name,
-                quantity: Number(item.acceptedQty)
-              }]);
-          }
-        }
+        // warehouse_inventory is retired.
       }
 
       // 3. Update GRN Header

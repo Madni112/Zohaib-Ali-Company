@@ -1215,13 +1215,7 @@ const AddPurchases = () => {
                                             }
 
                                             if (qtyToReverse > 0) {
-                                              const { data: p } = await supabase.from('warehouse_inventory')
-                                                .select('quantity')
-                                                .ilike('product_name', item.itemName)
-                                                .ilike('warehouse_name', item.warehouse)
-                                                .maybeSingle();
-
-                                              const currentStock = Number(p?.quantity || 0);
+                                              const currentStock = await getAvailableStock(item.itemName, item.warehouse);
                                               if (currentStock < qtyToReverse) {
                                                 toast.error(`Error: You currently only have ${currentStock} in ${item.warehouse}. Cannot delete this entry as it would cause negative stock.`, { duration: 5000 });
                                                 return; // Block removal

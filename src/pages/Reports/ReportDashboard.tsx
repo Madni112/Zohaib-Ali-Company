@@ -68,17 +68,15 @@ const ReportDashboard: React.FC = () => {
 
   const [salesData, setSalesData] = useState<any[]>([]);
   const [purchaseData, setPurchaseData] = useState<any[]>([]);
-  const [stockData, setStockData] = useState<any[]>([]);
   const [voucherData, setVoucherData] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<FinancialSummary>(defaultMetrics);
 
   const fetchSystemReports = async () => {
     try {
       setLoading(true);
-      const [salesRes, purchasesRes, stockRes, vouchersRes, finMetricsRes] = await Promise.allSettled([
+      const [salesRes, purchasesRes, vouchersRes, finMetricsRes] = await Promise.allSettled([
         supabase.from('sales_invoices').select('*').order('created_at', { ascending: false }),
         supabase.from('supplier_purchases').select('*').order('created_at', { ascending: false }),
-        supabase.from('warehouse_inventory').select('*'),
         supabase.from('financial_vouchers').select('*').order('created_at', { ascending: false }),
         fetchFinancialMetrics()
       ]);
@@ -88,9 +86,6 @@ const ReportDashboard: React.FC = () => {
       }
       if (purchasesRes.status === 'fulfilled' && Array.isArray(purchasesRes.value.data)) {
         setPurchaseData(purchasesRes.value.data);
-      }
-      if (stockRes.status === 'fulfilled' && Array.isArray(stockRes.value.data)) {
-        setStockData(stockRes.value.data);
       }
       if (vouchersRes.status === 'fulfilled' && Array.isArray(vouchersRes.value.data)) {
         setVoucherData(vouchersRes.value.data);

@@ -25,23 +25,7 @@ const GRNList = () => {
         try {
             setDeletingId(id);
             
-            // Revert inventory
-            if (status === 'Confirm' || status === 'Billed' || status === 'Partially Received') {
-                for (const item of items) {
-                    const { data: stock } = await supabase
-                        .from('warehouse_inventory')
-                        .select('id, quantity')
-                        .ilike('product_name', item.product_name)
-                        .ilike('warehouse_name', item.warehouse_name)
-                        .maybeSingle();
-                        
-                    if (stock) {
-                        const qtyToRevert = Number(item.accepted_qty ?? item.qty ?? 0);
-                        const newQty = Math.max(0, Number(stock.quantity) - qtyToRevert);
-                        await supabase.from('warehouse_inventory').update({ quantity: newQty }).eq('id', stock.id);
-                    }
-                }
-            }
+            // warehouse_inventory retired — formula-based stock is source of truth
 
             const { error } = await supabase.from('grn_receipts').delete().eq('id', id);
             if (error) throw error;
