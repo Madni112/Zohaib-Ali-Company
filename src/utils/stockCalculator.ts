@@ -20,6 +20,7 @@ export interface WarehouseBreakdown {
   transferredIn: number;
   transferredOut: number;
   hold: number;
+  purchaseHold: number;
   available: number;
   onHand: number;
 }
@@ -43,8 +44,42 @@ export type StockDataset = {
   deliveryChallans: any[];
 };
 
-export async function fetchStockDataset(): Promise<StockDataset> {
+export async function fetchStockDataset(): Promise<any> {
+  // Fast path: when the server-side stock_balances table is available & filled,
+  // use it (one small table instead of the 8 ledgers). Otherwise fall back to
+  // fetching all ledgers exactly as before.
+  try {
+    const probe = await supabase.from('stock_balances').select('product_name, warehouse_name, quantity').limit(1);
+    if (!probe.error && probe.data && probe.data.length > 0) {
+      const { data: rows } = await supabase.from('stock_balances').select('product_name, warehouse_name, quantity');
+      if (rows && rows.length > 0) {
+        return { balancesMode: true, balances: rows };
+      }
+    }
+  } catch {
+    /* table missing — fall through to ledgers */
+  }
   return fetchAllStockData() as unknown as StockDataset;
+}
+
+function balancesMatch(name: string, wh: string) {
+  const n = String(name || '').trim().toLowerCase();
+  const w = String(wh || '').trim().toLowerCase();
+  return (r: any) =>
+    String(r.product_name || '').trim().toLowerCase() === n &&
+    String(r.warehouse_name || '').trim().toLowerCase() === w;
+}
+
+function zeroBreakdown(available: number): WarehouseBreakdown {
+  return {
+    opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
+    rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0,
+    available, onHand: available,
+  };
+}
+
+function isBalancesDataset(d: any): d is { balancesMode: true; balances: any[] } {
+  return !!(d && d.balancesMode && Array.isArray(d.balances));
 }
 
 async function fetchAllStockData() {
@@ -78,7 +113,7 @@ function buildBreakdown(
   const getWh = (whName: string) => {
     const key = String(whName || 'Global / Unassigned').trim();
     if (!whBreakdowns[key]) {
-      whBreakdowns[key] = { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0 };
+      whBreakdowns[key] = { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, rejected: 0, transferredIn: 0, transferredOut: 0, hold: 0, purchaseHold: 0 };
     }
     return whBreakdowns[key];
   };
@@ -128,12 +163,14 @@ function buildBreakdown(
         if (pName === name || pName.includes(name)) {
           const accepted = Number(item.accepted_qty ?? (grn.status === 'Partially Received' ? 0 : item.qty) ?? 0);
           const rejected = Number(item.rejected_qty ?? 0);
+          const holdQty = Number(item.hold_qty ?? 0);
           const fullQty = accepted + rejected;
           totalPurchased += fullQty;
           totalRejected += rejected;
           const wh = item.warehouse_name || grn.target_warehouse || grn.warehouse || 'Global / Unassigned';
           getWh(wh).purchased += fullQty;
           getWh(wh).rejected += rejected;
+          getWh(wh).purchaseHold += holdQty;
         }
       });
     }
@@ -246,6 +283,7 @@ function buildBreakdown(
       transferredIn: tIn,
       transferredOut: tOut,
       hold: w.hold || 0,
+      purchaseHold: w.purchaseHold || 0,
       available: avail,
       onHand: avail + (w.hold || 0),
     };
@@ -255,10 +293,61 @@ function buildBreakdown(
 }
 
 /**
+ * Detailed breakdown for one product (Opening / Purchases / Sold / Returns /
+ * Rejected / Transfers per warehouse). Reads the ledgers on demand — use this
+ * only when the user explicitly asks for details (e.g. the breakdown modal).
+ */
+export async function getDetailedBreakdown(productName: string) {
+  const data = (await fetchAllStockData()) as any;
+  const res = buildBreakdown(productName.trim().toLowerCase(), data);
+
+  const agg = {
+    opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0,
+    hold: 0, purchaseHold: 0, rejected: 0, transferredIn: 0, transferredOut: 0,
+  };
+  Object.values(res.byWarehouse).forEach((w: any) => {
+    agg.opening += w.opening || 0;
+    agg.purchased += w.purchased || 0;
+    agg.sold += w.sold || 0;
+    agg.salesReturned += w.salesReturned || 0;
+    agg.purchaseReturned += w.purchaseReturned || 0;
+    agg.hold += w.hold || 0;
+    agg.purchaseHold += w.purchaseHold || 0;
+    agg.rejected += w.rejected || 0;
+    agg.transferredIn += w.transferredIn || 0;
+    agg.transferredOut += w.transferredOut || 0;
+  });
+
+  return {
+    breakdown: {
+      ...agg,
+      available: res.totalAvailable,
+      onHand: res.totalAvailable + agg.hold,
+    },
+    warehouseBreakdowns: res.byWarehouse,
+  };
+}
+
+/**
  * Get available stock for a product across all warehouses.
  */
-export async function getStockResult(productName: string, dataset?: StockDataset): Promise<StockResult> {
-  const data = dataset || await fetchAllStockData();
+export async function getStockResult(productName: string, dataset?: StockDataset | any): Promise<StockResult> {
+  const data = dataset || await fetchStockDataset();
+
+  if (isBalancesDataset(data)) {
+    const n = String(productName || '').trim().toLowerCase();
+    const byWarehouse: Record<string, WarehouseBreakdown> = {};
+    let totalAvailable = 0;
+    (data.balances || []).forEach((r: any) => {
+      if (String(r.product_name || '').trim().toLowerCase() !== n) return;
+      const qty = Number(r.quantity) || 0;
+      totalAvailable += qty;
+      const key = String(r.warehouse_name || 'Global / Unassigned').trim();
+      byWarehouse[key] = zeroBreakdown(qty);
+    });
+    return { totalAvailable, byWarehouse };
+  }
+
   const result = buildBreakdown(productName.trim().toLowerCase(), data);
 
   // Background sync: overwrite warehouse_inventory for all warehouses for this product
@@ -275,8 +364,14 @@ export async function getStockResult(productName: string, dataset?: StockDataset
  * Get available stock (to sell) for a product in a specific warehouse.
  * This matches exactly what ProductList breakdown shows as "Available Stock (To Sell)".
  */
-export async function getAvailableStock(productName: string, warehouseName: string, dataset?: StockDataset): Promise<number> {
-  const data = dataset || await fetchAllStockData();
+export async function getAvailableStock(productName: string, warehouseName: string, dataset?: StockDataset | any): Promise<number> {
+  const data = dataset || await fetchStockDataset();
+
+  if (isBalancesDataset(data)) {
+    const row = (data.balances || []).find(balancesMatch(productName, warehouseName));
+    return row ? (Number(row.quantity) || 0) : 0;
+  }
+
   const result = buildBreakdown(productName.trim().toLowerCase(), data);
   const matchKey = Object.keys(result.byWarehouse).find(
     (k) => k.toLowerCase() === warehouseName.trim().toLowerCase()
@@ -326,7 +421,17 @@ async function syncWarehouseInventoryRecord(productName: string, warehouseName: 
 /**
  * Get total available stock for a product across all warehouses.
  */
-export async function getTotalAvailableStock(productName: string, dataset?: StockDataset): Promise<number> {
-  const data = dataset || await fetchAllStockData();
+export async function getTotalAvailableStock(productName: string, dataset?: StockDataset | any): Promise<number> {
+  const data = dataset || await fetchStockDataset();
+
+  if (isBalancesDataset(data)) {
+    const n = String(productName || '').trim().toLowerCase();
+    return (data.balances || []).reduce(
+      (sum: number, r: any) =>
+        String(r.product_name || '').trim().toLowerCase() === n ? sum + (Number(r.quantity) || 0) : sum,
+      0
+    );
+  }
+
   return buildBreakdown(productName.trim().toLowerCase(), data).totalAvailable;
 }

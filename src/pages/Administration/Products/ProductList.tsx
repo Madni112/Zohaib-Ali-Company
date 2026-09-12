@@ -6,6 +6,7 @@ import Spinner from '../../../ui/Spinner';
 import { MdSearch, MdAdd, MdWarning, MdClose, MdInfoOutline } from 'react-icons/md';
 import TableActions from '../../../ui/TableActions';
 import SearchableDropdown from '../../../components/SearchableDropdown';
+import { getDetailedBreakdown } from '../../../utils/stockCalculator';
 
 const ProductList = () => {
   const navigate = useNavigate();
@@ -22,9 +23,54 @@ const ProductList = () => {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Server-side pagination mode (uses stock_balances when it exists)
+  const [serverMode, setServerMode] = useState(false);
+  const [serverBalances, setServerBalances] = useState<any[] | null>(null);
+  const [serverTotalEntries, setServerTotalEntries] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce the search box: only reload after the user stops typing
   useEffect(() => {
-    fetchInventoryProducts();
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const initListMode = async () => {
+      try {
+        const probe = await supabase
+          .from('stock_balances')
+          .select('product_name, warehouse_name, quantity')
+          .limit(1);
+
+        if (!probe.error && probe.data && probe.data.length > 0) {
+          const { data: rows } = await supabase
+            .from('stock_balances')
+            .select('product_name, warehouse_name, quantity');
+          if (rows && rows.length > 0) {
+            const { data: locMaster } = await supabase.from('inventory_locations').select('name');
+            if (locMaster) setMasterLocations(locMaster.map((l: any) => String(l.name).trim()));
+            setServerBalances(rows);
+            setServerMode(true);
+            return;
+          }
+        }
+      } catch {
+        /* stock_balances missing → legacy mode */
+      }
+      setServerMode(false);
+      fetchInventoryProducts();
+    };
+    initListMode();
   }, []);
+
+  // Reload the current page whenever anything that affects the query changes
+  useEffect(() => {
+    if (serverMode) {
+      loadServerPage();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, currentPage, pageSize, debouncedSearch, sortConfig]);
 
 
   const fetchInventoryProducts = async () => {
@@ -274,26 +320,176 @@ const ProductList = () => {
       setLoading(false);
     }
   };
+
+  // ---- Server-side pagination (only the current page is loaded) ----
+  const PRODUCT_PAGE_COLS = 'id, product_name, item_sr_no, category, sub_category, sub_sub_category, bin, uom, retail_price, purchase_price, mrp, min_stock_alert, product_description, item_type, pieces_per_box, pcs_per_box, pieces_per_packing, scenario_name, service_charges';
+
+  const stockForProduct = (productName: string) => {
+    const n = String(productName || '').trim().toLowerCase();
+    const rows = (serverBalances || []).filter((r) => String(r.product_name || '').trim().toLowerCase() === n);
+    const byWh: Record<string, any> = {};
+    let total = 0;
+    rows.forEach((r) => {
+      const qty = Number(r.quantity) || 0;
+      total += qty;
+      const wh = String(r.warehouse_name || 'Global / Unassigned').trim();
+      byWh[wh] = { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0, rejected: 0, transferredIn: 0, transferredOut: 0, available: qty, onHand: qty };
+    });
+    return { total, byWh };
+  };
+
+  const applyFilters = (q: any, term: string) => {
+    const t = term.trim();
+    if (!t) return q;
+    const esc = t.replace(/[%_\\]/g, (m) => `\\${m}`);
+    return q.or(`product_name.ilike.%${esc}%,item_sr_no.ilike.%${esc}%,category.ilike.%${esc}%,product_description.ilike.%${esc}%`);
+  };
+
+  const loadServerPage = async () => {
+    if (!serverMode) return;
+    try {
+      setLoading(true);
+      const term = debouncedSearch || '';
+      const sortKey = sortConfig?.key || 'created_at';
+      // No explicit sort = newest products first (created_at desc)
+      const asc = sortConfig ? sortConfig.direction !== 'desc' : false;
+
+      // Count filtered rows first (same filters, no page)
+      let countQ = supabase.from('products').select('id', { count: 'exact', head: true });
+      countQ = applyFilters(countQ, term);
+      const { count } = await countQ;
+
+      const total = count ?? 0;
+      setServerTotalEntries(total);
+
+      if (total === 0) {
+        setProducts([]);
+        return;
+      }
+
+      const stockSort = sortKey === 'current_stock';
+
+      if (stockSort) {
+        // Sorting by stock: fetch all matching ids, sort by balances, then take the page
+        let allQ = supabase.from('products').select('id, product_name');
+        allQ = applyFilters(allQ, term);
+        const { data: allRows } = await allQ;
+
+        const enriched = (allRows || []).map((p: any) => ({ p, stock: stockForProduct(p.product_name).total }));
+        enriched.sort((a, b) =>
+          asc ? a.stock - b.stock : b.stock - a.stock
+        );
+
+        const pageIds = enriched.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((x) => x.p.id);
+        if (pageIds.length === 0) {
+          setProducts([]);
+          return;
+        }
+
+        let detQ = supabase.from('products').select(PRODUCT_PAGE_COLS);
+        detQ = applyFilters(detQ, term);
+        const { data: details } = await detQ;
+        const byId: Record<string, any> = {};
+        (details || []).forEach((d: any) => { byId[d.id] = d; });
+
+        const sortedPage = enriched
+          .filter((x) => pageIds.includes(x.p.id))
+          .sort((a, b) => (asc ? a.stock - b.stock : b.stock - a.stock))
+          .map((x) => byId[x.p.id])
+          .filter(Boolean);
+
+        setProducts(sortedPage.map((row: any) => {
+          const { total: stock, byWh } = stockForProduct(row.product_name);
+          return {
+            ...row,
+            current_stock: stock,
+            breakdown: { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0, rejected: 0, onHand: stock, available: stock },
+            warehouseBreakdowns: byWh,
+          };
+        }));
+        return;
+      }
+
+      // Normal: one DB call returns this page's rows
+      let q = supabase.from('products').select(PRODUCT_PAGE_COLS);
+      q = applyFilters(q, term);
+      q = q.order(sortKey, { ascending: asc });
+      q = q.range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      setProducts((data || []).map((row: any) => {
+        const { total: stock, byWh } = stockForProduct(row.product_name);
+        return {
+          ...row,
+          current_stock: stock,
+          breakdown: { opening: 0, purchased: 0, sold: 0, salesReturned: 0, purchaseReturned: 0, hold: 0, rejected: 0, onHand: stock, available: stock },
+          warehouseBreakdowns: byWh,
+        };
+      }));
+    } catch (err: any) {
+      toast.error('Data Fetching Failure: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Open the breakdown modal; in server mode fetch the real details on demand
+  const handleOpenBreakdown = async (product: any) => {
+    setSelectedModalWarehouse('ALL');
+    if (!serverMode) {
+      setSelectedStockBreakdown(product);
+      return;
+    }
+    setSelectedStockBreakdown({ ...product, _loading: true });
+    try {
+      const detail = await getDetailedBreakdown(product.product_name);
+      setSelectedStockBreakdown({
+        ...product,
+        breakdown: detail.breakdown,
+        warehouseBreakdowns: detail.warehouseBreakdowns,
+        _loading: false,
+      });
+    } catch (err: any) {
+      toast.error('Breakdown load failed: ' + err.message);
+      setSelectedStockBreakdown({ ...product, _loading: false });
+    }
+  };
+
   const handleDeleteProduct = async (id: string | number) => {
     if (!window.confirm('Are you certain you want to delete this product catalog entry?')) return;
     try {
       const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw error;
       toast.success('Product removed from database catalog successfully.');
-      fetchInventoryProducts();
+      if (serverMode) {
+        const remainingOnPage = products.length - 1;
+        if (remainingOnPage === 0 && currentPage > 1) {
+          setCurrentPage((p) => p - 1);
+        } else {
+          loadServerPage();
+        }
+      } else {
+        fetchInventoryProducts();
+      }
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
-  let filteredProducts = products.filter(p => {
-    return p.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.product_description?.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+  // In server mode the filtering/sorting/paging already happened in the DB —
+  // `products` is exactly the current page. Otherwise keep the legacy behavior.
+  let filteredProducts = serverMode
+    ? products
+    : products.filter(p => {
+        return p.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.item_sr_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.product_description?.toLowerCase().includes(searchTerm.toLowerCase());
+      });
 
-  if (sortConfig !== null) {
+  if (!serverMode && sortConfig !== null) {
     filteredProducts.sort((a, b) => {
       let aVal = a[sortConfig.key];
       let bVal = b[sortConfig.key];
@@ -312,15 +508,15 @@ const ProductList = () => {
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  } const totalEntries = filteredProducts.length;
+  } const totalEntries = serverMode ? serverTotalEntries : filteredProducts.length;
   const totalPages = Math.ceil(totalEntries / pageSize);
   const startIndex = totalEntries === 0 ? 0 : (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalEntries);
-  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
+  const paginatedProducts = serverMode ? filteredProducts : filteredProducts.slice(startIndex, startIndex + pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, pageSize, sortConfig]);
+  }, [debouncedSearch, pageSize, sortConfig]);
 
   const handleSort = (key: string) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -366,7 +562,7 @@ const ProductList = () => {
             {Number(product.current_stock || 0).toLocaleString()} {product.uom || 'PCS'}
           </span>
           {isLowStock && <MdWarning size={14} className="text-rose-500 inline ml-1" />}
-          <button onClick={() => { setSelectedStockBreakdown(product); setSelectedModalWarehouse('ALL'); }} className="text-[9px] font-sans text-emerald-600 hover:underline cursor-pointer block mx-auto mt-0.5">View Breakdown</button>
+          <button onClick={() => handleOpenBreakdown(product)} className="text-[9px] font-sans text-emerald-600 hover:underline cursor-pointer block mx-auto mt-0.5">View Breakdown</button>
         </td>
         <td className="py-3.5 px-4 text-center">
           <TableActions
@@ -406,7 +602,7 @@ const ProductList = () => {
             Catalog Inventory Overview
           </span>
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-mono">
-            {products.length} Products Registered
+            {(serverMode ? totalEntries : products.length)} Products Registered
           </span>
         </div>
 
@@ -580,6 +776,9 @@ const ProductList = () => {
             </div>
 
             {(() => {
+              if (selectedStockBreakdown._loading) {
+                return <div className="p-10 flex justify-center"><Spinner /></div>;
+              }
               const isTile = Boolean(
                 (String(selectedStockBreakdown.category || '').toLowerCase().includes('tile') ||
                   String(selectedStockBreakdown.scenario_name || '').toLowerCase().includes('tile')) &&
@@ -632,10 +831,10 @@ const ProductList = () => {
                       </div>
                       {formatVal(bData.purchased || 0)}
                     </div>
-                    {/* Hold (yellow badge) */}
+                    {/* Purchase / QC hold (from GRN) */}
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-yellow-50/50 dark:bg-yellow-900/10 px-3 -mx-3 rounded-lg mb-1">
-                      <span className="text-[9px] font-bold text-yellow-800 dark:text-yellow-600 mt-0.5 tracking-wide">Hold (Committed)</span>
-                      <div className="text-yellow-700 dark:text-yellow-500">{formatVal(bData.hold || 0)}</div>
+                      <span className="text-[9px] font-bold text-yellow-800 dark:text-yellow-600 mt-0.5 tracking-wide">Hold (QC / Purchase)</span>
+                      <div className="text-yellow-700 dark:text-yellow-500">{formatVal(bData.purchaseHold || 0)}</div>
                     </div>
 
                     {/* Rejected (QC Failed) */}
@@ -655,9 +854,9 @@ const ProductList = () => {
                       {formatVal(bData.sold || 0)}
                     </div>
 
-                    {/* Hold (yellow badge) for Sales */}
+                    {/* Sales / delivery hold */}
                     <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-strokedark/50 bg-yellow-50/50 dark:bg-yellow-900/10 px-3 -mx-3 rounded-lg mb-1">
-                      <span className="text-[9px] font-bold text-yellow-800 dark:text-yellow-600 mt-0.5 tracking-wide">Hold (Committed)</span>
+                      <span className="text-[9px] font-bold text-yellow-800 dark:text-yellow-600 mt-0.5 tracking-wide">Hold (Committed Sales)</span>
                       <div className="text-yellow-700 dark:text-yellow-500">{formatVal(bData.hold || 0)}</div>
                     </div>
 

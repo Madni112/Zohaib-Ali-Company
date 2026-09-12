@@ -31,6 +31,55 @@ import {
 import StatCard from '../../ui/StatCard';
 import ActionCard from '../../ui/ActionCard';
 import { QtyBadge } from '../../utils/QtyBadge';
+import { useAuth } from '../../Context/Auth';
+import SalesmanDashboard from './SalesmanDashboard';
+import WarehouseDashboard from './WarehouseDashboard';
+
+const AdminRoleSwitcher: React.FC<{
+  activeView: 'executive' | 'salesman' | 'warehouse';
+  onChangeView: (v: 'executive' | 'salesman' | 'warehouse') => void;
+}> = ({ activeView, onChangeView }) => {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-xs">
+      <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 px-2">
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+        Role Dashboard Preview:
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          onClick={() => onChangeView('executive')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            activeView === 'executive'
+              ? 'bg-blue-600 text-white shadow-sm scale-102'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+          }`}
+        >
+          👑 Executive Overview
+        </button>
+        <button
+          onClick={() => onChangeView('salesman')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            activeView === 'salesman'
+              ? 'bg-blue-600 text-white shadow-sm scale-102'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+          }`}
+        >
+          🛒 Salesman View
+        </button>
+        <button
+          onClick={() => onChangeView('warehouse')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+            activeView === 'warehouse'
+              ? 'bg-orange-600 text-white shadow-sm scale-102'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+          }`}
+        >
+          📦 Warehouse
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // Types for Dashboard Operational Intelligence
 interface ReceivableInvoice {
@@ -94,8 +143,26 @@ interface CashTransaction {
   description: string;
 }
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  initialView?: 'executive' | 'salesman' | 'warehouse';
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ initialView = 'executive' }) => {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const [adminView, setAdminView] = useState<'executive' | 'salesman' | 'warehouse'>(initialView);
+
+  const userRoleLower = (role || '').toLowerCase();
+  let allowedModules: string[] = [];
+  try {
+    const cached = localStorage.getItem('zac_user_modules');
+    if (cached) allowedModules = JSON.parse(cached).map((s: string) => String(s).toLowerCase().trim());
+  } catch (_) {}
+
+  const isAdmin = userRoleLower.includes('admin') || userRoleLower.includes('owner') || userRoleLower.includes('super admin');
+  const isSalesman = !isAdmin && (userRoleLower.includes('salesman') || allowedModules.includes('/dashboard/salesman') || allowedModules.includes('salesman-dashboard'));
+  const isWarehouse = !isAdmin && !isSalesman && (userRoleLower.includes('warehouse') || allowedModules.includes('/dashboard/warehouse') || allowedModules.includes('warehouse-dashboard'));
+
   const [metrics, setMetrics] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -118,8 +185,10 @@ const Dashboard: React.FC = () => {
   const [customerSalesMonthly, setCustomerSalesMonthly] = useState<{ months: string[]; sales: number[] }>({ months: [], sales: [] });
 
   useEffect(() => {
-    loadCompleteDashboard();
-  }, []);
+    if (!isSalesman && !isWarehouse) {
+      loadCompleteDashboard();
+    }
+  }, [isSalesman, isWarehouse]);
 
   const loadCompleteDashboard = async () => {
     try {
@@ -535,6 +604,35 @@ const Dashboard: React.FC = () => {
     });
   }, [holdingItems, holdingTab, selectedWarehouseGuy, selectedHoldingInvoice]);
 
+  // 1. Direct auto-render for role: Salesman
+  if (isSalesman) {
+    return <SalesmanDashboard />;
+  }
+
+  // 2. Direct auto-render for role: Warehouse Manager (A-39 or SHOP)
+  if (isWarehouse) {
+    return <WarehouseDashboard />;
+  }
+
+  // 3. Super Admin Previews
+  if (adminView === 'salesman') {
+    return (
+      <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs pb-12">
+        <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />
+        <SalesmanDashboard />
+      </div>
+    );
+  }
+
+  if (adminView === 'warehouse') {
+    return (
+      <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs pb-12">
+        <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />
+        <WarehouseDashboard />
+      </div>
+    );
+  }
+
   if (loading || !metrics) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -624,6 +722,9 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl flex flex-col gap-6 text-slate-800 dark:text-slate-100 text-xs pb-12">
+      {/* Role Dashboard Switcher for Admins */}
+      <AdminRoleSwitcher activeView={adminView} onChangeView={setAdminView} />
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
         <div>

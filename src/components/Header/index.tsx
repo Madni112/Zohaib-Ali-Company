@@ -1,5 +1,6 @@
 import DropdownUser from './DropdownUser';
 import DarkModeSwitcher from './DarkModeSwitcher';
+import NotificationDropdown from './NotificationDropdown';
 import { MdMenu, MdShield, MdCloudDone } from 'react-icons/md';
 
 const Header = (props: {
@@ -35,6 +36,7 @@ const Header = (props: {
         {/* Right Side: Tools & Profile */}
         <div className="flex items-center gap-3 2xsm:gap-4">
           <ul className="flex items-center gap-2">
+            <NotificationDropdown />
             <DarkModeSwitcher />
           </ul>
           <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />

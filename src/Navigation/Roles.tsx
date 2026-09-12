@@ -6,12 +6,14 @@ import {
   MdLaptopChromebook, MdMan, MdRequestPage, MdOutlineRequestPage, MdPageview,
   MdSpaceDashboard, MdOutlineLaptop, MdTexture, MdPayment, MdAssignmentReturn,
   MdAssessment, MdDashboardCustomize, MdTrendingUp, MdBarChart, MdAccountBalanceWallet,
-  MdBalance, MdPauseCircleFilled, MdInbox
+  MdBalance, MdPauseCircleFilled, MdInbox, MdPointOfSale, MdWarehouse
 } from 'react-icons/md';
 import HoldingReport from '../pages/Reports/Holding Report/HoldingReport';
 import HoldingReportPrint from '../pages/Reports/Holding Report/HoldingReportPrint';
 import Brands from '../pages/Administration/Brands';
 import Dashboard from '../pages/Dashboard/Dashboard';
+import SalesmanDashboard from '../pages/Dashboard/SalesmanDashboard';
+import WarehouseDashboard from '../pages/Dashboard/WarehouseDashboard';
 import NewInvoice from '../pages/Sales/Invoice/NewInvoice';
 import SalesHistory from '../pages/Sales/Invoice/SalesHistory';
 import PrintInvoice from '../pages/Sales/Invoice/PrintInvoice';
@@ -92,6 +94,20 @@ export const adminRoutes = [
     component: <Dashboard />,
     label: 'Dashboard',
     icon: MdDashboard,
+  },
+  {
+    path: '/Dashboard/Salesman',
+    component: <SalesmanDashboard />,
+    label: 'Salesman Dashboard',
+    icon: MdPointOfSale,
+    hideFromSidebar: true,
+  },
+  {
+    path: '/Dashboard/Warehouse',
+    component: <WarehouseDashboard />,
+    label: 'Warehouse Dashboard',
+    icon: MdWarehouse,
+    hideFromSidebar: true,
   },
   {
     label: 'Administation',

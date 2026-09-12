@@ -17,6 +17,7 @@ const ShopDispatchQueue = () => {
   const [selectedChallanForApproval, setSelectedChallanForApproval] = useState<any | null>(null);
   const [approvalItems, setApprovalItems] = useState<any[]>([]);
   const [transportList, setTransportList] = useState<any[]>([]);
+  const [productsMaster, setProductsMaster] = useState<any[]>([]);
   const [approvalTransportName, setApprovalTransportName] = useState('Customer\'s Own Transport');
   const [approvalTransportSearch, setApprovalTransportSearch] = useState('');
   const [isTransportDropdownOpen, setIsTransportDropdownOpen] = useState(false);
@@ -29,6 +30,7 @@ const ShopDispatchQueue = () => {
 
   // Datatable layout state controllers
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewHoldModal, setViewHoldModal] = useState<any | null>(null);
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -41,7 +43,59 @@ const ShopDispatchQueue = () => {
     try {
       const { data } = await supabase.from('logistics_transportation').select('*').order('name');
       setTransportList(data || []);
+
+      const { data: prods } = await supabase
+        .from('products')
+        .select('product_name, pieces_per_box, pcs_per_box, pieces_per_packing, category, scenario_name');
+      setProductsMaster(prods || []);
     } catch (_) {}
+  };
+
+  // ── Boxes / Pcs formatting (same as Delivery Challan page) ──
+  const pcsPerBoxFor = (productName: string) => {
+    const key = String(productName || '').trim().toLowerCase();
+    const pr = productsMaster.find((p: any) => String(p.product_name || '').trim().toLowerCase() === key);
+    if (!pr) return 1;
+    const isTile = Boolean(
+      String(pr.category || '').toLowerCase().includes('tile') ||
+      String(pr.scenario_name || '').toLowerCase().includes('tile')
+    );
+    const rp = Number(pr.pieces_per_box || pr.pcs_per_box || pr.pieces_per_packing || 0);
+    return isTile ? (rp > 1 ? rp : 4) : 1;
+  };
+
+  const fmtBoxPcs = (qty: number, productName: string) => {
+    const pb = pcsPerBoxFor(productName);
+    if (pb > 1) {
+      const pieces = Math.round(qty * pb);
+      const boxes = Math.floor(pieces / pb);
+      const loose = pieces % pb;
+      return `${boxes} Boxes${loose > 0 ? ` + ${loose} Pcs` : ''}`;
+    }
+    return qty.toLocaleString();
+  };
+
+  const sumGroupQty = (group: any, kind: 'order' | 'disp' | 'hold') => {
+    let boxes = 0;
+    let pcs = 0;
+    (group.challans || []).forEach((c: any) => {
+      (c.items || []).forEach((it: any) => {
+        const qty = kind === 'order'
+          ? Number(it.orderQty ?? it.qty ?? 0)
+          : kind === 'disp'
+            ? Number(it.dispatchedQty ?? 0)
+            : Number(it.holdQty ?? 0);
+        const pb = pcsPerBoxFor(it.pDescription || it.itemName || it.product_name || '');
+        if (pb > 1) {
+          const pieces = Math.round(qty * pb);
+          boxes += Math.floor(pieces / pb);
+          pcs += pieces % pb;
+        } else {
+          boxes += qty;
+        }
+      });
+    });
+    return `${boxes.toLocaleString()}${pcs > 0 ? ` + ${pcs} Pcs` : ''}`;
   };
 
   const fetchChallans = async () => {
@@ -678,11 +732,86 @@ const ShopDispatchQueue = () => {
         </div>
       )}
 
+      {/* ── POPUP: REMAINING HOLD BREAKDOWN ── */}
+      {viewHoldModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white dark:bg-boxdark w-full max-w-xl rounded-2xl shadow-2xl border border-stroke dark:border-strokedark overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center bg-slate-900 text-white p-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg font-bold">
+                  <FiCheckCircle />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">Remaining Hold</h3>
+                  <p className="text-[11px] text-slate-400">
+                    {viewHoldModal.customer_name} • {viewHoldModal.dispatch_warehouse}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setViewHoldModal(null)} className="text-slate-400 hover:text-white text-xl">
+                <FiX />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-3">
+              {viewHoldModal.challans.map((c: any) => {
+                const heldItems = (c.items || []).map((it: any) => {
+                  const orderQty = Number(it.orderQty ?? it.qty ?? 0);
+                  const dispatchedQty = Number(it.dispatchedQty ?? (c.status === 'Dispatched' ? orderQty : 0) ?? 0);
+                  const holdQty = Number(it.holdQty !== undefined ? it.holdQty : Math.max(0, orderQty - dispatchedQty));
+                  return { name: it.itemName || it.product_name || it.item_name || 'Item', orderQty, dispatchedQty, holdQty };
+                }).filter((x: any) => x.holdQty > 0);
+
+                if (heldItems.length === 0) return null;
+
+                return (
+                  <div key={c.id} className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50 dark:bg-meta-4/30 flex items-center justify-between">
+                      <span className="font-mono font-bold text-xs text-primary">{c.challan_no || `DC-${c.id}`}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">{c.status || ''}</span>
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-strokedark">
+                          <th className="py-1.5 px-3 text-left">Product</th>
+                          <th className="py-1.5 px-3 text-center">Order</th>
+                          <th className="py-1.5 px-3 text-center">Dispatched</th>
+                          <th className="py-1.5 px-3 text-center text-amber-600 dark:text-amber-400">Hold</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {heldItems.map((it: any, iIdx: number) => (
+                          <tr key={iIdx} className="border-b border-slate-100 dark:border-strokedark/60">
+                            <td className="py-1.5 px-3 font-semibold text-slate-800 dark:text-white">{it.name}</td>
+                            <td className="py-1.5 px-3 text-center font-mono">{fmtBoxPcs(it.orderQty, it.name)}</td>
+                            <td className="py-1.5 px-3 text-center font-mono">{fmtBoxPcs(it.dispatchedQty, it.name)}</td>
+                            <td className="py-1.5 px-3 text-center font-mono font-bold text-amber-600 dark:text-amber-400">{fmtBoxPcs(it.holdQty, it.name)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-meta-4/30 border-t border-stroke dark:border-strokedark flex justify-end">
+              <button
+                onClick={() => setViewHoldModal(null)}
+                className="px-4 py-2 bg-white dark:bg-boxdark border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-meta-4 text-slate-600 dark:text-slate-300 text-xs font-bold rounded-lg transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header Controls row */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex-1">
-          <h2 className="text-xl font-black tracking-tight text-slate-800 dark:text-slate-100 uppercase mt-1">Shop Dispatch Queue (SDQ)</h2>
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest mt-1">Manage shop counter handovers and pending deliveries</p>
+          <h4 className="text-xl font-semibold text-black dark:text-white">Shop Dispatch Queue (SDQ)</h4>
+          <p className="text-xs text-gray-500 mt-0.5">Manage shop counter handovers and pending deliveries</p>
         </div>
       </div>
 
@@ -755,15 +884,19 @@ const ShopDispatchQueue = () => {
                   {/* Summary Badges */}
                   <div className="flex items-center gap-3 text-xs">
                     <span className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 font-mono text-slate-700 dark:text-slate-300 font-bold border border-slate-200 dark:border-slate-700">
-                      Total Order: {group.totalOrdered}
+                      Total Order: {sumGroupQty(group, 'order')}
                     </span>
                     <span className="px-2.5 py-1 rounded bg-emerald-50 dark:bg-emerald-950/40 font-mono text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
-                      Dispatched: {group.totalDispatched}
+                      Dispatched: {sumGroupQty(group, 'disp')}
                     </span>
                     {group.totalHold > 0 && (
-                      <span className="px-2.5 py-1 rounded bg-amber-50 dark:bg-amber-950/40 font-mono text-amber-700 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800">
-                        Remaining Hold: {group.totalHold}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setViewHoldModal(group)}
+                        className="px-2.5 py-1 rounded bg-amber-50 dark:bg-amber-950/40 font-mono text-amber-700 dark:text-amber-300 font-bold border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition shadow-sm cursor-pointer"
+                      >
+                        Remaining Hold: {sumGroupQty(group, 'hold')}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -821,16 +954,16 @@ const ShopDispatchQueue = () => {
                                       <div className="flex flex-wrap items-center gap-1.5 pl-3">
                                         {isPending ? (
                                           <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10 dark:bg-gray-800 dark:text-gray-400">
-                                            {ord} Ordered (Pending)
+                                            {fmtBoxPcs(ord, i.pDescription || i.itemName || i.product_name || '')} Ordered (Pending)
                                           </span>
                                         ) : (
                                           <>
                                             <span className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-400">
-                                              {disp} Sent
+                                              {fmtBoxPcs(disp, i.pDescription || i.itemName || i.product_name || '')} Sent
                                             </span>
                                             {hld > 0 && (
                                               <span className="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950/40 dark:text-amber-400">
-                                                {hld} on Hold
+                                                {fmtBoxPcs(hld, i.pDescription || i.itemName || i.product_name || '')} on Hold
                                               </span>
                                             )}
                                           </>
@@ -843,19 +976,22 @@ const ShopDispatchQueue = () => {
                             </td>
 
                             <td className="py-3 px-4 text-center">
-                              {isPending && (
+                              {isPending ? (
                                 <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800">
                                   <FiClock /> Pending
                                 </span>
-                              )}
-                              {isPartial && (
-                                <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
-                                  <FiAlertCircle /> Partial ({totalHoldUnits} Hold)
+                              ) : isPartial ? (
+                                <span className="inline-flex flex-col items-center gap-0.5 rounded-3xl py-1 px-3 text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 text-center leading-none">
+                                  <span className="inline-flex items-center gap-1"><FiAlertCircle /> Partial</span>
+                                  <span className="text-[9px] font-bold opacity-80 normal-case">({sumGroupQty({ challans: [c] }, 'hold')} Hold)</span>
                                 </span>
-                              )}
-                              {isDispatched && (
+                              ) : isDispatched ? (
                                 <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
                                   <FiCheckCircle /> Dispatched
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full py-0.5 px-2.5 text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                  {String(c.status || '').toUpperCase()}
                                 </span>
                               )}
                             </td>
@@ -863,25 +999,15 @@ const ShopDispatchQueue = () => {
                             <td className="py-3 px-4 text-right pr-6">
                               <div className="flex items-center justify-end gap-2">
                                 {/* APPROVE BUTTON */}
-                                <button
-                                  type="button"
-                                  onClick={() => openApprovalModal(c)}
-                                  className={`inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold text-white shadow-xs transition duration-150 cursor-pointer ${
-                                    isPending ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800'
-                                  }`}
-                                >
-                                  <FiTruck size={12} /> {isPending ? 'Approve Items' : 'Edit Dispatch'}
-                                </button>
-
-                                {/* PRINT BUTTON */}
-                                {!isPending && (
+                                {!c.is_printed && (
                                   <button
                                     type="button"
-                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Delivery-Challan/Print/${c.id}`)}
-                                    title="Print Gate Pass / Delivery Challan"
-                                    className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition duration-150 cursor-pointer"
+                                    onClick={() => openApprovalModal(c)}
+                                    className={`inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold text-white shadow-xs transition duration-150 cursor-pointer ${
+                                      isPending ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800'
+                                    }`}
                                   >
-                                    <FiPrinter size={12} /> Print
+                                    <FiTruck size={12} /> {isPending ? 'Approve Items' : 'Edit Dispatch'}
                                   </button>
                                 )}
 
@@ -893,7 +1019,7 @@ const ShopDispatchQueue = () => {
                                     title={`Create new DC for remaining ${totalHoldUnits} hold items`}
                                     className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition duration-150 cursor-pointer"
                                   >
-                                    <FiPlusCircle size={12} /> Send Rest ({totalHoldUnits})
+                                    <FiPlusCircle size={12} /> Dispatch Remaining
                                   </button>
                                 )}
 
@@ -910,7 +1036,7 @@ const ShopDispatchQueue = () => {
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Delivery-Challan/Print/${c.id}`)}
+                                    onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Sales/Delivery-Challan/Print/${c.id}`)}
                                     className="inline-flex items-center gap-1 py-1 px-2.5 rounded text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 transition shadow-xs cursor-pointer"
                                     title="Print Official Gate Pass / Delivery Voucher"
                                   >

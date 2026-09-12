@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getAvailableStock, fetchStockDataset } from '../../../utils/stockCalculator';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
@@ -18,6 +18,7 @@ const AddStockTransfer = () => {
   const [openDropdownRowIndex, setOpenDropdownRowIndex] = useState<number | null>(null);
   const [activeDropdownType, setActiveDropdownType] = useState<'name' | 'code' | null>(null);
   const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
+  const dropdownScrollRef = useRef<HTMLDivElement>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -107,6 +108,41 @@ const AddStockTransfer = () => {
 
   const blockInvalidChar = (e: React.KeyboardEvent<HTMLInputElement>) =>
     ['-', 'e', 'E', '+'].includes(e.key) && e.preventDefault();
+
+  // Keep the highlighted option visible while using the arrow keys
+  const queueDropdownScroll = (next: number) => {
+    setTimeout(() => {
+      const box = dropdownScrollRef.current;
+      if (!box) return;
+      const el = box.querySelector(`[data-opt="${next}"]`) as HTMLElement | null;
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }, 0);
+  };
+
+  // Same picker behaviour as the Opening Stock page:
+  // focus shows the list (no typing needed), highest stock first, code shown under the name.
+  const normText = (v: any) => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+  const productOptions = (queryRaw: string) => {
+    const q = normText(queryRaw);
+    const base = q
+      ? productList.filter((p: any) =>
+          normText(p.product_name).includes(q) ||
+          normText(p.item_sr_no).includes(q)
+        )
+      : productList.slice();
+
+    return base
+      .slice()
+      .sort((a: any, b: any) =>
+        (Number(b.current_stock) || 0) - (Number(a.current_stock) || 0) ||
+        String(a.product_name || '').localeCompare(String(b.product_name || ''))
+      )
+      .slice(0, 60);
+  };
+
+  const isExactProductName = (name: string) =>
+    productList.some((p: any) => p.product_name === name);
 
   if (metadataLoading) return <div className="flex h-48 items-center justify-center"><Spinner /></div>;
   return (
@@ -262,8 +298,7 @@ const AddStockTransfer = () => {
                   <thead>
                     <tr className="bg-gray-100 dark:bg-meta-4 font-bold text-black dark:text-white text-xs uppercase border-b border-stroke dark:border-strokedark">
                       <th className="p-2 border border-stroke dark:border-strokedark w-12">S#</th>
-                      <th className="p-2 border border-stroke dark:border-strokedark w-40 text-left">Code (SKU)</th>
-                      <th className="p-2 border border-stroke dark:border-strokedark text-left">Select Product Item Designation Label</th>
+                      <th className="p-2 border border-stroke dark:border-strokedark text-left">Product (Name / Code)</th>
                       <th className="p-2 border border-stroke dark:border-strokedark w-36">Live Available WH Bal</th>
                       <th className="p-2 border border-stroke dark:border-strokedark w-28">UOM</th>
                       <th className="p-2 border border-stroke dark:border-strokedark w-32">Transfer Qty</th>
@@ -292,7 +327,8 @@ const AddStockTransfer = () => {
                           return (
                             <tr key={index} className="bg-white dark:bg-boxdark text-xs border-b border-stroke dark:border-strokedark text-black dark:text-white">
                               <td className="p-2 border border-stroke dark:border-strokedark font-medium">{index + 1}</td>
-                              <td className="p-2 border border-stroke dark:border-strokedark">
+                              {/* Legacy code cell kept hidden — code now shows under the product name */}
+                              <td className="hidden">
                                 <div className="relative">
                                   <input
                                     type="text"
@@ -319,17 +355,24 @@ const AddStockTransfer = () => {
                                       }, 200);
                                     }}
                                     onKeyDown={(e) => {
-                                      const searchQuery = String(item.itemCode || '').toLowerCase();
-                                      const filteredProducts = productList.filter((p: any) => 
-                                        (p.item_sr_no || '').toLowerCase().includes(searchQuery)
-                                      );
+                                      const filteredProducts = productOptions(item.itemCode);
                                       
                                       if (e.key === 'ArrowDown') {
                                         e.preventDefault();
-                                        setHighlightedProductIndex((prev) => prev < filteredProducts.length - 1 ? prev + 1 : 0);
+                                        if (filteredProducts.length === 0) return;
+                                        setHighlightedProductIndex((prev) => {
+                                          const next = prev < filteredProducts.length - 1 ? prev + 1 : 0;
+                                          queueDropdownScroll(next);
+                                          return next;
+                                        });
                                       } else if (e.key === 'ArrowUp') {
                                         e.preventDefault();
-                                        setHighlightedProductIndex((prev) => prev > 0 ? prev - 1 : filteredProducts.length - 1);
+                                        if (filteredProducts.length === 0) return;
+                                        setHighlightedProductIndex((prev) => {
+                                          const next = prev > 0 ? prev - 1 : filteredProducts.length - 1;
+                                          queueDropdownScroll(next);
+                                          return next;
+                                        });
                                       } else if (e.key === 'Enter') {
                                         e.preventDefault();
                                         if (filteredProducts.length > 0) {
@@ -355,12 +398,9 @@ const AddStockTransfer = () => {
                                     placeholder="Search Code..."
                                   />
                                   {openDropdownRowIndex === index && activeDropdownType === 'code' && (
-                                    <div className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[250px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
+                                    <div ref={dropdownScrollRef} className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[250px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
                                       {(() => {
-                                      const searchQuery = String(item.itemCode || '').toLowerCase();
-                                        const filteredProducts = productList.filter((p: any) => 
-                                          (p.item_sr_no || '').toLowerCase().includes(searchQuery)
-                                        );
+                                        const filteredProducts = productOptions(item.itemCode);
                                         
                                         return filteredProducts.length > 0 ? (
                                           filteredProducts.map((p, idx) => {
@@ -368,6 +408,7 @@ const AddStockTransfer = () => {
                                             return (
                                               <div
                                                 key={p.id}
+                                                data-opt={idx}
                                                 onMouseEnter={() => setHighlightedProductIndex(idx)}
                                                 onMouseDown={(e) => {
                                                   e.preventDefault();
@@ -415,7 +456,10 @@ const AddStockTransfer = () => {
                                     value={item.itemName}
                                     autoComplete="new-password"
                                     onChange={(e) => {
-                                      setFieldValue(`items.${index}.itemName`, e.target.value);
+                                      const typed = e.target.value;
+                                      const updated = [...values.items];
+                                      updated[index] = { ...updated[index], itemName: typed, itemCode: '' };
+                                      setFieldValue('items', updated);
                                       setOpenDropdownRowIndex(index);
                                       setActiveDropdownType('name');
                                       setHighlightedProductIndex(0);
@@ -433,18 +477,26 @@ const AddStockTransfer = () => {
                                       }, 200);
                                     }}
                                     onKeyDown={(e) => {
-                                      const searchQuery = String(item.itemName || '').toLowerCase();
-                                      const filteredProducts = productList.filter((p: any) => 
-                                        (p.product_name || '').toLowerCase().includes(searchQuery) ||
-                                        (p.item_sr_no || '').toLowerCase().includes(searchQuery)
+                                      const filteredProducts = productOptions(
+                                        isExactProductName(item.itemName) ? '' : item.itemName
                                       );
                                       
                                       if (e.key === 'ArrowDown') {
                                         e.preventDefault();
-                                        setHighlightedProductIndex((prev) => prev < filteredProducts.length - 1 ? prev + 1 : 0);
+                                        if (filteredProducts.length === 0) return;
+                                        setHighlightedProductIndex((prev) => {
+                                          const next = prev < filteredProducts.length - 1 ? prev + 1 : 0;
+                                          queueDropdownScroll(next);
+                                          return next;
+                                        });
                                       } else if (e.key === 'ArrowUp') {
                                         e.preventDefault();
-                                        setHighlightedProductIndex((prev) => prev > 0 ? prev - 1 : filteredProducts.length - 1);
+                                        if (filteredProducts.length === 0) return;
+                                        setHighlightedProductIndex((prev) => {
+                                          const next = prev > 0 ? prev - 1 : filteredProducts.length - 1;
+                                          queueDropdownScroll(next);
+                                          return next;
+                                        });
                                       } else if (e.key === 'Enter') {
                                         e.preventDefault();
                                         if (filteredProducts.length > 0) {
@@ -467,20 +519,23 @@ const AddStockTransfer = () => {
                                       }
                                     }}
                                     className={`w-full rounded border p-2 bg-transparent outline-none focus:border-primary font-bold text-black dark:text-white border-stroke dark:border-strokedark text-left${dupInputBorder}`}
-                                    placeholder="Search Product..."
+                                    placeholder="Search name or code..."
                                   />
                                   {isDuplicateRow && (
                                     <p className="text-rose-500 text-[10px] mt-1 font-bold">
                                       Duplicate product — already added in row {firstDupRowIndex + 1}. Remove it from one of these rows.
                                     </p>
                                   )}
+                                  {item.itemCode && (
+                                    <span className="block mt-1 text-[10px] font-mono font-bold text-primary dark:text-blue-400 text-left">
+                                      Code: {item.itemCode}
+                                    </span>
+                                  )}
                                   {openDropdownRowIndex === index && activeDropdownType === 'name' && (
-                                    <div className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[300px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
+                                    <div ref={dropdownScrollRef} className="absolute left-0 top-full mt-1 z-[99999] w-full min-w-[300px] max-h-64 overflow-y-auto rounded-lg border border-stroke dark:border-strokedark bg-white dark:bg-boxdark shadow-xl divide-y divide-stroke dark:divide-strokedark text-left">
                                       {(() => {
-                                      const searchQuery = String(item.itemName || '').toLowerCase();
-                                        const filteredProducts = productList.filter((p: any) => 
-                                          (p.product_name || '').toLowerCase().includes(searchQuery) ||
-                                          (p.item_sr_no || '').toLowerCase().includes(searchQuery)
+                                        const filteredProducts = productOptions(
+                                          isExactProductName(item.itemName) ? '' : item.itemName
                                         );
                                         
                                         return filteredProducts.length > 0 ? (
@@ -490,6 +545,7 @@ const AddStockTransfer = () => {
                                             return (
                                               <div
                                                 key={pName}
+                                                data-opt={idx}
                                                 onMouseEnter={() => setHighlightedProductIndex(idx)}
                                                 onMouseDown={(e) => {
                                                   e.preventDefault();

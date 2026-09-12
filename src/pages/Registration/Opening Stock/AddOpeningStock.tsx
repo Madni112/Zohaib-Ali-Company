@@ -370,11 +370,12 @@ const AddOpeningStock = () => {
                                             </thead>
                                             <tbody>
                                                 {values.items.map((item: any, index: number) => {
-                                                    const query = String(item.itemName || '').trim().toLowerCase();
+                                                    const normText = (v: any) => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                                                    const query = normText(item.itemName);
                                                     const filtered = (query
                                                         ? products.filter((p) =>
-                                                            (p.product_name || '').toLowerCase().includes(query) ||
-                                                            (p.item_sr_no || '').toLowerCase().includes(query)
+                                                            normText(p.product_name).includes(query) ||
+                                                            normText(p.item_sr_no).includes(query)
                                                         )
                                                         : products
                                                     )
@@ -805,11 +806,10 @@ const AddOpeningStock = () => {
                                                                     setFieldValue('purchasePrice', p.purchase_price || 0);
                                                                     setShowSkuDropdown(false);
                                                                 }}
-                                                                className={`p-3 cursor-pointer transition flex items-center justify-between group ${
-                                                                    isHighlighted
+                                                                className={`p-3 cursor-pointer transition flex items-center justify-between group ${isHighlighted
                                                                         ? 'bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500'
                                                                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/80'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <span className="font-mono font-bold text-xs text-primary group-hover:text-emerald-600 dark:group-hover:text-emerald-400">

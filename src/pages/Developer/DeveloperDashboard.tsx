@@ -49,22 +49,27 @@ export interface PermissionNode {
 
 export const PERMISSION_TREE: PermissionNode[] = [
   {
-    id: 'dashboard',
-    label: 'Dashboard',
+    id: 'dashboards',
+    label: 'Dashboards',
+    children: [
+      { id: 'dashboard', label: 'Main / Executive Dashboard' },
+      { id: '/Dashboard/Salesman', label: 'Salesman Dashboard' },
+      { id: '/Dashboard/Warehouse', label: 'Warehouse (Location) Dashboard' },
+    ],
   },
   {
     id: 'administration',
     label: 'Administration',
     children: [
       { id: '/Administration/Categories/List', label: 'Categories' },
-      { id: '/Administration/Surface-Finish', label: 'Brand' },
-      { id: '/Administration/UOM/List', label: 'UOM' },
-
+      { id: '/Administration/Surface-Finish', label: 'Brand / Surface Finish' },
+      { id: '/Administration/UOM/List', label: 'UOM (Units of Measure)' },
       { id: '/Administration/Products/List', label: 'Products' },
+      { id: '/Administration/Products/Bulk-Upload', label: 'Bulk Product Upload' },
       { id: '/Administration/Locations/List', label: 'Locations' },
       { id: '/Administration/Transportation/List', label: 'Transportation' },
       { id: '/Administration/StockTransfer/List', label: 'Stock Transfer' },
-      { id: '/company', label: 'Company' },
+      { id: '/company', label: 'Company Profile' },
     ],
   },
   {
@@ -72,8 +77,8 @@ export const PERMISSION_TREE: PermissionNode[] = [
     label: 'Registration',
     children: [
       { id: '/Registration/Chart-of-Account/List', label: 'Chart of Account' },
-      { id: '/Registration/Vouchers/List', label: 'Vouchers' },
-      { id: '/Registration/Bank-Account/BankAccountList', label: 'Bank Account' },
+      { id: '/Registration/Vouchers/List', label: 'Financial Vouchers' },
+      { id: '/Registration/Bank-Account/BankAccountList', label: 'Bank Accounts' },
       { id: '/Inventory/OpeningStock/List', label: 'Opening Stock' },
     ],
   },
@@ -81,34 +86,52 @@ export const PERMISSION_TREE: PermissionNode[] = [
     id: 'sales',
     label: 'Sales',
     children: [
-      { id: '/Sales/Invoice/List', label: 'Invoice' },
-      { id: '/Sales/InvoiceReceipt/List', label: 'Invoice Receipt' },
-      { id: '/Sales/Sales-Return/List', label: 'Sales Return' },
-      { id: '/Sales/Sales-Return-Receipt/List', label: 'Sales Return Receipt' },
-      { id: '/Sales/Customers/List', label: 'Customers' },
-      { id: '/Sales/Salesman/List', label: 'Salesman' },
-      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan' },
+      { id: '/Sales/Invoice/List', label: 'Sales Invoice' },
+      { id: '/Sales/InvoiceReceipt/List', label: 'Invoice Receipts' },
+      { id: '/Sales/Sales-Return/List', label: 'Sales Returns' },
+      { id: '/Sales-Return/Debit-Notes/List', label: 'Debit Notes' },
+      { id: '/Sales/Sales-Return-Receipt/List', label: 'Sales Return Receipts' },
+      { id: '/Sales/Customers/List', label: 'Customers Directory' },
+      { id: '/Sales/Salesman/List', label: 'Salesmen Ledger' },
+      { id: '/Sales/Delivery-Challan/List', label: 'Delivery Challan (A-39 WDQ)' },
+      { id: '/Sales/Shop-Dispatch/List', label: 'Shop Dispatch Queue (SHOP SDQ)' },
     ],
   },
   {
     id: 'purchase',
     label: 'Purchase',
     children: [
-      { id: '/Purchase/Purchases/List', label: 'Purchases' },
-      { id: '/Purchase/Purchase-Receipt/List', label: 'Purchase Receipt' },
-      { id: '/Purchase/Purchase-Return/List', label: 'Purchase Return' },
-      { id: '/Purchase/Purchase-Return-Receipt/List', label: 'Purchase Return Receipt' },
-      { id: '/Purchase/Vendor/List', label: 'Vendor' },
+      { id: '/Purchase/Purchases/List', label: 'Purchases (PO & Invoices)' },
+      { id: '/Purchase/Inward-Challan/List', label: 'Inward Challan (A-39 Warehouse)' },
+      { id: '/Purchase/Shop-Receiving', label: 'Shop Receiving Queue (SHOP)' },
+      { id: '/Purchase/Purchase-Receipt/List', label: 'Purchase Receipts' },
+      { id: '/Purchase/Purchase-Return/List', label: 'Purchase Returns' },
+      { id: '/Purchase/Purchase-Return-Receipt/List', label: 'Purchase Return Receipts' },
+      { id: '/Purchase/Vendor/List', label: 'Vendors Directory' },
+    ],
+  },
+  {
+    id: 'warehouse',
+    label: 'Warehouse & Logistics (A-39 & SHOP)',
+    children: [
+      { id: '/Sales/Delivery-Challan/List', label: 'A-39 Outward Delivery Challan (WDQ)' },
+      { id: '/Sales/Shop-Dispatch/List', label: 'Shop Counter Dispatch Queue (SDQ)' },
+      { id: '/Purchase/Inward-Challan/List', label: 'A-39 Supplier Inward Challan (Receiving)' },
+      { id: '/Purchase/Shop-Receiving', label: 'Shop Incoming Stock Receiving' },
+      { id: '/Warehouse/Return-Challan', label: 'A-39 Customer Return Challans' },
+      { id: '/Warehouse/Shop-Return', label: 'Shop Return Receiving Queue' },
+      { id: '/Administration/StockTransfer/List', label: 'Inter-Warehouse Stock Transfers' },
     ],
   },
   {
     id: 'reports',
     label: 'Reports',
     children: [
-      { id: '/Reports/Reports-Dashboard', label: 'Report Dashboard' },
+      { id: '/Reports/Reports-Dashboard', label: 'Reports Dashboard' },
       { id: '/Reports/Sales-Report', label: 'Sales Reports' },
       { id: '/Reports/Purchase-Report', label: 'Purchase Reports' },
       { id: '/Reports/Stock-Report', label: 'Stock Reports' },
+      { id: '/Reports/Holding-Report', label: 'Holding Reports' },
       { id: '/Reports/Account-Report', label: 'Account Reports' },
       { id: '/Reports/Balance-Sheet', label: 'Balance Sheet' },
     ],
@@ -150,10 +173,12 @@ const PermissionTreeEditor: React.FC<{
   onChange: (ids: string[]) => void;
 }> = ({ selectedIds, onChange }) => {
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
+    dashboards: true,
     administration: true,
     registration: true,
     sales: true,
     purchase: true,
+    warehouse: true,
     reports: true,
   });
 
@@ -338,12 +363,14 @@ const DeveloperDashboard: React.FC = () => {
 
   // Employee Data
   const [employees, setEmployees] = useState<EmployeeAccount[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
 
   // Newly Created Result
   const [createdResult, setCreatedResult] = useState<{ name: string; email: string; role: string } | null>(null);
 
   // Edit Permissions Modal State
   const [editingEmployee, setEditingEmployee] = useState<EmployeeAccount | null>(null);
+  const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('Warehouse Manager');
   const [editModules, setEditModules] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -354,6 +381,7 @@ const DeveloperDashboard: React.FC = () => {
     email: '',
     password: '',
     role: 'Warehouse Manager',
+    location_id: '' as string | number,
     modules: ROLE_PRESETS['Warehouse Manager'].modules,
   });
   const [isCreating, setIsCreating] = useState(false);
@@ -398,6 +426,10 @@ const DeveloperDashboard: React.FC = () => {
 
       const { count: invCount } = await supabase.from('sales_invoices').select('*', { count: 'exact', head: true });
       setTotalInvoices(invCount || 0);
+
+      // Fetch locations
+      const { data: locData } = await supabase.from('inventory_locations').select('*');
+      if (locData) setLocations(locData);
 
       // Fetch saved employee tenant accounts
       const { data: tenantData } = await supabase.from('tenants').select('*').order('created_at', { ascending: false });
@@ -497,7 +529,14 @@ const DeveloperDashboard: React.FC = () => {
       const cleanSlug = newEmployee.name.toLowerCase().trim().replace(/[^a-z0-9_-]/g, '-');
 
       // 1. Create User in Supabase Auth with allowed modules and role
-      const { error: authError } = await supabase.auth.signUp({
+      // Create a secondary client so we don't log out the active session
+      const secondaryAuthClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL || 'https://wpzwntbgpeiiclytuuht.supabase.co',
+        import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_IpW1ssWRf1_q6-J0hvXTzA_kVDyZcjy',
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+      
+      const { data: authData, error: authError } = await secondaryAuthClient.auth.signUp({
         email: newEmployee.email.trim(),
         password: newEmployee.password,
         options: {
@@ -524,11 +563,25 @@ const DeveloperDashboard: React.FC = () => {
             business_activity: newEmployee.role,
             seller_address: 'Zoaib Ali & Company Headquarters',
             allowed_modules: newEmployee.modules,
+            location_id: newEmployee.role === 'Warehouse Manager' && newEmployee.location_id ? Number(newEmployee.location_id) : null,
           },
         ], { onConflict: 'slug' });
       } catch (err) {
         console.warn('Tenants table upsert:', err);
       }
+
+      // 3. Auto-link Salesman role to Salesmen directory
+      if (newEmployee.role === 'Salesman' && authData?.user?.id) {
+        try {
+          await supabase.from('salesmen').insert({
+            name: newEmployee.name.trim(),
+            user_id: authData.user.id,
+          });
+        } catch (err) {
+          console.warn('Salesmen table insert:', err);
+        }
+      }
+
 
       setCreatedResult({
         name: newEmployee.name.trim(),
@@ -543,6 +596,7 @@ const DeveloperDashboard: React.FC = () => {
         email: '',
         password: '',
         role: 'Warehouse Manager',
+        location_id: '',
         modules: ROLE_PRESETS['Warehouse Manager'].modules,
       });
       fetchDevData();
@@ -555,6 +609,7 @@ const DeveloperDashboard: React.FC = () => {
 
   const handleOpenEditModal = (emp: EmployeeAccount) => {
     setEditingEmployee(emp);
+    setEditName(emp.name || '');
     setEditRole(emp.role || 'Warehouse Manager');
     setEditModules(emp.allowed_modules || getAllPermissionIds());
   };
@@ -578,6 +633,7 @@ const DeveloperDashboard: React.FC = () => {
       
       // Attempt update with standard columns (business_activity, allowed_modules)
       const updatePayload: any = {
+        name: editName.trim(),
         business_activity: editRole,
         allowed_modules: editModules,
       };
@@ -591,11 +647,20 @@ const DeveloperDashboard: React.FC = () => {
         // Fallback update without crashing if specific column differs
         const { error: fallbackError } = await supabase
           .from('tenants')
-          .update({ business_activity: editRole })
+          .update({ name: editName.trim(), business_activity: editRole })
           .eq('slug', editingEmployee.slug);
         
         if (fallbackError) {
           console.warn('Tenant record fallback:', fallbackError);
+        }
+      }
+
+      // If they are a salesman, sync name to salesmen table
+      if (editRole === 'Salesman' || editingEmployee.role === 'Salesman') {
+        try {
+          await supabase.from('salesmen').update({ name: editName.trim() }).eq('name', editingEmployee.name);
+        } catch (err) {
+          console.warn('Sync salesman name error:', err);
         }
       }
 
@@ -953,6 +1018,23 @@ const DeveloperDashboard: React.FC = () => {
                       </select>
                     </div>
 
+                    {newEmployee.role === 'Warehouse Manager' && (
+                      <div>
+                        <label className="block text-xs font-bold text-black dark:text-white mb-1 text-emerald-600">Assigned Location *</label>
+                        <select
+                          required
+                          value={newEmployee.location_id}
+                          onChange={e => setNewEmployee({ ...newEmployee, location_id: e.target.value })}
+                          className="w-full bg-white dark:bg-form-input border border-emerald-300 dark:border-emerald-700 rounded-lg p-2.5 text-black dark:text-white text-xs outline-none focus:border-emerald-500"
+                        >
+                          <option value="">Select Location</option>
+                          {locations.map(loc => (
+                            <option key={loc.id} value={loc.id}>{loc.name} ({loc.location_type})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-xs font-bold text-black dark:text-white mb-1">Login Email / Username *</label>
                       <input
@@ -1070,8 +1152,18 @@ const DeveloperDashboard: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-black dark:text-white">Role Template Presets:</label>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-black dark:text-white mb-1">Employee Name:</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-transparent dark:bg-form-input border border-stroke dark:border-form-strokedark rounded-xl p-2 text-xs text-black dark:text-white outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-black dark:text-white mb-2">Role Template Presets:</label>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ROLE_PRESETS).map(([key, preset]) => (
                     <button
@@ -1089,6 +1181,7 @@ const DeveloperDashboard: React.FC = () => {
                     </button>
                   ))}
                 </div>
+              </div>
               </div>
             )}
 

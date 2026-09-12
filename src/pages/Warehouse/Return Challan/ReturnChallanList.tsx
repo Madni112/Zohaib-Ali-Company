@@ -17,6 +17,7 @@ const ReturnChallanList: React.FC<ReturnChallanListProps> = ({ locationFilter = 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage] = useState(10);
+  const { userLocationName } = useAuth();
   const { showModal, hideModal } = useModal();
 
   const openHistoryModal = () => {
@@ -57,7 +58,11 @@ const ReturnChallanList: React.FC<ReturnChallanListProps> = ({ locationFilter = 
       if (error) throw error;
       
       let filteredData = data || [];
-      if (locationFilter !== 'ALL') {
+      if (userLocationName) {
+        filteredData = filteredData.filter(ret => {
+          return String(ret.warehouse_name || '').toUpperCase() === String(userLocationName).toUpperCase();
+        });
+      } else if (locationFilter !== 'ALL') {
         filteredData = filteredData.filter(ret => {
           const isShop = String(ret.warehouse_name || '').toUpperCase() === 'SHOP';
           return locationFilter === 'SHOP' ? isShop : !isShop;

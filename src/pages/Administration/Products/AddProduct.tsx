@@ -228,7 +228,7 @@ const AddProduct = () => {
 
             const databasePayload = {
               item_type: values.itemType || 'goods',
-              product_name: values.productName.trim(),
+              product_name: String(values.productName || '').replace(/\s+/g, ' ').trim(),
               category: values.category,
               sub_category: values.subCategory,
               sub_sub_category: values.subSubCategory,

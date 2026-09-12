@@ -11,6 +11,9 @@ interface AuthContextType {
   tenantId: string | null;
   businessName: string | null;
   userEmail: string | null;
+  userLocationId: string | number | null;
+  userLocationName: string | null;
+  userName?: string | null;
   currentUser: any;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -47,6 +50,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userEmail, setUserEmail] = useState<string | null>(() => {
     try {
       return localStorage.getItem('zac_user_email') || null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const [userLocationId, setUserLocationId] = useState<string | number | null>(() => {
+    try {
+      return localStorage.getItem('zac_user_location_id') || null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const [userLocationName, setUserLocationName] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('zac_user_location_name') || null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const [userName, setUserName] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('zac_user_name') || null;
     } catch (_) {
       return null;
     }
@@ -139,20 +163,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       let userRole = metadata.role || appMetadata.role || 'Super Admin';
       let userPermissions: string[] | null = null;
+      let locId: string | number | null = null;
+      let locName: string | null = null;
+      let empName: string | null = metadata.name || appMetadata.name || null;
 
       // 1. Try to fetch live permissions and role from tenants table by email
       try {
         if (email) {
           const { data: tenantRecord } = await supabase
             .from('tenants')
-            .select('business_activity, allowed_modules, name')
+            .select('business_activity, allowed_modules, name, location_id')
             .ilike('email', email)
             .maybeSingle();
 
           if (tenantRecord) {
             if (tenantRecord.business_activity) userRole = tenantRecord.business_activity;
+            if (tenantRecord.name) empName = tenantRecord.name;
             if (Array.isArray(tenantRecord.allowed_modules) && tenantRecord.allowed_modules.length > 0) {
               userPermissions = tenantRecord.allowed_modules;
+            }
+            if (tenantRecord.location_id) {
+              locId = tenantRecord.location_id;
+              // Fetch location name
+              const { data: locData } = await supabase.from('inventory_locations').select('name').eq('id', locId).maybeSingle();
+              if (locData) locName = locData.name;
             }
           }
         }
@@ -172,11 +206,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setTenantId(null);
       setBusinessName('Zoaib Ali & Company');
       setAllowedModules(userPermissions);
+      setUserLocationId(locId);
+      setUserLocationName(locName);
+      setUserName(empName);
 
       try {
         localStorage.setItem('zac_is_authenticated', 'true');
         localStorage.setItem('zac_user_role', userRole);
         if (email) localStorage.setItem('zac_user_email', email);
+        if (empName) localStorage.setItem('zac_user_name', empName);
+        if (locId) localStorage.setItem('zac_user_location_id', locId.toString());
+        if (locName) localStorage.setItem('zac_user_location_name', locName);
         localStorage.setItem('zac_user_modules', JSON.stringify(userPermissions));
       } catch (_) {}
     } else {
@@ -186,12 +226,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setRole('Super Admin');
       setTenantId(null);
       setBusinessName('Zoaib Ali & Company');
+      setUserLocationId(null);
+      setUserLocationName(null);
+      setUserName(null);
       setAllowedModules(ROLE_PRESETS['Super Admin'].modules);
 
       try {
         localStorage.removeItem('zac_is_authenticated');
         localStorage.removeItem('zac_user_role');
         localStorage.removeItem('zac_user_email');
+        localStorage.removeItem('zac_user_name');
+        localStorage.removeItem('zac_user_location_id');
+        localStorage.removeItem('zac_user_location_name');
       } catch (_) {}
     }
   };
@@ -247,6 +293,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // Route aliases mapping
         const aliases: Record<string, string[]> = {
+          '/': ['dashboard', 'dashboards', '/dashboard/executive', '/', '/dashboard/salesman', '/dashboard/warehouse', 'salesman-dashboard', 'warehouse-dashboard'],
+          'dashboard': ['/', 'dashboard', 'dashboards', '/dashboard/executive', '/dashboard/salesman', '/dashboard/warehouse'],
+          '/dashboard/executive': ['dashboard', 'dashboards', '/', '/dashboard/executive'],
+          '/dashboard/salesman': ['salesman-dashboard', '/dashboard/salesman', 'dashboards', 'dashboard', '/'],
+          '/dashboard/warehouse': ['warehouse-dashboard', '/dashboard/warehouse', 'dashboards', 'dashboard', '/'],
           '/sales/invoicereceipt/list': ['/registration/invoicereceipt/list'],
           '/registration/invoicereceipt/list': ['/sales/invoicereceipt/list'],
           '/sales/sales-return/list': ['/sales-return/debit-notes/list'],
@@ -279,8 +330,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const routePath = String(route.path || '').toLowerCase().trim();
 
           // 2. Standalone pages (like Dashboard)
-          if (routePath === '/' || label === 'dashboard') {
-            const isAllowed = lowerAllowed.includes('dashboard') || lowerAllowed.includes('/');
+          if (routePath === '/' || label === 'dashboard' || label === 'dashboards') {
+            const isAllowed =
+              lowerAllowed.includes('dashboard') ||
+              lowerAllowed.includes('dashboards') ||
+              lowerAllowed.includes('/') ||
+              lowerAllowed.includes('/dashboard/salesman') ||
+              lowerAllowed.includes('/dashboard/warehouse') ||
+              lowerAllowed.includes('salesman-dashboard') ||
+              lowerAllowed.includes('warehouse-dashboard') ||
+              lowerAllowed.some(m => m.includes('dashboard'));
             return isAllowed ? route : null;
           }
 
@@ -332,6 +391,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       tenantId,
       businessName,
       userEmail,
+      userLocationId,
+      userLocationName,
+      userName,
       currentUser,
       loading,
       login,

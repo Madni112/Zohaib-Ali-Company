@@ -74,12 +74,6 @@ const SalesmanHistory = () => {
       {/* Top Header Section */}
       <div className="flex justify-between items-center mb-6"> 
         <h4 className="text-xl font-semibold text-black dark:text-white">Sales Team Directory</h4> 
-        <button 
-          onClick={() => navigate('/Salesman/add')} 
-          className="bg-primary text-white py-2 px-4 rounded text-sm font-medium hover:bg-opacity-90 transition shadow-sm" 
-        > 
-          + Add New 
-        </button> 
       </div> 
 
       {/* Filter and Input line controllers */}
@@ -119,14 +113,13 @@ const SalesmanHistory = () => {
               <th className="min-w-[220px] py-4 px-4 font-medium text-black dark:text-white text-sm">Salesman Name</th> 
               <th className="min-w-[150px] py-4 px-4 font-medium text-black dark:text-white text-sm">Phone</th> 
               <th className="min-w-[120px] py-4 px-4 font-medium text-black dark:text-white text-sm">Area</th> 
-              <th className="py-4 px-4 font-medium text-black dark:text-white text-sm text-center w-28">Actions</th> 
             </tr> 
           </thead> 
           <tbody> 
             {loading ? ( 
-              <tr><td colSpan={5} className="py-12 text-center"><Spinner /></td></tr> 
+              <tr><td colSpan={4} className="py-12 text-center"><Spinner /></td></tr> 
             ) : paginatedSalesmen.length === 0 ? ( 
-              <tr><td colSpan={5} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400">No salesman records found.</td></tr> 
+              <tr><td colSpan={4} className="text-center py-10 text-sm text-gray-500 dark:text-gray-400">No salesman records found.</td></tr> 
             ) : ( 
               paginatedSalesmen.map((salesman, idx) => {
                 const serialNumber = startIndex + idx + 1;
@@ -144,14 +137,6 @@ const SalesmanHistory = () => {
                       <p className="inline-flex rounded-full bg-success bg-opacity-10 py-1 px-3 text-xs font-medium text-success"> 
                         {salesman.area || 'General'} 
                       </p> 
-                    </td> 
-                    <td className="py-3.5 px-4 text-center"> 
-                      <TableActions
-                        onEdit={() => navigate('/Salesman/add', { state: { salesman } })}
-                        onDelete={() => handleDelete(salesman.id)}
-                        editTitle="Edit Salesman"
-                        deleteTitle="Delete Salesman"
-                      />
                     </td> 
                   </tr> 
                 );

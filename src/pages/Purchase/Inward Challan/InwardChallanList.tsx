@@ -19,7 +19,7 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage] = useState(10);
-  const { tenantId } = useAuth();
+  const { tenantId, userLocationName } = useAuth();
   const { showModal, hideModal } = useModal();
 
   const openHistoryModal = () => {
@@ -63,7 +63,17 @@ const InwardChallanList: React.FC<InwardChallanListProps> = ({ locationFilter = 
         const pur = (purchases || []).find(p => p.metadata?.grn_id === g.id);
         return { ...g, purchase_no: pur?.purchase_no || '' };
       });
-      if (locationFilter !== 'ALL') {
+      
+      // Strict filter for Warehouse Managers locked to a location
+      if (userLocationName) {
+        filteredData = filteredData.filter(grn => {
+          return grn.grn_items?.some((item: any) => {
+            const matchesLocation = String(item.warehouse_name).toUpperCase() === String(userLocationName).toUpperCase();
+            const isUnverified = (item.accepted_qty == null) || (item.accepted_qty === 0 && item.rejected_qty === 0 && item.qty > 0);
+            return matchesLocation && isUnverified;
+          });
+        });
+      } else if (locationFilter !== 'ALL') {
         filteredData = filteredData.filter(grn => {
           if (locationFilter === 'SHOP') {
             // Include if there are any SHOP items that are NOT verified

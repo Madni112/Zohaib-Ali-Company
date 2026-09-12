@@ -8,12 +8,16 @@ interface StatCardProps {
   Icon: IconType;
   /** Tailwind gradient class for the icon background */
   bgColor?: string;
+  decimals?: number;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, Icon, bgColor = 'bg-gradient-to-br from-emerald-500 to-teal-700' }) => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, Icon, bgColor = 'bg-gradient-to-br from-emerald-500 to-teal-700', decimals }) => {
   const formattedValue =
     typeof value === 'number'
-      ? value.toLocaleString(undefined, { minimumFractionDigits: 2 })
+      ? value.toLocaleString(undefined, {
+          minimumFractionDigits: decimals !== undefined ? decimals : Number.isInteger(value) ? 0 : 2,
+          maximumFractionDigits: decimals !== undefined ? decimals : Number.isInteger(value) ? 0 : 2,
+        })
       : value;
   return (
     <GlassCard className="flex items-center justify-between p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group">

@@ -70,7 +70,7 @@ const BulkProductUpload = () => {
     const uniqueData = Array.from(uniqueMap.values());
 
     const payload = uniqueData.map(row => ({
-      product_name: String(row['DESCRIPTION'] || ''),
+      product_name: String(row['DESCRIPTION'] || '').replace(/\s+/g, ' ').trim(),
       item_sr_no: row['CODE'] || '',
       bin: String(row['BRAND'] || row['BIN'] || '').trim(),
       purchase_price: Number(row['PURCHASE PRICE']) || 0,

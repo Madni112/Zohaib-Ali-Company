@@ -9,7 +9,7 @@ import { FiCheckCircle, FiTruck, FiX, FiClock, FiPlusCircle, FiAlertCircle, FiPr
 
 const DeliveryChallanHistory = () => {
   const navigate = useNavigate();
-  const { tenantId } = useAuth();
+  const { tenantId, userLocationName } = useAuth();
   const [challans, setChallans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [productsMaster, setProductsMaster] = useState<any[]>([]);
@@ -59,11 +59,18 @@ const DeliveryChallanHistory = () => {
   const fetchChallans = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('delivery_challans')
-        .select('*')
-        .neq('dispatch_warehouse', 'SHOP')
-        .order('created_at', { ascending: false });
+        .select('*');
+
+      // Restrict Warehouse Managers to their assigned location, else filter SHOP for regular users (if that was the intention)
+      if (userLocationName) {
+        query = query.eq('dispatch_warehouse', userLocationName);
+      } else {
+        query = query.neq('dispatch_warehouse', 'SHOP');
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setChallans(data || []);

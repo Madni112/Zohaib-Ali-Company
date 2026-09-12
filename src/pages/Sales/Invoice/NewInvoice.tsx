@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getAvailableStock, getTotalAvailableStock, fetchStockDataset } from '../../../utils/stockCalculator';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
@@ -13,7 +13,10 @@ import { useAuth } from '../../../Context/Auth';
 const NewInvoice = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { tenantId } = useAuth();
+  const { tenantId, role, userName } = useAuth();
+  const currentRole = (role || localStorage.getItem('zac_user_role') || '').toLowerCase();
+  const currentSalesmanName = (userName || localStorage.getItem('zac_user_name') || '').trim();
+  const isSalesman = currentRole.includes('salesman');
   const editData = location.state?.invoice || location.state?.record || null;
 
   const [loading, setLoading] = useState(false);
@@ -23,9 +26,13 @@ const NewInvoice = () => {
   const [customersList, setCustomersList] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
   const [salesmenList, setSalesmenList] = useState<any[]>([]);
+  const matchedSalesman = salesmenList.find(
+    (s) => (s.name || '').toLowerCase().trim() === currentSalesmanName.toLowerCase()
+  )?.name || currentSalesmanName;
   const [transportList, setTransportList] = useState<any[]>([]);
   const [warehousesList, setWarehousesList] = useState<any[]>([]);
   const [stockDataset, setStockDataset] = useState<any>(null);
+  const productDropdownScrollRef = useRef<HTMLDivElement>(null);
   const [banksList, setBanksList] = useState<any[]>([]);
   const [activeSkuIndex, setActiveSkuIndex] = useState<number | null>(null);
   const [highlightedSkuIndex, setHighlightedSkuIndex] = useState<number>(0);
@@ -115,7 +122,7 @@ const NewInvoice = () => {
         dispatchWarehouse: editData.dispatch_warehouse || '',
         applyFbrTax: Boolean(editData.apply_fbr_tax || (editData.scenario_type && editData.scenario_type !== 'Standard Retail Sale (No Tax)')),
         taxScenario: editData.scenario_type || 'Goods at Standard Rate to Registered Buyers',
-        salesman: editData.salesman || '',
+        salesman: editData.salesman || (isSalesman ? (matchedSalesman || currentSalesmanName) : ''),
         transportType: editData.transport_name || 'No Transport (Handover)',
         transportCharges: Number(editData.transport_charges || 0),
         settlementMode: (Number(editData.cash_amount_paid || 0) > 0 && (Number(editData.bank_amount || 0) > 0 || editData.selected_bank))
@@ -152,9 +159,10 @@ const NewInvoice = () => {
     }
     return {
       invoiceNo: '', customerName: '', saleDate: new Date().toISOString().split('T')[0], paymentTerm: 'Cash',
-      dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, showAdditionalCharges: false, additionalCharges: 0, taxScenario: 'Goods at Standard Rate to Registered Buyers', salesman: '',
+      dispatchWarehouse: '', applyFbrTax: false, showDiscount: false, showAdditionalCharges: false, additionalCharges: 0, taxScenario: 'Goods at Standard Rate to Registered Buyers',
+      salesman: isSalesman ? (matchedSalesman || currentSalesmanName) : '',
       transportType: 'No Transport (Handover)', transportCharges: 0, settlementMode: 'Cash',
-      selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0, dcNo: '',
+      selectedBankTitle: '', cashAmountPaid: 0, bankAmountPaid: 0,
       dcNo: '',
       gatePasses: {},
       shippingAddress: '',
@@ -250,6 +258,16 @@ const NewInvoice = () => {
       console.error("[Invoice] Error fetching stock:", err);
       return 0;
     }
+  };
+
+  // Keep the highlighted option in view while navigating with the arrow keys
+  const queueProductScroll = (next: number) => {
+    setTimeout(() => {
+      const box = productDropdownScrollRef.current;
+      if (!box) return;
+      const el = box.querySelector(`[data-opt="${next}"]`) as HTMLElement | null;
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }, 0);
   };
 
   const handleProductSelectionWithWH = async (selectedProduct: any, index: number, chosenWarehouse: string, setFieldValue: any, currentItem?: any) => {
@@ -386,7 +404,7 @@ const NewInvoice = () => {
         sale_date: values.saleDate,
         payment_term: runningBalanceTerm,
         dispatch_warehouse: values.dispatchWarehouse,
-        salesman: values.salesman,
+        salesman: values.salesman || (isSalesman ? (matchedSalesman || currentSalesmanName) : ''),
         transport_name: values.transportType,
         transport_charges: Number(values.transportCharges || 0),
         additional_charges: Number(values.additionalCharges || 0),
@@ -795,6 +813,9 @@ const NewInvoice = () => {
           enableReinitialize={true}
           validationSchema={validationSchema}
           onSubmit={async (values) => {
+            if (isSalesman) {
+              values.salesman = matchedSalesman || currentSalesmanName || values.salesman;
+            }
             setPendingFormValues(values);
             if (editData && editData.customer_name) {
               const custName = String(editData.customer_name).trim();
@@ -824,6 +845,13 @@ const NewInvoice = () => {
             const currentSubtotalValue = values.items.reduce((acc: number, item: any) => {
               return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
             }, 0) + Number(values.transportCharges || 0) + Number(values.additionalCharges || 0);
+
+            // Auto-lock salesman value if logged in as salesman
+            if (isSalesman && (matchedSalesman || currentSalesmanName) && values.salesman !== (matchedSalesman || currentSalesmanName)) {
+              setTimeout(() => {
+                setFieldValue('salesman', matchedSalesman || currentSalesmanName);
+              }, 0);
+            }
 
             return (
               <Form className="space-y-6">
@@ -869,11 +897,40 @@ const NewInvoice = () => {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-gray-500 mb-1">Assigned Salesman: *</label>
-                    <select name="salesman" value={values.salesman} onChange={handleChange} className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.salesman ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}>
-                      <option value="">-- Select Officer --</option>
-                      {salesmenList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
+                    <label className="block font-bold text-gray-500 mb-1">
+                      Assigned Salesman: * {isSalesman && <span className="text-[11px] text-emerald-600 font-semibold">(Locked)</span>}
+                    </label>
+                    {isSalesman ? (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="salesman"
+                          value={values.salesman || matchedSalesman || currentSalesmanName}
+                          readOnly
+                          className="w-full rounded border p-2 text-sm bg-gray-100 dark:bg-slate-800 font-bold outline-none text-slate-800 dark:text-slate-100 border-stroke dark:border-strokedark cursor-not-allowed select-none"
+                        />
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                          🔒 Logged In
+                        </div>
+                      </div>
+                    ) : (
+                      <select
+                        name="salesman"
+                        value={values.salesman}
+                        onChange={handleChange}
+                        className={`w-full rounded border p-2 text-sm bg-white dark:bg-boxdark font-bold outline-none text-black dark:text-white ${hasAttempted && errors.salesman ? 'border-red-500 bg-red-50/10' : 'border-stroke dark:border-strokedark focus:border-primary'}`}
+                      >
+                        <option value="">-- Select Officer --</option>
+                        {salesmenList.map((s) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {hasAttempted && errors.salesman && (
+                      <p className="text-red-500 text-xs font-bold mt-1">{String(errors.salesman)}</p>
+                    )}
                   </div>
                 </div>
 
@@ -981,8 +1038,7 @@ const NewInvoice = () => {
                             <thead className="bg-gray-100 dark:bg-meta-4 text-[10px] font-black uppercase text-black dark:text-white border-b">
                               <tr>
                                 <th className="p-2 w-8 text-center">S#</th>
-                                <th className="p-2 w-36">Code (Search)</th>
-                                <th className="p-2 min-w-[200px]">Item Product Description</th>
+                                <th className="p-2 min-w-[220px]">Product (Name / Code)</th>
                                 <th className="p-2 w-40">Warehouse Zone Source</th>
                                 <th className="p-2 w-32 text-center bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold">Stock In Warehouse</th>
                                 <th className="p-2 w-48 text-center">Qty (UOM)</th>
@@ -1033,8 +1089,8 @@ const NewInvoice = () => {
                                   <tr key={idx} className={`border-b border-stroke dark:border-strokedark font-mono font-semibold text-black dark:text-white ${isCurrentActive || isCurrentProdNameActive || activeWhIndex === idx ? 'relative z-30' : 'relative z-10'} ${hasItemError ? 'bg-red-50/5' : ''}`}>
                                     <td className="p-2 text-center font-sans text-gray-400">{idx + 1}</td>
 
-                                    {/* Code REALTIME SEARCH / TYPEABLE INPUT IDENTICAL TO OPENING STOCK */}
-                                    <td className="p-2 relative sku-container">
+                                    {/* Legacy SKU cell kept hidden — code now shows under the product name */}
+                                    <td className="hidden sku-container">
                                       {(() => {
                                         const filteredProds = productsList.filter(p => {
                                           if (!item.skuCode) return true;
@@ -1150,14 +1206,23 @@ const NewInvoice = () => {
                                     {/* Description & DESCRIPTION (SEARCHABLE TWO-WAY INPUT WITH RICH DROPDOWN) */}
                                     <td className="p-2 relative prod-name-container min-w-[220px] max-w-[320px]">
                                       {(() => {
-                                        const query = (item.itemName || '').toLowerCase().trim();
-                                        const filteredByName = productsList.filter(p => {
-                                          if (!query) return true;
-                                          const name = (p.product_name || '').toLowerCase();
-                                          const sku = (p.item_sr_no || `SKU-${p.id}`).toLowerCase();
-                                          const cat = (p.category || '').toLowerCase();
-                                          return name.includes(query) || sku.includes(query) || cat.includes(query);
-                                        });
+                                        const normText = (v: any) => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                                        const exactSelected = productsList.some(p => p.product_name === item.itemName);
+                                        const query = exactSelected ? '' : normText(item.itemName);
+                                        let filteredByName = query
+                                          ? productsList.filter(p =>
+                                              normText(p.product_name).includes(query) ||
+                                              normText(p.item_sr_no).includes(query) ||
+                                              normText(p.category).includes(query)
+                                            )
+                                          : productsList.slice();
+                                        filteredByName = filteredByName
+                                          .slice()
+                                          .sort((a, b) =>
+                                            (Number(b.current_stock) || 0) - (Number(a.current_stock) || 0) ||
+                                            String(a.product_name || '').localeCompare(String(b.product_name || ''))
+                                          )
+                                          .slice(0, 60);
 
                                         return (
                                           <div className="relative">
@@ -1173,14 +1238,20 @@ const NewInvoice = () => {
                                               onKeyDown={(e) => {
                                                 if (e.key === 'ArrowDown') {
                                                   e.preventDefault();
-                                                  setHighlightedProdNameIndex((prev) =>
-                                                    prev < filteredByName.length - 1 ? prev + 1 : 0
-                                                  );
+                                                  if (filteredByName.length === 0) return;
+                                                  setHighlightedProdNameIndex((prev) => {
+                                                    const next = prev < filteredByName.length - 1 ? prev + 1 : 0;
+                                                    queueProductScroll(next);
+                                                    return next;
+                                                  });
                                                 } else if (e.key === 'ArrowUp') {
                                                   e.preventDefault();
-                                                  setHighlightedProdNameIndex((prev) =>
-                                                    prev > 0 ? prev - 1 : filteredByName.length - 1
-                                                  );
+                                                  if (filteredByName.length === 0) return;
+                                                  setHighlightedProdNameIndex((prev) => {
+                                                    const next = prev > 0 ? prev - 1 : filteredByName.length - 1;
+                                                    queueProductScroll(next);
+                                                    return next;
+                                                  });
                                                 } else if (e.key === 'Enter') {
                                                   e.preventDefault();
                                                   if (filteredByName.length > 0) {
@@ -1195,6 +1266,7 @@ const NewInvoice = () => {
                                               onChange={(e) => {
                                                 const typed = e.target.value;
                                                 setFieldValue(`items.${idx}.itemName`, typed);
+                                                setFieldValue(`items.${idx}.skuCode`, '');
                                                 setActiveProdNameIndex(idx);
                                                 setHighlightedProdNameIndex(0);
 
@@ -1216,15 +1288,22 @@ const NewInvoice = () => {
                                               </div>
                                             )}
 
+                                            {item.skuCode && (
+                                              <div className="text-[10px] font-mono font-bold text-primary dark:text-blue-400 mt-0.5 truncate">
+                                                Code: {item.skuCode}
+                                              </div>
+                                            )}
+
                                             {/* SEARCHABLE PRODUCT DROPDOWN (UPPER LAYER ON Z-AXIS) */}
                                             {isCurrentProdNameActive && (
-                                              <div className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
+                                              <div ref={productDropdownScrollRef} className="absolute left-0 top-full mt-1.5 z-[99999] min-w-[340px] max-w-[420px] max-h-[300px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A222C] shadow-2xl divide-y divide-slate-100 dark:divide-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600">
                                                 {filteredByName.map((p, pIdx) => {
                                                   const displaySku = p.item_sr_no || `SKU-${p.id}`;
                                                   const isHighlighted = pIdx === highlightedProdNameIndex;
                                                   return (
                                                     <div
                                                       key={p.id}
+                                                      data-opt={pIdx}
                                                       onMouseEnter={() => setHighlightedProdNameIndex(pIdx)}
                                                       onMouseDown={(e) => {
                                                         e.preventDefault();
@@ -1673,7 +1752,15 @@ const NewInvoice = () => {
                               })}
                             </tbody>
                           </table>
-                          <div className="p-2 bg-gray-50/50 dark:bg-meta-4/10 border-t"><button type="button" onClick={() => push({ itemName: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 18, fTaxPer: 0, amount: 0, availableQty: 0 })} className="inline-flex items-center gap-1 bg-primary text-white font-bold py-1 px-3 rounded text-[10px] cursor-pointer">+ Add Row Line</button></div>
+                          <div className="p-2 bg-gray-50/10 dark:bg-meta-4/10 border-t border-stroke dark:border-strokedark text-left">
+                            <button
+                              type="button"
+                              onClick={() => push({ itemName: '', skuCode: '', qty: 1, rp: 0, discountPer: 0, discountAmt: 0, gstRate: 18, fTaxPer: 0, amount: 0, availableQty: 0 })}
+                              className="text-success font-bold hover:underline cursor-pointer"
+                            >
+                              + Append Item Row
+                            </button>
+                          </div>
                         </div>
                       );
                     }}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npx tsc --noEmit -p tsconfig.json 2 >& 1)",
+      "Shell(Select-String:*)",
+      "Shell(Select-Object:*)",
+      "Shell(npx tsc --noEmit -p tsconfig.json > \"$COMMANDCODE_SCRATCHPAD/tsc_out.txt\" 2>&1; echo \"EXIT=$?\")",
+      "Shell(findstr:*)",
+      "Shell(npx tsc --noEmit -p tsconfig.json >nul 2>&1 & echo EXITCODE=%ERRORLEVEL%)",
+      "Shell(node introspect_db.cjs)",
+      "Shell(git:*)",
+      "Shell(git commit -F - <<'EOF' Checkpoint: stock formula fixes, multi-row opening stock, snapshot-ready stockCalculator Co-authored-by: CommandCodeBot <noreply@commandcode.ai> EOF)",
+      "Shell(del:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
