@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
+import { useAuth } from '../../../Context/Auth';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import TableActions from '../../../ui/TableActions';
 import { MdInventory } from 'react-icons/md';
 
 const OpeningStockList = () => {
+  const { userName, userEmail } = useAuth();
   const [stocks, setStocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -95,6 +97,24 @@ const OpeningStockList = () => {
       const ids = group.map((r: any) => r.id).filter(Boolean);
       const { error } = await supabase.from('opening_stocks').delete().in('id', ids);
       if (error) throw error;
+
+      // Record deletion in audit_logs
+      try {
+        await supabase.from('audit_logs').insert({
+          action_type: 'DELETE',
+          table_name: 'opening_stocks',
+          performed_by: userName || userEmail || 'Warehouse Manager',
+          details: {
+            stock_no: stockNoLabel,
+            location: group[0]?.location || '',
+            items_count: itemCount,
+            total_quantity: totalQty,
+            deleted_items: group.slice(0, 10).map((r: any) => `${r.itemName || r.product_name} (${r.qty || r.quantity} Units)`),
+          },
+        });
+      } catch (auditErr) {
+        console.warn('Opening stock deletion audit log note:', auditErr);
+      }
 
       toast.success(`Opening stock batch ${stockNoLabel} deleted successfully.`);
       fetchStocks();

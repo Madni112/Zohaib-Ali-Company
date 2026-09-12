@@ -60,17 +60,51 @@ interface WarehouseDashboardProps {
 
 const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation }) => {
   const navigate = useNavigate();
-  const { userLocationName, userName, role } = useAuth();
+  const { userLocationName, userLocationId, userEmail, userName, role } = useAuth();
 
-  // Determine starting warehouse: either prop, user assigned location, or default to A-39
-  const defaultLoc: 'A-39' | 'SHOP' = useMemo(() => {
-    if (initialLocation) return initialLocation;
-    const loc = (userLocationName || '').toUpperCase();
-    if (loc.includes('SHOP')) return 'SHOP';
+  // Check if current user is Super Admin / Admin / Owner
+  const isAdmin = useMemo(() => {
+    const r = (role || '').toLowerCase();
+    const email = (userEmail || '').toLowerCase();
+    return (
+      r.includes('admin') ||
+      r.includes('owner') ||
+      email === 'admin@zoaibalicompany.com' ||
+      email === 'developer@noorhorizontechnologies.com'
+    );
+  }, [role, userEmail]);
+
+  // Determine user's assigned warehouse (SHOP or A-39)
+  const userAssignedLocation: 'A-39' | 'SHOP' = useMemo(() => {
+    const locName = (userLocationName || '').toUpperCase();
+    const uName = (userName || '').toUpperCase();
+    const email = (userEmail || '').toLowerCase();
+    const locId = userLocationId ? String(userLocationId) : '';
+
+    if (locName.includes('SHOP') || uName.includes('SHOP') || email.includes('shop') || locId === '2') {
+      return 'SHOP';
+    }
     return 'A-39';
-  }, [initialLocation, userLocationName]);
+  }, [userLocationName, userName, userEmail, userLocationId]);
 
-  const [activeLocation, setActiveLocation] = useState<'A-39' | 'SHOP'>(defaultLoc);
+  // Can the user switch warehouses?
+  // Strictly only Admins can switch between warehouses. Warehouse employees are locked to their own warehouse for safety!
+  const canSwitchLocation = isAdmin && !initialLocation;
+
+  // Active location is either prop, or if not admin locked to userAssignedLocation, else default
+  const [activeLocation, setActiveLocation] = useState<'A-39' | 'SHOP'>(() => {
+    if (initialLocation) return initialLocation;
+    if (!isAdmin) return userAssignedLocation;
+    return userAssignedLocation || 'A-39';
+  });
+
+  // Safety lock: If user is not Admin, strictly enforce their assigned location
+  useEffect(() => {
+    if (!canSwitchLocation) {
+      setActiveLocation(userAssignedLocation);
+    }
+  }, [canSwitchLocation, userAssignedLocation]);
+
   const [loading, setLoading] = useState(true);
 
   // Data states
@@ -281,36 +315,53 @@ const WarehouseDashboard: React.FC<WarehouseDashboardProps> = ({ initialLocation
           </div>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            {/* Quick Location Switcher Buttons */}
-            <div className="flex items-center bg-black/30 p-1 rounded-2xl border border-white/20 backdrop-blur-md">
-              <button
-                onClick={() => setActiveLocation('A-39')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  isA39
-                    ? 'bg-white text-orange-800 shadow-md scale-102'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <MdWarehouse className="text-sm" />
-                A-39 (Storage)
-              </button>
-              <button
-                onClick={() => setActiveLocation('SHOP')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  !isA39
-                    ? 'bg-white text-emerald-800 shadow-md scale-102'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <MdStorefront className="text-sm" />
-                SHOP (Sale Point)
-              </button>
-            </div>
+            {/* Quick Location Switcher Buttons - Visible ONLY to Super Admin / Admin */}
+            {canSwitchLocation ? (
+              <div className="flex items-center bg-black/30 p-1 rounded-2xl border border-white/20 backdrop-blur-md">
+                <button
+                  onClick={() => setActiveLocation('A-39')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isA39
+                      ? 'bg-white text-orange-800 shadow-md scale-102'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <MdWarehouse className="text-sm" />
+                  A-39 (Storage)
+                </button>
+                <button
+                  onClick={() => setActiveLocation('SHOP')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    !isA39
+                      ? 'bg-white text-emerald-800 shadow-md scale-102'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <MdStorefront className="text-sm" />
+                  SHOP (Sale Point)
+                </button>
+              </div>
+            ) : (
+              /* When locked, show a clean, non-clickable assigned location pill */
+              <div className="flex items-center gap-2 bg-black/30 px-3.5 py-2 rounded-2xl border border-white/20 backdrop-blur-md text-xs font-bold text-white shadow-inner">
+                {isA39 ? (
+                  <>
+                    <MdWarehouse className="text-yellow-300 text-sm" />
+                    <span>Assigned: A-39 Storage</span>
+                  </>
+                ) : (
+                  <>
+                    <MdStorefront className="text-emerald-300 text-sm" />
+                    <span>Assigned: Shop Floor</span>
+                  </>
+                )}
+              </div>
+            )}
 
             <button
               onClick={loadWarehouseData}
               title="Refresh Warehouse Records"
-              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm"
+              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl border border-white/20 transition-all text-white backdrop-blur-md shadow-sm cursor-pointer"
             >
               <MdRefresh className="text-lg" />
             </button>

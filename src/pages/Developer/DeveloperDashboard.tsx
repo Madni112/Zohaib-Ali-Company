@@ -33,6 +33,14 @@ import {
   MdLocationOn,
   MdVpnLock,
   MdBadge,
+  MdHistory,
+  MdVisibility,
+  MdClose,
+  MdSearch,
+  MdFilterList,
+  MdPerson,
+  MdCode,
+  MdInfoOutline,
 } from 'react-icons/md';
 import { ROLE_PRESETS, RolePreset, getModulesForRole } from '../../constant/roles';
 
@@ -353,7 +361,35 @@ const DeveloperDashboard: React.FC = () => {
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'create'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'employees' | 'create' | 'logs'>('overview');
+
+  // Audit Logs State
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logFilterAction, setLogFilterAction] = useState<string>('ALL');
+  const [logFilterEmployee, setLogFilterEmployee] = useState<string>('ALL');
+  const [logSearch, setLogSearch] = useState<string>('');
+  const [logPage, setLogPage] = useState<number>(1);
+  const [selectedLogModal, setSelectedLogModal] = useState<any | null>(null);
+  const [showRawJsonModal, setShowRawJsonModal] = useState<boolean>(false);
+
+  const fetchAuditLogs = async () => {
+    try {
+      setLogsLoading(true);
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(300);
+
+      if (error) throw error;
+      setLogs(data || []);
+    } catch (err: any) {
+      console.error('Failed to load audit logs:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   // Stats
   const [loading, setLoading] = useState(true);
@@ -389,8 +425,15 @@ const DeveloperDashboard: React.FC = () => {
   useEffect(() => {
     if (isDevAuthorized) {
       fetchDevData();
+      fetchAuditLogs();
     }
   }, [isDevAuthorized]);
+
+  useEffect(() => {
+    if (isDevAuthorized && activeTab === 'logs') {
+      fetchAuditLogs();
+    }
+  }, [isDevAuthorized, activeTab]);
 
   const handleDevLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -472,15 +515,6 @@ const DeveloperDashboard: React.FC = () => {
             email: 'accountant@zoaibalicompany.com',
             role: 'Accountant',
             allowed_modules: ROLE_PRESETS['Accountant'].modules,
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: '4',
-            name: 'Cashier Operator',
-            slug: 'cashier',
-            email: 'cashier@zoaibalicompany.com',
-            role: 'Cashier',
-            allowed_modules: ROLE_PRESETS['Cashier'].modules,
             created_at: new Date().toISOString(),
           },
         ];
@@ -748,6 +782,350 @@ const DeveloperDashboard: React.FC = () => {
     );
   }
 
+  // Resolve employee friendly name, role, and avatar from performed_by identifier
+  const getEmployeeInfo = (performedBy?: string) => {
+    if (!performedBy || performedBy.toLowerCase() === 'system') {
+      return {
+        name: 'System Automated',
+        role: 'Background System',
+        email: 'Automated Audit Daemon',
+        initials: 'SYS',
+        avatarBg: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300',
+        badgeColor: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark',
+      };
+    }
+    const lower = performedBy.toLowerCase();
+    if (
+      lower.includes('admin') ||
+      lower === 'system administrator' ||
+      lower === DEV_EMAIL.toLowerCase() ||
+      lower === BACKUP_DEV_EMAIL.toLowerCase()
+    ) {
+      return {
+        name: 'Zoaib Ali',
+        role: 'Super Admin',
+        email: lower.includes('@') ? performedBy : DEV_EMAIL,
+        initials: 'ZA',
+        avatarBg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+        badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+      };
+    }
+
+    const matched = employees.find(
+      e =>
+        (e.email && e.email.toLowerCase() === lower) ||
+        (e.name && e.name.toLowerCase() === lower) ||
+        (e.slug && e.slug.toLowerCase() === lower)
+    );
+
+    if (matched) {
+      const parts = matched.name.split(' ');
+      const initials = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+      return {
+        name: matched.name,
+        role: matched.role || 'Staff Member',
+        email: matched.email || performedBy,
+        initials,
+        avatarBg: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+        badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-300 dark:border-blue-800',
+      };
+    }
+
+    if (performedBy.includes('@')) {
+      const username = performedBy.split('@')[0];
+      const prettyName = username.charAt(0).toUpperCase() + username.slice(1);
+      return {
+        name: prettyName,
+        role: 'Staff User',
+        email: performedBy,
+        initials: prettyName.slice(0, 2).toUpperCase(),
+        avatarBg: 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300',
+        badgeColor: 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border-purple-300 dark:border-purple-800',
+      };
+    }
+
+    return {
+      name: performedBy,
+      role: 'Staff Member',
+      email: performedBy,
+      initials: performedBy.slice(0, 2).toUpperCase(),
+      avatarBg: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300',
+      badgeColor: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark',
+    };
+  };
+
+  // Plain-English Activity Formatter for Non-Technical Users
+  const formatActivityEvent = (log: any) => {
+    const action = (log.action_type || 'UNKNOWN').toUpperCase();
+    const table = (log.table_name || '').toLowerCase();
+    const details = log.details || {};
+
+    if (action === 'LOGIN') {
+      return {
+        category: 'User Authentication',
+        actionLabel: 'Logged In',
+        badgeClass: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300 dark:border-blue-800',
+        icon: '🔐',
+        title: 'Logged into ERP System',
+        summary: details.email ? `User ${details.email} logged in` : 'Employee session started',
+      };
+    }
+    if (action === 'LOGOUT') {
+      return {
+        category: 'User Authentication',
+        actionLabel: 'Logged Out',
+        badgeClass: 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-800',
+        icon: '🚪',
+        title: 'Signed Out of System',
+        summary: details.email ? `User ${details.email} signed out` : 'Employee session ended',
+      };
+    }
+
+    if (table.includes('system') || action === 'SYSTEM') {
+      return {
+        category: 'System Operations',
+        actionLabel: 'System Notice',
+        badgeClass: 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark',
+        icon: '⚙️',
+        title: details.event || 'System Audit Initialized',
+        summary: details.scope || 'System background audit stream active',
+      };
+    }
+
+    if (table.includes('sales_invoice') && !table.includes('receipt')) {
+      const invNo = details.invoice_number || (details.id ? `#${details.id}` : '');
+      const cust = details.customer_name || details.customer || '';
+      const total = details.total_amount ? `Rs. ${Number(details.total_amount).toLocaleString()}` : '';
+
+      if (action === 'INSERT') {
+        return {
+          category: 'Sales & Invoicing',
+          actionLabel: 'Created Invoice',
+          badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+          icon: '🧾',
+          title: `Created Sales Invoice ${invNo}`,
+          summary: [cust && `Customer: ${cust}`, total && `Total: ${total}`].filter(Boolean).join(' • ') || 'New sales invoice recorded',
+        };
+      }
+      if (action === 'UPDATE') {
+        return {
+          category: 'Sales & Invoicing',
+          actionLabel: 'Modified Invoice',
+          badgeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800',
+          icon: '✏️',
+          title: `Modified Sales Invoice ${invNo}`,
+          summary: [cust && `Customer: ${cust}`, total && `Total: ${total}`].filter(Boolean).join(' • ') || 'Sales invoice updated',
+        };
+      }
+      if (action === 'DELETE') {
+        return {
+          category: 'Sales & Invoicing',
+          actionLabel: 'Deleted Invoice',
+          badgeClass: 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-300 dark:border-red-800',
+          icon: '🗑️',
+          title: `Deleted Sales Invoice ${invNo}`,
+          summary: cust ? `Cancelled invoice for customer: ${cust}` : 'Sales invoice removed',
+        };
+      }
+    }
+
+    if (table.includes('receipt') || table.includes('invoice_receipt')) {
+      const rcptNo = details.receipt_number || (details.id ? `#${details.id}` : '');
+      const amt = details.received_amount || details.amount ? `Rs. ${Number(details.received_amount || details.amount).toLocaleString()}` : '';
+      const cust = details.customer_name || '';
+
+      if (action === 'INSERT') {
+        return {
+          category: 'Finance & Receipts',
+          actionLabel: 'Payment Received',
+          badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+          icon: '💰',
+          title: `Received Customer Payment ${rcptNo}`,
+          summary: [cust && `From: ${cust}`, amt && `Amount: ${amt}`].filter(Boolean).join(' • ') || 'Payment receipt generated',
+        };
+      }
+      return {
+        category: 'Finance & Receipts',
+        actionLabel: action === 'UPDATE' ? 'Updated Receipt' : 'Deleted Receipt',
+        badgeClass: action === 'UPDATE' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300' : 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-300',
+        icon: '💵',
+        title: `${action === 'UPDATE' ? 'Modified' : 'Deleted'} Receipt ${rcptNo}`,
+        summary: amt ? `Amount: ${amt}` : 'Payment receipt altered',
+      };
+    }
+
+    if (table.includes('delivery_challan') || table.includes('challan')) {
+      const chNo = details.challan_number || (details.id ? `#${details.id}` : '');
+      const cust = details.customer_name || '';
+
+      if (action === 'INSERT') {
+        return {
+          category: 'Warehouse & Logistics',
+          actionLabel: 'Stock Dispatched',
+          badgeClass: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800',
+          icon: '🚚',
+          title: `Dispatched Delivery Challan ${chNo}`,
+          summary: cust ? `Outward delivery to: ${cust}` : 'Goods dispatched from warehouse',
+        };
+      }
+      return {
+        category: 'Warehouse & Logistics',
+        actionLabel: action === 'UPDATE' ? 'Updated Challan' : 'Deleted Challan',
+        badgeClass: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300',
+        icon: '📦',
+        title: `${action === 'UPDATE' ? 'Modified' : 'Deleted'} Delivery Challan ${chNo}`,
+        summary: 'Warehouse dispatch record changed',
+      };
+    }
+
+    if (table.includes('return')) {
+      const retNo = details.return_number || (details.id ? `#${details.id}` : '');
+      return {
+        category: 'Sales Returns',
+        actionLabel: 'Sales Return',
+        badgeClass: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300 dark:border-rose-800',
+        icon: '↩️',
+        title: `Processed Sales Return ${retNo}`,
+        summary: details.reason ? `Reason: ${details.reason}` : 'Returned item received into inventory',
+      };
+    }
+
+    if (table.includes('stock_transfer') || table.includes('transfer')) {
+      return {
+        category: 'Warehouse Inventory',
+        actionLabel: 'Stock Transfer',
+        badgeClass: 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border-teal-300 dark:border-teal-800',
+        icon: '🔄',
+        title: 'Inter-Warehouse Stock Transfer',
+        summary: details.source_location && details.destination_location
+          ? `Transferred from ${details.source_location} to ${details.destination_location}`
+          : 'Stock movement recorded between locations',
+      };
+    }
+
+    if (table.includes('purchase')) {
+      const poNo = details.purchase_number || (details.id ? `#${details.id}` : '');
+      const vendor = details.vendor_name || details.supplier || '';
+      return {
+        category: 'Purchase & Stock Inward',
+        actionLabel: action === 'INSERT' ? 'New Purchase' : 'Purchase Record',
+        badgeClass: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800',
+        icon: '🛍️',
+        title: `Supplier Purchase ${poNo}`,
+        summary: vendor ? `Vendor: ${vendor}` : 'Purchase transaction registered',
+      };
+    }
+
+    if (table.includes('opening_stock') || table.includes('opening_stocks')) {
+      const stockNo = details.stock_no || details.stockNo || (details.id ? `#${details.id}` : '');
+      const loc = details.location || '';
+      const itemsCount = details.items_count ? `${details.items_count} Products` : (details.product_name ? details.product_name : '');
+      const totalUnits = details.total_quantity || details.quantity || details.qty ? `${details.total_quantity || details.quantity || details.qty} Units` : '';
+
+      return {
+        category: 'Inventory & Opening Stock',
+        actionLabel: action === 'INSERT' ? 'Opening Stock In' : action === 'UPDATE' ? 'Updated Stock' : 'Deleted Stock',
+        badgeClass: action === 'INSERT'
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+          : action === 'UPDATE'
+          ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+          : 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-300 dark:border-red-800',
+        icon: '📦',
+        title: action === 'INSERT' ? `Initialized Opening Stock (${stockNo})` : action === 'UPDATE' ? `Updated Opening Stock (${stockNo})` : `Deleted Opening Stock (${stockNo})`,
+        summary: [loc && `Location: ${loc}`, itemsCount, totalUnits].filter(Boolean).join(' • ') || 'Opening stock record processed',
+      };
+    }
+
+    let friendlyAction = 'Activity Logged';
+    let badgeClass = 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark';
+    if (action === 'INSERT') {
+      friendlyAction = 'Created Record';
+      badgeClass = 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300';
+    } else if (action === 'UPDATE') {
+      friendlyAction = 'Modified Record';
+      badgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300';
+    } else if (action === 'DELETE') {
+      friendlyAction = 'Deleted Record';
+      badgeClass = 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-300';
+    }
+
+    const cleanCategory = table ? table.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'System';
+
+    return {
+      category: cleanCategory,
+      actionLabel: friendlyAction,
+      badgeClass,
+      icon: '📝',
+      title: `${friendlyAction} in ${cleanCategory}`,
+      summary: details.id ? `Record ID #${details.id}` : (typeof details === 'string' ? details : JSON.stringify(details).slice(0, 70)),
+    };
+  };
+
+  // Distinct list of employees for filter dropdown
+  const employeeFilterOptions = React.useMemo(() => {
+    const list: { key: string; label: string }[] = [];
+    const added = new Set<string>();
+
+    employees.forEach(emp => {
+      if (emp.name && !added.has(emp.name.toLowerCase())) {
+        added.add(emp.name.toLowerCase());
+        list.push({ key: emp.name, label: `${emp.name} (${emp.role || 'Staff'})` });
+      }
+    });
+
+    logs.forEach(log => {
+      const info = getEmployeeInfo(log.performed_by);
+      if (info.name && !added.has(info.name.toLowerCase())) {
+        added.add(info.name.toLowerCase());
+        list.push({ key: info.name, label: `${info.name} (${info.role})` });
+      }
+    });
+
+    return list;
+  }, [employees, logs]);
+
+  // Audit Logs computed filtering & pagination
+  const filteredLogs = logs.filter(log => {
+    // Action filter
+    if (logFilterAction !== 'ALL') {
+      if (logFilterAction === 'AUTH') {
+        if (log.action_type !== 'LOGIN' && log.action_type !== 'LOGOUT') return false;
+      } else if (log.action_type !== logFilterAction) {
+        return false;
+      }
+    }
+
+    // Employee filter
+    if (logFilterEmployee !== 'ALL') {
+      const empInfo = getEmployeeInfo(log.performed_by);
+      const matchesName = empInfo.name.toLowerCase() === logFilterEmployee.toLowerCase();
+      const matchesEmail = empInfo.email.toLowerCase() === logFilterEmployee.toLowerCase();
+      const matchesRaw = (log.performed_by || '').toLowerCase() === logFilterEmployee.toLowerCase();
+      if (!matchesName && !matchesEmail && !matchesRaw) return false;
+    }
+
+    // Search query
+    if (logSearch.trim()) {
+      const q = logSearch.toLowerCase();
+      const empInfo = getEmployeeInfo(log.performed_by);
+      const activity = formatActivityEvent(log);
+      const matchAction = (log.action_type || '').toLowerCase().includes(q);
+      const matchCategory = activity.category.toLowerCase().includes(q);
+      const matchTitle = activity.title.toLowerCase().includes(q);
+      const matchSummary = activity.summary.toLowerCase().includes(q);
+      const matchEmpName = empInfo.name.toLowerCase().includes(q);
+      const matchEmpRole = empInfo.role.toLowerCase().includes(q);
+      const matchDetails = JSON.stringify(log.details || {}).toLowerCase().includes(q);
+      return matchAction || matchCategory || matchTitle || matchSummary || matchEmpName || matchEmpRole || matchDetails;
+    }
+
+    return true;
+  });
+
+  const pageSize = 15;
+  const totalPages = Math.ceil(filteredLogs.length / pageSize) || 1;
+  const paginatedLogs = filteredLogs.slice((logPage - 1) * pageSize, logPage * pageSize);
+
   return (
     <div className="min-h-screen bg-gray-50 text-body dark:bg-boxdark-2 dark:text-bodydark font-sans p-6 md:p-10 flex flex-col items-center transition-colors duration-200">
       
@@ -796,6 +1174,14 @@ const DeveloperDashboard: React.FC = () => {
               }`}
             >
               <MdAddCircle /> Add Employee User
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`py-1.5 px-3 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'logs' ? 'bg-emerald-600 text-white shadow-xs font-bold' : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <MdHistory /> Logs {logs.length > 0 && `(${logs.length})`}
             </button>
           </div>
 
@@ -970,7 +1356,7 @@ const DeveloperDashboard: React.FC = () => {
                 <div>
                   <h3 className="text-xl font-extrabold text-black dark:text-white">Register New Employee User</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Assign a role (Warehouse Manager, Accountant, Cashier, etc.) and configure accessible pages.
+                    Assign a role (Warehouse Manager, Accountant, Salesman, etc.) and configure accessible pages.
                   </p>
                 </div>
                 <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20 font-semibold flex items-center gap-1.5">
@@ -1123,6 +1509,286 @@ const DeveloperDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* ================= TAB 4: AUDIT LOGS ================= */}
+        {activeTab === 'logs' && (
+          <div className="space-y-6">
+            {/* LOGS HEADER & FILTERS BAR */}
+            <div className="bg-white dark:bg-boxdark p-5 rounded-2xl border border-stroke dark:border-strokedark shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-lg">
+                    <MdHistory />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-black dark:text-white">
+                      Live System Activity & Audit Logs
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Real-time forensic logs tracking user logins, sales operations, stock dispatches, and data changes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Search Bar */}
+                <div className="relative">
+                  <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-base" />
+                  <input
+                    type="text"
+                    placeholder="Search logs (user, table, action)..."
+                    value={logSearch}
+                    onChange={(e) => {
+                      setLogSearch(e.target.value);
+                      setLogPage(1);
+                    }}
+                    className="pl-9 pr-3 py-2 text-xs bg-gray-50 dark:bg-meta-4/30 border border-stroke dark:border-strokedark rounded-xl text-black dark:text-white placeholder:text-gray-400 focus:border-emerald-500 focus:outline-none w-56 sm:w-64"
+                  />
+                  {logSearch && (
+                    <button
+                      onClick={() => { setLogSearch(''); setLogPage(1); }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    >
+                      <MdClose className="text-xs" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Refresh Button */}
+                <button
+                  onClick={() => fetchAuditLogs()}
+                  disabled={logsLoading}
+                  className="px-3 py-2 text-xs font-bold rounded-xl border border-stroke dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4 text-gray-700 dark:text-gray-200 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Reload Logs"
+                >
+                  <MdRefresh className={logsLoading ? 'animate-spin' : ''} /> Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* ACTION & EMPLOYEE FILTERS BAR */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+              {/* Action Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 shrink-0">
+                <span className="text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1 pl-1">
+                  <MdFilterList /> Filter:
+                </span>
+                {[
+                  { id: 'ALL', label: 'All Activities', count: logs.length },
+                  { id: 'INSERT', label: 'Created', count: logs.filter(l => l.action_type === 'INSERT').length },
+                  { id: 'UPDATE', label: 'Modified', count: logs.filter(l => l.action_type === 'UPDATE').length },
+                  { id: 'DELETE', label: 'Deleted', count: logs.filter(l => l.action_type === 'DELETE').length },
+                  { id: 'AUTH', label: 'Logins & Logouts', count: logs.filter(l => l.action_type === 'LOGIN' || l.action_type === 'LOGOUT').length },
+                ].map(filter => (
+                  <button
+                    key={filter.id}
+                    onClick={() => {
+                      setLogFilterAction(filter.id);
+                      setLogPage(1);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl border font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                      logFilterAction === filter.id
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white dark:bg-boxdark text-gray-600 dark:text-gray-300 border-stroke dark:border-strokedark hover:border-emerald-500'
+                    }`}
+                  >
+                    <span>{filter.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                      logFilterAction === filter.id
+                        ? 'bg-white/20 text-white'
+                        : 'bg-gray-100 dark:bg-meta-4 text-gray-500 dark:text-gray-400'
+                    }`}>
+                      {filter.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Employee Filter Dropdown */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1">
+                  <MdPeople className="text-emerald-600" /> Filter by Employee:
+                </span>
+                <select
+                  value={logFilterEmployee}
+                  onChange={e => {
+                    setLogFilterEmployee(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="bg-white dark:bg-boxdark border border-stroke dark:border-strokedark text-black dark:text-white rounded-xl px-3 py-1.5 text-xs font-semibold outline-none focus:border-emerald-500 cursor-pointer shadow-2xs"
+                >
+                  <option value="ALL">All Employees & System ({logs.length})</option>
+                  {employeeFilterOptions.map(opt => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {logFilterEmployee !== 'ALL' && (
+                  <button
+                    onClick={() => { setLogFilterEmployee('ALL'); setLogPage(1); }}
+                    className="text-[11px] text-emerald-600 hover:underline font-bold"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* LOGS TABLE CARD */}
+            <div className="bg-white dark:bg-boxdark rounded-2xl border border-stroke dark:border-strokedark shadow-xs overflow-hidden">
+              {logsLoading && logs.length === 0 ? (
+                <div className="p-12 text-center">
+                  <Spinner />
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading audit log stream...</p>
+                </div>
+              ) : filteredLogs.length === 0 ? (
+                <div className="p-12 text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-meta-4 flex items-center justify-center mx-auto text-gray-400 text-xl">
+                    <MdHistory />
+                  </div>
+                  <h4 className="text-sm font-bold text-black dark:text-white">No activity logs found</h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                    {logSearch || logFilterAction !== 'ALL' || logFilterEmployee !== 'ALL'
+                      ? 'No logs matched your current filter criteria. Try changing filters or clearing search.'
+                      : 'Audit logs will record here automatically when employees perform sales, inventory, or auth actions.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-stroke dark:border-strokedark bg-gray-50/70 dark:bg-meta-4/20 text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        <th className="py-3.5 px-4 whitespace-nowrap">Date & Time</th>
+                        <th className="py-3.5 px-4">Employee / Performer</th>
+                        <th className="py-3.5 px-4">Action</th>
+                        <th className="py-3.5 px-4">Activity Description</th>
+                        <th className="py-3.5 px-4">Summary Details</th>
+                        <th className="py-3.5 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stroke dark:divide-strokedark text-xs">
+                      {paginatedLogs.map((log: any) => {
+                        const emp = getEmployeeInfo(log.performed_by);
+                        const activity = formatActivityEvent(log);
+
+                        return (
+                          <tr key={log.id} className="hover:bg-gray-50/70 dark:hover:bg-meta-4/10 transition">
+                            {/* Date & Time */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="font-semibold text-black dark:text-white">
+                                {new Date(log.created_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: '2-digit',
+                                  year: 'numeric',
+                                })}
+                              </div>
+                              <div className="text-[11px] text-gray-400 font-mono">
+                                {new Date(log.created_at).toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  second: '2-digit',
+                                })}
+                              </div>
+                            </td>
+
+                            {/* Employee */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${emp.avatarBg}`}>
+                                  {emp.initials}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-black dark:text-white leading-tight">
+                                    {emp.name}
+                                  </div>
+                                  <span className={`inline-block text-[10px] px-1.5 py-0.2 rounded-md font-semibold mt-0.5 border ${emp.badgeColor}`}>
+                                    {emp.role}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Action */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${activity.badgeClass}`}>
+                                <span>{activity.icon}</span>
+                                <span>{activity.actionLabel}</span>
+                              </span>
+                            </td>
+
+                            {/* Activity Event Title & Category */}
+                            <td className="py-3.5 px-4 font-medium text-black dark:text-white max-w-xs">
+                              <div className="font-semibold text-xs leading-snug">
+                                {activity.title}
+                              </div>
+                              <div className="text-[11px] text-gray-400">
+                                {activity.category}
+                              </div>
+                            </td>
+
+                            {/* Details Summary */}
+                            <td className="py-3.5 px-4 text-gray-600 dark:text-gray-300 max-w-sm">
+                              <div className="line-clamp-2 text-xs">
+                                {activity.summary || '—'}
+                              </div>
+                            </td>
+
+                            {/* Action Button */}
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              <button
+                                onClick={() => {
+                                  setSelectedLogModal(log);
+                                  setShowRawJsonModal(false);
+                                }}
+                                className="px-3 py-1.5 rounded-xl border border-stroke dark:border-strokedark bg-white dark:bg-boxdark hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 text-gray-700 dark:text-gray-200 text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                              >
+                                <MdVisibility className="text-emerald-600 dark:text-emerald-400 text-sm" /> View
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* PAGINATION BAR */}
+              {filteredLogs.length > pageSize && (
+                <div className="border-t border-stroke dark:border-strokedark p-4 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <div>
+                    Showing <strong className="text-black dark:text-white">{(logPage - 1) * pageSize + 1}</strong> to{' '}
+                    <strong className="text-black dark:text-white">
+                      {Math.min(logPage * pageSize, filteredLogs.length)}
+                    </strong>{' '}
+                    of <strong className="text-black dark:text-white">{filteredLogs.length}</strong> entries
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                      disabled={logPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-stroke dark:border-strokedark disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-meta-4 transition cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-1.5 font-bold text-black dark:text-white">
+                      {logPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setLogPage(p => Math.min(totalPages, p + 1))}
+                      disabled={logPage >= totalPages}
+                      className="px-3 py-1.5 rounded-lg border border-stroke dark:border-strokedark disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-meta-4 transition cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* EDIT EMPLOYEE PERMISSIONS MODAL */}
@@ -1215,6 +1881,211 @@ const DeveloperDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* AUDIT LOG DETAILS MODAL */}
+      {selectedLogModal && (() => {
+        const emp = getEmployeeInfo(selectedLogModal.performed_by);
+        const activity = formatActivityEvent(selectedLogModal);
+        const details = selectedLogModal.details || {};
+        const isDetailsObject = typeof details === 'object' && details !== null && !Array.isArray(details);
+
+        return (
+          <div className="fixed inset-0 bg-black/60 z-99999 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-boxdark w-full max-w-2xl rounded-3xl border border-stroke dark:border-strokedark p-6 shadow-2xl space-y-5 max-h-[92vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-stroke dark:border-strokedark pb-4">
+                <div className="flex items-center gap-3">
+                  <span className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-2xl flex items-center justify-center shrink-0">
+                    {activity.icon}
+                  </span>
+                  <div>
+                    <h4 className="text-base font-bold text-black dark:text-white">
+                      {activity.title}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Recorded on {new Date(selectedLogModal.created_at).toLocaleString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedLogModal(null)}
+                  className="p-2 rounded-xl text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-meta-4 transition cursor-pointer"
+                >
+                  <MdClose className="text-xl" />
+                </button>
+              </div>
+
+              {/* Quick Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                {/* 1. Employee Performer */}
+                <div className="bg-gray-50 dark:bg-meta-4/20 p-3.5 rounded-2xl border border-stroke dark:border-strokedark space-y-1.5">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">
+                    Performed By
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${emp.avatarBg}`}>
+                      {emp.initials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-black dark:text-white truncate">
+                        {emp.name}
+                      </div>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block truncate">
+                        {emp.role}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Action Type */}
+                <div className="bg-gray-50 dark:bg-meta-4/20 p-3.5 rounded-2xl border border-stroke dark:border-strokedark space-y-1.5">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">
+                    Action Event
+                  </span>
+                  <div className="pt-0.5">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${activity.badgeClass}`}>
+                      <span>{activity.icon}</span>
+                      <span>{activity.actionLabel}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Business Department */}
+                <div className="bg-gray-50 dark:bg-meta-4/20 p-3.5 rounded-2xl border border-stroke dark:border-strokedark space-y-1.5">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider block">
+                    Business Area
+                  </span>
+                  <div className="font-bold text-black dark:text-white pt-1 truncate">
+                    {activity.category}
+                  </div>
+                </div>
+              </div>
+
+              {/* User-Friendly Activity Breakdown */}
+              <div className="flex-1 overflow-y-auto space-y-3 min-h-0 pr-1">
+                <div className="flex items-center justify-between">
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                    <MdInfoOutline className="text-emerald-600 text-sm" /> Activity Information & Summary
+                  </h5>
+                  <button
+                    type="button"
+                    onClick={() => setShowRawJsonModal(prev => !prev)}
+                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <MdCode /> {showRawJsonModal ? 'Hide Technical Data' : 'View Technical Data'}
+                  </button>
+                </div>
+
+                {/* Friendly Field Cards */}
+                {isDetailsObject && Object.keys(details).length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {Object.entries(details).map(([key, val]) => {
+                      const friendlyKey = key
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, l => l.toUpperCase());
+
+                      if (Array.isArray(val)) {
+                        return (
+                          <div
+                            key={key}
+                            className="sm:col-span-2 bg-gray-50 dark:bg-meta-4/20 p-3 rounded-xl border border-stroke dark:border-strokedark"
+                          >
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">
+                              {friendlyKey} ({val.length})
+                            </span>
+                            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+                              {val.map((item: any, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="inline-block bg-white dark:bg-boxdark border border-stroke dark:border-strokedark text-black dark:text-white px-2.5 py-1 rounded-lg text-xs font-medium shadow-2xs"
+                                >
+                                  {String(item)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      let displayVal = String(val);
+                      if (typeof val === 'number') {
+                        if (key.toLowerCase().includes('quantity') || key.toLowerCase().includes('qty')) {
+                          displayVal = `${val.toLocaleString()} Units`;
+                        } else if (key.toLowerCase().includes('count')) {
+                          displayVal = `${val.toLocaleString()}`;
+                        } else if (key.toLowerCase().includes('amount') || key.toLowerCase().includes('price') || key.toLowerCase().includes('total')) {
+                          displayVal = `Rs. ${val.toLocaleString()}`;
+                        } else {
+                          displayVal = val.toLocaleString();
+                        }
+                      } else if (typeof val === 'object' && val !== null) {
+                        displayVal = JSON.stringify(val);
+                      }
+
+                      return (
+                        <div
+                          key={key}
+                          className="bg-gray-50 dark:bg-meta-4/20 p-3 rounded-xl border border-stroke dark:border-strokedark"
+                        >
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
+                            {friendlyKey}
+                          </span>
+                          <span className="text-xs font-semibold text-black dark:text-white mt-0.5 block break-words">
+                            {displayVal || '—'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-meta-4/20 p-4 rounded-xl border border-stroke dark:border-strokedark text-xs text-gray-700 dark:text-gray-300">
+                    {String(details || 'No additional details recorded for this activity.')}
+                  </div>
+                )}
+
+                {/* Collapsible Technical JSON (Hidden by default for non-technical users) */}
+                {showRawJsonModal && (
+                  <div className="pt-2 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono text-[11px] text-gray-400">Raw Technical Payload (JSON)</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(selectedLogModal.details, null, 2));
+                          toast.success('Log payload copied to clipboard');
+                        }}
+                        className="text-xs text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <MdContentCopy className="text-xs" /> Copy JSON
+                      </button>
+                    </div>
+                    <pre className="bg-gray-900 text-emerald-400 p-3.5 rounded-xl text-xs font-mono border border-gray-800 leading-relaxed overflow-x-auto max-h-48">
+                      {JSON.stringify(selectedLogModal.details, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="pt-3 border-t border-stroke dark:border-strokedark flex justify-end">
+                <button
+                  onClick={() => setSelectedLogModal(null)}
+                  className="px-5 py-2 text-xs font-bold rounded-xl bg-gray-100 dark:bg-meta-4 hover:bg-gray-200 dark:hover:bg-meta-4/80 text-black dark:text-white transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

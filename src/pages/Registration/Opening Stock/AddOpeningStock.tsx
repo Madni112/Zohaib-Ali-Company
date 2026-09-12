@@ -3,12 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Formik, Form, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { supabase } from '../../../Context/supabaseClient';
+import { useAuth } from '../../../Context/Auth';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 const AddOpeningStock = () => {
+    const { userName, userEmail } = useAuth();
     const [loading, setLoading] = useState(false);
     const [locations, setLocations] = useState<any[]>([]);
     const [products, setProducts] = useState<any[]>([]);
@@ -200,6 +202,27 @@ const AddOpeningStock = () => {
                 await updateProductStock(nameKey, totalQty);
             }
 
+            // Record in audit_logs
+            try {
+                const totalUnits = rows.reduce((sum: number, r: any) => sum + (Number(r.qty) || 0), 0);
+                await supabase.from('audit_logs').insert({
+                    action_type: 'INSERT',
+                    table_name: 'opening_stocks',
+                    performed_by: userName || userEmail || 'Warehouse Manager',
+                    details: {
+                        stock_no: sharedStockNo,
+                        batch_number: values.batchNumber || '001',
+                        location: values.location,
+                        opening_date: values.openingDate,
+                        items_count: rows.length,
+                        total_quantity: totalUnits,
+                        products: rows.slice(0, 10).map((r: any) => `${r.itemName} (${r.qty} Units)`),
+                    },
+                });
+            } catch (auditErr) {
+                console.warn('Opening stock audit log note:', auditErr);
+            }
+
             toast.success(`Opening stock initialized for ${rows.length} item(s) under ${sharedStockNo}!`);
             navigate('/Inventory/OpeningStock/List');
         } catch (err: any) {
@@ -262,6 +285,27 @@ const AddOpeningStock = () => {
             // 4. Re-apply stock for the new lines
             for (const [nameKey, qty] of Object.entries(aggregateByProduct(rows))) {
                 await updateProductStock(nameKey, qty);
+            }
+
+            // Record batch update in audit_logs
+            try {
+                const totalUnits = rows.reduce((sum: number, r: any) => sum + (Number(r.qty) || 0), 0);
+                await supabase.from('audit_logs').insert({
+                    action_type: 'UPDATE',
+                    table_name: 'opening_stocks',
+                    performed_by: userName || userEmail || 'Warehouse Manager',
+                    details: {
+                        stock_no: batchStockNo,
+                        batch_number: values.batchNumber || '001',
+                        location: values.location,
+                        opening_date: values.openingDate,
+                        items_count: rows.length,
+                        total_quantity: totalUnits,
+                        products: rows.slice(0, 10).map((r: any) => `${r.itemName} (${r.qty} Units)`),
+                    },
+                });
+            } catch (auditErr) {
+                console.warn('Opening stock batch update audit log note:', auditErr);
             }
 
             toast.success(`Opening stock batch ${batchStockNo} updated (${rows.length} item(s))!`);

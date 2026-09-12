@@ -248,12 +248,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (data.user) {
       await handleAuthState(data.session);
+      try {
+        await supabase.from('audit_logs').insert([{
+          action_type: 'LOGIN',
+          table_name: 'auth_users',
+          performed_by: email,
+          details: { email, event: 'User logged into ERP portal', timestamp: new Date().toISOString() }
+        }]);
+      } catch (_) {}
     }
 
     navigate('/');
   };
 
   const logout = async () => {
+    try {
+      const userEmail = localStorage.getItem('zac_user_email') || 'User';
+      await supabase.from('audit_logs').insert([{
+        action_type: 'LOGOUT',
+        table_name: 'auth_users',
+        performed_by: userEmail,
+        details: { email: userEmail, event: 'User logged out of ERP portal', timestamp: new Date().toISOString() }
+      }]);
+    } catch (_) {}
+
     await supabase.auth.signOut();
     localStorage.removeItem('zac_is_authenticated');
     localStorage.removeItem('zac_user_role');
