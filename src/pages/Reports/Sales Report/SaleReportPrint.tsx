@@ -156,10 +156,28 @@ const SaleReportPrint = () => {
           .filter(Boolean);
       };
 
+      const extractItemDetails = (row: any): Array<{ name: string; qty: number | string; price: number | string }> => {
+        let itemsList: any[] = [];
+        if (Array.isArray(row.items)) {
+          itemsList = row.items;
+        } else if (typeof row.items === 'string') {
+          try {
+            itemsList = JSON.parse(row.items);
+          } catch {
+            itemsList = [];
+          }
+        }
+        return itemsList.map((it: any) => ({
+          name: it.itemName || it.pDescription || it.product_name || it.name || 'Product',
+          qty: it.qty ?? it.quantity ?? it.orderQty ?? 1,
+          price: it.rp ?? it.rate ?? it.price ?? 0
+        })).filter(it => it.name);
+      };
+
       const columns: ExcelColumn[] = [
         { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
         { header: 'Document Ref #', key: 'docRef', width: 18 },
-        { header: 'Product', key: 'products', width: 35 },
+        { header: 'Product', key: 'products', width: 45 },
         { header: 'Customer', key: 'customerName', width: 28 },
         ...(rType === 'sale' ? [
           { header: 'Salesmen', key: 'salesman', width: 18 },
@@ -169,11 +187,16 @@ const SaleReportPrint = () => {
       ];
 
       const exportData = reportRows.map((row) => {
+        const itemDetails = extractItemDetails(row);
         const itemNames = extractItemNames(row);
+        const productsFormatted = rType === 'invoice'
+          ? itemDetails.map(it => `${it.name} | ${it.qty} | Rs. ${Number(it.price).toLocaleString()}`).join('\r\n')
+          : itemNames.join(' | ');
+
         return {
           processingDate: row.sale_date || row.return_date || String(row.created_at || '').split('T')[0],
           docRef: row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`),
-          products: itemNames.join(' | '),
+          products: productsFormatted,
           customerName: row.customer_name || 'Counter Retail Buyer',
           salesman: row.salesman || 'Direct',
           transport: row.transport_name || 'Self Pick',
@@ -215,6 +238,24 @@ const SaleReportPrint = () => {
     return itemsList
       .map((it: any) => it.itemName || it.pDescription || it.product_name || it.name || '')
       .filter(Boolean);
+  };
+
+  const extractItemDetails = (row: any): Array<{ name: string; qty: number | string; price: number | string }> => {
+    let itemsList: any[] = [];
+    if (Array.isArray(row.items)) {
+      itemsList = row.items;
+    } else if (typeof row.items === 'string') {
+      try {
+        itemsList = JSON.parse(row.items);
+      } catch {
+        itemsList = [];
+      }
+    }
+    return itemsList.map((it: any) => ({
+      name: it.itemName || it.pDescription || it.product_name || it.name || 'Product',
+      qty: it.qty ?? it.quantity ?? it.orderQty ?? 1,
+      price: it.rp ?? it.rate ?? it.price ?? 0
+    })).filter(it => it.name);
   };
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
@@ -281,27 +322,46 @@ const SaleReportPrint = () => {
                   const displayDocPrefixId = row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`);
                   const processingDateDisplay = row.sale_date || row.return_date || String(row.created_at || '').split('T')[0];
                   const itemNames = extractItemNames(row);
+                  const itemDetails = extractItemDetails(row);
 
                   return (
                     <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                      <td className="p-1.5 border border-black text-center text-gray-600">{processingDateDisplay}</td>
-                      <td className="p-1.5 border border-black text-primary font-black uppercase whitespace-nowrap">{displayDocPrefixId}</td>
-                      <td className="p-1.5 border border-black font-sans text-black text-[11px]">
-                        {itemNames.length > 0 ? (
-                          itemNames.map((name: string, i: number) => (
-                            <React.Fragment key={i}>
-                              {i > 0 && <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>}
-                              <span className="font-medium">{name}</span>
-                            </React.Fragment>
-                          ))
+                      <td className="p-1.5 border border-black text-center text-gray-600 align-top">{processingDateDisplay}</td>
+                      <td className="p-1.5 border border-black text-primary font-black uppercase whitespace-nowrap align-top">{displayDocPrefixId}</td>
+                      <td className="p-1.5 border border-black font-sans text-black text-[11px] align-top">
+                        {rType === 'invoice' ? (
+                          itemDetails.length > 0 ? (
+                            <div className="flex flex-col gap-1 py-0.5">
+                              {itemDetails.map((item, idx) => (
+                                <div key={idx} className="flex items-center text-[11px] whitespace-nowrap">
+                                  <span className="font-semibold text-black">{item.name}</span>
+                                  <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
+                                  <span className="text-gray-700 font-mono font-bold">{item.qty}</span>
+                                  <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
+                                  <span className="text-gray-900 font-mono font-bold">Rs. {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">No Items</span>
+                          )
                         ) : (
-                          <span className="text-gray-400 italic">No Items</span>
+                          itemNames.length > 0 ? (
+                            itemNames.map((name: string, i: number) => (
+                              <React.Fragment key={i}>
+                                {i > 0 && <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>}
+                                <span className="font-medium">{name}</span>
+                              </React.Fragment>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 italic">No Items</span>
+                          )
                         )}
                       </td>
-                      <td className="p-1.5 border border-black text-black font-sans">{row.customer_name || 'Counter Retail Buyer'}</td>
-                      {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-gray-600">{row.salesman || 'Direct'}</td>}
-                      {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-purple-700 font-bold">{row.transport_name || 'Self Pick'}</td>}
-                      <td className="p-1.5 border border-black text-right pr-3 text-success font-black whitespace-nowrap">Rs. {Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="p-1.5 border border-black text-black font-sans align-top">{row.customer_name || 'Counter Retail Buyer'}</td>
+                      {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-gray-600 align-top">{row.salesman || 'Direct'}</td>}
+                      {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-purple-700 font-bold align-top">{row.transport_name || 'Self Pick'}</td>}
+                      <td className="p-1.5 border border-black text-right pr-3 text-success font-black whitespace-nowrap align-top">Rs. {Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                   );
                 })
