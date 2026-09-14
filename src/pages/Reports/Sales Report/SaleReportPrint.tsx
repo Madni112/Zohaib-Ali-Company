@@ -14,6 +14,7 @@ const SaleReportPrint = () => {
   const [loading, setLoading] = useState(true);
 
   const [reportRows, setReportRows] = useState<any[]>([]);
+  const [productUomMap, setProductUomMap] = useState<Record<string, string>>({});
 
   const config = location.state || { type: 'sale', filters: {} };
   const { type: rType, filters } = config;
@@ -22,6 +23,18 @@ const SaleReportPrint = () => {
     const compileExcelStructuredDataset = async () => {
       try {
         setLoading(true);
+
+        const { data: prodData } = await supabase.from('products').select('product_name, uom, category');
+        const uomMapObj: Record<string, string> = {};
+        if (prodData) {
+          prodData.forEach((p: any) => {
+            if (p.product_name) {
+              const isTile = Boolean(String(p.category || '').toLowerCase().includes('tile'));
+              uomMapObj[p.product_name.trim().toLowerCase()] = p.uom || (isTile ? 'BOX' : 'Nos');
+            }
+          });
+          setProductUomMap(uomMapObj);
+        }
 
         if (rType === 'sale') {
           let query = supabase.from('sales_invoices').select('*');
@@ -156,7 +169,7 @@ const SaleReportPrint = () => {
           .filter(Boolean);
       };
 
-      const extractItemDetails = (row: any): Array<{ name: string; qty: number | string; price: number | string }> => {
+      const extractItemDetails = (row: any, uomMap?: Record<string, string>): Array<{ name: string; qty: number | string; uom: string; price: number | string }> => {
         let itemsList: any[] = [];
         if (Array.isArray(row.items)) {
           itemsList = row.items;
@@ -167,11 +180,18 @@ const SaleReportPrint = () => {
             itemsList = [];
           }
         }
-        return itemsList.map((it: any) => ({
-          name: it.itemName || it.pDescription || it.product_name || it.name || 'Product',
-          qty: it.qty ?? it.quantity ?? it.orderQty ?? 1,
-          price: it.rp ?? it.rate ?? it.price ?? 0
-        })).filter(it => it.name);
+        const activeMap = uomMap || productUomMap;
+        return itemsList.map((it: any) => {
+          const name = it.itemName || it.pDescription || it.product_name || it.name || 'Product';
+          const cleanKey = String(name).trim().toLowerCase();
+          const uom = it.uom || it.unit || activeMap[cleanKey] || 'Nos';
+          return {
+            name,
+            qty: it.qty ?? it.quantity ?? it.orderQty ?? 1,
+            uom,
+            price: it.rp ?? it.rate ?? it.price ?? 0
+          };
+        }).filter(it => it.name);
       };
 
       const columns: ExcelColumn[] = [
@@ -190,7 +210,7 @@ const SaleReportPrint = () => {
         const itemDetails = extractItemDetails(row);
         const itemNames = extractItemNames(row);
         const productsFormatted = rType === 'invoice'
-          ? itemDetails.map(it => `${it.name} | ${it.qty} | Rs. ${Number(it.price).toLocaleString()}`).join('\r\n')
+          ? itemDetails.map(it => `${it.name} | ${it.qty} ${it.uom} | Rs. ${Number(it.price).toLocaleString()}`).join('\r\n')
           : itemNames.join(' | ');
 
         return {
@@ -240,7 +260,7 @@ const SaleReportPrint = () => {
       .filter(Boolean);
   };
 
-  const extractItemDetails = (row: any): Array<{ name: string; qty: number | string; price: number | string }> => {
+  const extractItemDetails = (row: any): Array<{ name: string; qty: number | string; uom: string; price: number | string }> => {
     let itemsList: any[] = [];
     if (Array.isArray(row.items)) {
       itemsList = row.items;
@@ -251,11 +271,17 @@ const SaleReportPrint = () => {
         itemsList = [];
       }
     }
-    return itemsList.map((it: any) => ({
-      name: it.itemName || it.pDescription || it.product_name || it.name || 'Product',
-      qty: it.qty ?? it.quantity ?? it.orderQty ?? 1,
-      price: it.rp ?? it.rate ?? it.price ?? 0
-    })).filter(it => it.name);
+    return itemsList.map((it: any) => {
+      const name = it.itemName || it.pDescription || it.product_name || it.name || 'Product';
+      const cleanKey = String(name).trim().toLowerCase();
+      const uom = it.uom || it.unit || productUomMap[cleanKey] || 'Nos';
+      return {
+        name,
+        qty: it.qty ?? it.quantity ?? it.orderQty ?? 1,
+        uom,
+        price: it.rp ?? it.rate ?? it.price ?? 0
+      };
+    }).filter(it => it.name);
   };
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
@@ -336,7 +362,7 @@ const SaleReportPrint = () => {
                                 <div key={idx} className="flex items-center text-[11px] whitespace-nowrap">
                                   <span className="font-semibold text-black">{item.name}</span>
                                   <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
-                                  <span className="text-gray-700 font-mono font-bold">{item.qty}</span>
+                                  <span className="text-gray-700 font-mono font-bold">{item.qty} {item.uom}</span>
                                   <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
                                   <span className="text-gray-900 font-mono font-bold">Rs. {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                 </div>
