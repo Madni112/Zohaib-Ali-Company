@@ -140,29 +140,46 @@ const SaleReportPrint = () => {
         'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
       };
 
+      const extractItemNames = (row: any): string[] => {
+        let itemsList: any[] = [];
+        if (Array.isArray(row.items)) {
+          itemsList = row.items;
+        } else if (typeof row.items === 'string') {
+          try {
+            itemsList = JSON.parse(row.items);
+          } catch {
+            itemsList = [];
+          }
+        }
+        return itemsList
+          .map((it: any) => it.itemName || it.pDescription || it.product_name || it.name || '')
+          .filter(Boolean);
+      };
+
       const columns: ExcelColumn[] = [
-        { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
+        { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
         { header: 'Document Ref #', key: 'docRef', width: 18 },
-        { header: 'Customer / Account Title', key: 'customerName', width: 28 },
+        { header: 'Product', key: 'products', width: 35 },
+        { header: 'Customer', key: 'customerName', width: 28 },
         ...(rType === 'sale' ? [
-          { header: 'Officer Link', key: 'salesman', width: 18 },
+          { header: 'Salesmen', key: 'salesman', width: 18 },
           { header: 'Carrier Fleet', key: 'transport', width: 18 }
         ] : []),
-        { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
-        { header: 'Receipt Status', key: 'status', width: 14, alignment: 'center' as const },
         { header: 'Gross Matrix Amount (Rs.)', key: 'totalAmount', width: 22, type: 'currency' as const }
       ];
 
-      const exportData = reportRows.map((row, idx) => ({
-        idx: idx + 1,
-        docRef: rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`,
-        customerName: row.customer_name || 'Counter Retail Buyer',
-        salesman: row.salesman || 'Direct',
-        transport: row.transport_name || 'Self Pick',
-        processingDate: row.sale_date || row.return_date || String(row.created_at || '').split('T')[0],
-        status: row.receipt_status || row.status || 'Confirm',
-        totalAmount: Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0)
-      }));
+      const exportData = reportRows.map((row) => {
+        const itemNames = extractItemNames(row);
+        return {
+          processingDate: row.sale_date || row.return_date || String(row.created_at || '').split('T')[0],
+          docRef: row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`),
+          products: itemNames.join(' | '),
+          customerName: row.customer_name || 'Counter Retail Buyer',
+          salesman: row.salesman || 'Direct',
+          transport: row.transport_name || 'Self Pick',
+          totalAmount: Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0)
+        };
+      });
 
       await exportToExcel({
         fileName: `Sales_Audit_Report_${rType}_${new Date().toISOString().split('T')[0]}.xlsx`,
@@ -182,6 +199,22 @@ const SaleReportPrint = () => {
     } finally {
       setExporting(false);
     }
+  };
+
+  const extractItemNames = (row: any): string[] => {
+    let itemsList: any[] = [];
+    if (Array.isArray(row.items)) {
+      itemsList = row.items;
+    } else if (typeof row.items === 'string') {
+      try {
+        itemsList = JSON.parse(row.items);
+      } catch {
+        itemsList = [];
+      }
+    }
+    return itemsList
+      .map((it: any) => it.itemName || it.pDescription || it.product_name || it.name || '')
+      .filter(Boolean);
   };
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
@@ -227,39 +260,48 @@ const SaleReportPrint = () => {
           <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans antialiased text-left print:w-full">
             <thead>
               <tr className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
-                <th className="p-1.5 border border-black text-center w-12">Index</th>
-                <th className="p-1.5 border border-black">Document Ref #</th>
-                <th className="p-1.5 border border-black">Customer / Account Title</th>
-                {rType === 'sale' && <th className="p-1.5 border border-black">Officer Link</th>}
-                {rType === 'sale' && <th className="p-1.5 border border-black">Carrier Fleet</th>}
                 <th className="p-1.5 border border-black text-center">Processing Date</th>
-                <th className="p-1.5 border border-black text-center">Receipt Status</th>
+                <th className="p-1.5 border border-black">Document Ref #</th>
+                <th className="p-1.5 border border-black">Product</th>
+                <th className="p-1.5 border border-black">Customer</th>
+                {rType === 'sale' && <th className="p-1.5 border border-black">Salesmen</th>}
+                {rType === 'sale' && <th className="p-1.5 border border-black">Carrier Fleet</th>}
                 <th className="p-1.5 border border-black text-right pr-3">Gross Matrix Amount</th>
               </tr>
             </thead>
             <tbody>
               {reportRows.length === 0 ? (
                 <tr>
-                  <td colSpan={rType === 'sale' ? 8 : 6} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">
+                  <td colSpan={rType === 'sale' ? 7 : 5} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">
                     No rows fetched matching the isolated active report criteria token keys.
                   </td>
                 </tr>
               ) : (
-                reportRows.map((row, idx) => {
-                  const displayDocPrefixId = `INV-${row.id}`;
+                reportRows.map((row) => {
+                  const displayDocPrefixId = row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`);
                   const processingDateDisplay = row.sale_date || row.return_date || String(row.created_at || '').split('T')[0];
-                  const activeStatusValue = row.receipt_status || 'Confirm';
+                  const itemNames = extractItemNames(row);
 
                   return (
                     <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                      <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
-                      <td className="p-1.5 border border-black text-primary font-black uppercase">{displayDocPrefixId}</td>
+                      <td className="p-1.5 border border-black text-center text-gray-600">{processingDateDisplay}</td>
+                      <td className="p-1.5 border border-black text-primary font-black uppercase whitespace-nowrap">{displayDocPrefixId}</td>
+                      <td className="p-1.5 border border-black font-sans text-black text-[11px]">
+                        {itemNames.length > 0 ? (
+                          itemNames.map((name: string, i: number) => (
+                            <React.Fragment key={i}>
+                              {i > 0 && <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>}
+                              <span className="font-medium">{name}</span>
+                            </React.Fragment>
+                          ))
+                        ) : (
+                          <span className="text-gray-400 italic">No Items</span>
+                        )}
+                      </td>
                       <td className="p-1.5 border border-black text-black font-sans">{row.customer_name || 'Counter Retail Buyer'}</td>
                       {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-gray-600">{row.salesman || 'Direct'}</td>}
                       {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-purple-700 font-bold">{row.transport_name || 'Self Pick'}</td>}
-                      <td className="p-1.5 border border-black text-center text-gray-500">{processingDateDisplay}</td>
-                      <td className="p-2 border border-black text-center uppercase text-[10px] font-black">{activeStatusValue}</td>
-                      <td className="p-1.5 border border-black text-right pr-3 text-success font-black">Rs. {Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="p-1.5 border border-black text-right pr-3 text-success font-black whitespace-nowrap">Rs. {Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                   );
                 })
@@ -267,8 +309,8 @@ const SaleReportPrint = () => {
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t border-black font-black font-mono text-xs">
-                <td colSpan={rType === 'sale' ? 7 : 5} className="p-2 border border-black text-right uppercase tracking-wider text-gray-500">Gross Sheet Aggregated Balanced Sum (PKR):</td>
-                <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm">
+                <td colSpan={rType === 'sale' ? 6 : 4} className="p-2 border border-black text-right uppercase tracking-wider text-gray-500">Gross Sheet Aggregated Balanced Sum (PKR):</td>
+                <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm whitespace-nowrap">
                   Rs. {reportRows.reduce((sum, r) => sum + (Number(r.total_amount || r.return_amount || r.payout_amount_paid || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
               </tr>
