@@ -377,6 +377,24 @@ const NewInvoice = () => {
   const executeInvoicePersistence = async (values: any, customerFinalName: string) => {
     try {
       setLoading(true);
+      
+      // STRICT VALIDATION: Block if quantity exceeds available stock
+      for (const item of values.items) {
+        let maxAllowed = Number(item.availableQty || 0);
+        if (editData && editData.items) {
+           const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
+           const original = oldItems.find((oi: any) => oi.skuCode === item.skuCode && (oi.warehouse || editData.dispatch_warehouse || 'Main Warehouse') === (item.warehouse || values.dispatchWarehouse || 'Main Warehouse'));
+           if (original) {
+              maxAllowed += Number(original.qty || 0);
+           }
+        }
+        if (item.itemName && Number(item.qty) > maxAllowed) {
+          toast.error(`Insufficient stock for ${item.itemName}. Max Available: ${maxAllowed.toLocaleString()}, Requested: ${Number(item.qty).toLocaleString()}`);
+          setLoading(false);
+          return;
+        }
+      }
+
       let calculatedGrandTotal = values.items.reduce((acc: number, item: any) => {
         return acc + calculateLineTotals(item, values.taxScenario, values.applyFbrTax).netTotal;
       }, 0) + Number(values.transportCharges || 0) + Number(values.additionalCharges || 0);
@@ -1080,7 +1098,15 @@ const NewInvoice = () => {
                                 const uomName = selectedProd?.uom ? selectedProd.uom : (isTile ? 'BOX' : 'PCS');
 
                                 // Calculate available stock breakdown
-                                const totalAvailStock = Number(item.availableQty || 0);
+                                let effectiveAvailStock = Number(item.availableQty || 0);
+                                if (editData && editData.items) {
+                                  const oldItems = typeof editData.items === 'string' ? JSON.parse(editData.items || '[]') : (editData.items || []);
+                                  const original = oldItems.find((oi: any) => oi.skuCode === item.skuCode && (oi.warehouse || editData.dispatch_warehouse || 'Main Warehouse') === (item.warehouse || values.dispatchWarehouse || 'Main Warehouse'));
+                                  if (original) {
+                                     effectiveAvailStock += Number(original.qty || 0);
+                                  }
+                                }
+                                const totalAvailStock = effectiveAvailStock;
                                 const totalPieces = isTile && pcsPerBox > 1 ? Math.round(totalAvailStock * pcsPerBox) : 0;
                                 const availBoxes = isTile && pcsPerBox > 1 ? Math.floor(totalPieces / pcsPerBox) : Math.floor(totalAvailStock);
                                 const availLoosePcs = isTile && pcsPerBox > 1 ? (totalPieces % pcsPerBox) : 0;

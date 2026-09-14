@@ -1036,6 +1036,36 @@ const DeveloperDashboard: React.FC = () => {
       };
     }
 
+    if (table.includes('product')) {
+      const isBulk = Boolean(details.event?.toLowerCase().includes('bulk') || details.new_products_added !== undefined || details.file_name);
+      if (isBulk) {
+        const added = details.new_products_added ?? 0;
+        const updated = details.existing_products_updated ?? 0;
+        const skipped = details.skipped_duplicates ?? 0;
+        return {
+          category: 'Product Catalog',
+          actionLabel: 'Bulk Product Upload',
+          badgeClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800',
+          icon: '📦',
+          title: `Bulk Upload: ${added} New Products Added`,
+          summary: `${added} added • ${updated} updated • ${skipped} duplicates skipped (${details.file_name || 'Excel'})`,
+        };
+      }
+
+      return {
+        category: 'Product Catalog',
+        actionLabel: action === 'INSERT' ? 'Created Product' : action === 'UPDATE' ? 'Updated Product' : 'Deleted Product',
+        badgeClass: action === 'INSERT'
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300'
+          : action === 'UPDATE'
+          ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300'
+          : 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-300',
+        icon: '🏷️',
+        title: `${action === 'INSERT' ? 'Added' : action === 'UPDATE' ? 'Updated' : 'Removed'} Product: ${details.product_name || details.name || ''}`,
+        summary: details.item_sr_no ? `Code: ${details.item_sr_no}` : (details.category ? `Category: ${details.category}` : 'Product catalog modified'),
+      };
+    }
+
     let friendlyAction = 'Activity Logged';
     let badgeClass = 'bg-gray-100 text-gray-700 dark:bg-meta-4 dark:text-gray-300 border-gray-300 dark:border-strokedark';
     if (action === 'INSERT') {
