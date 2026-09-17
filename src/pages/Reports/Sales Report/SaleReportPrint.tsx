@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
-import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
+import { MdPrint, MdArrowBack, MdFileDownload, MdShare } from 'react-icons/md';
+import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
@@ -18,6 +19,14 @@ const SaleReportPrint = () => {
 
   const config = location.state || { type: 'sale', filters: {} };
   const { type: rType, filters } = config;
+
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
+    return () => {
+      document.title = originalTitle;
+    };
+  }, []);
 
   useEffect(() => {
     const compileExcelStructuredDataset = async () => {
@@ -93,6 +102,20 @@ const SaleReportPrint = () => {
             });
           }
 
+          if (filters.sortBy) {
+            if (filters.sortBy === 'date_asc') {
+              pool.sort((a, b) => (a.sale_date || a.created_at || '').localeCompare(b.sale_date || b.created_at || ''));
+            } else if (filters.sortBy === 'amount_desc') {
+              pool.sort((a, b) => Number(b.total_amount || 0) - Number(a.total_amount || 0));
+            } else if (filters.sortBy === 'amount_asc') {
+              pool.sort((a, b) => Number(a.total_amount || 0) - Number(b.total_amount || 0));
+            } else if (filters.sortBy === 'invoice_asc') {
+              pool.sort((a, b) => String(a.invoice_no || a.id).localeCompare(String(b.invoice_no || b.id)));
+            } else {
+              pool.sort((a, b) => (b.sale_date || b.created_at || '').localeCompare(a.sale_date || a.created_at || ''));
+            }
+          }
+
           setReportRows(pool);
         }
 
@@ -118,15 +141,101 @@ const SaleReportPrint = () => {
               return targetDateStr >= startStr && targetDateStr <= endStr;
             });
           }
+
+          if (filters.sortBy) {
+            if (filters.sortBy === 'date_asc') {
+              pool.sort((a, b) => (a.return_date || a.created_at || '').localeCompare(b.return_date || b.created_at || ''));
+            } else if (filters.sortBy === 'amount_desc') {
+              pool.sort((a, b) => Number(b.return_amount || 0) - Number(a.return_amount || 0));
+            } else if (filters.sortBy === 'amount_asc') {
+              pool.sort((a, b) => Number(a.return_amount || 0) - Number(b.return_amount || 0));
+            } else {
+              pool.sort((a, b) => (b.return_date || b.created_at || '').localeCompare(a.return_date || a.created_at || ''));
+            }
+          }
+
           setReportRows(pool);
         }
 
         else if (rType === 'invoice') {
           let query = supabase.from('sales_invoices').select('*');
           if (filters.invoiceNo && filters.invoiceNo !== 'All') query = query.eq('id', filters.invoiceNo);
+          if (filters.customer && filters.customer.length > 0) query = query.in('customer_name', filters.customer);
+          if (filters.dateFrom && filters.dateTo) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            const endStr = String(filters.dateTo).split('T')[0];
+            query = query.gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59.999Z`);
+          }
           const { data, error } = await query;
           if (error) throw error;
-          setReportRows(data || []);
+
+          let pool = data || [];
+          if (filters.dateFrom && filters.dateTo) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            const endStr = String(filters.dateTo).split('T')[0];
+            pool = pool.filter(i => {
+              const targetDateStr = String(i.sale_date || i.created_at || '').split('T')[0];
+              return targetDateStr >= startStr && targetDateStr <= endStr;
+            });
+          }
+
+          if (filters.sortBy) {
+            if (filters.sortBy === 'date_asc') {
+              pool.sort((a, b) => (a.sale_date || a.created_at || '').localeCompare(b.sale_date || b.created_at || ''));
+            } else if (filters.sortBy === 'amount_desc') {
+              pool.sort((a, b) => Number(b.total_amount || 0) - Number(a.total_amount || 0));
+            } else if (filters.sortBy === 'amount_asc') {
+              pool.sort((a, b) => Number(a.total_amount || 0) - Number(b.total_amount || 0));
+            } else if (filters.sortBy === 'invoice_asc') {
+              pool.sort((a, b) => String(a.invoice_no || a.id).localeCompare(String(b.invoice_no || b.id)));
+            } else {
+              pool.sort((a, b) => (b.sale_date || b.created_at || '').localeCompare(a.sale_date || a.created_at || ''));
+            }
+          }
+
+          setReportRows(pool);
+        }
+
+        else if (rType === 'loyalty') {
+          let query = supabase.from('sales_invoices').select('*').order('created_at', { ascending: true });
+          if (filters.customer && filters.customer.length > 0) query = query.in('customer_name', filters.customer);
+          if (filters.dateFrom && filters.dateTo) {
+            const startStr = String(filters.dateFrom).split('T')[0];
+            const endStr = String(filters.dateTo).split('T')[0];
+            query = query.gte('created_at', `${startStr}T00:00:00`).lte('created_at', `${endStr}T23:59:59.999Z`);
+          }
+          const { data: invData, error: invError } = await query;
+          if (invError) throw invError;
+
+          let runningPts = 0;
+          const ledgerEntries: any[] = [];
+
+          // Opening row
+          ledgerEntries.push({
+            id: 'open-0',
+            date: filters.dateFrom || new Date().toISOString().split('T')[0],
+            narration: 'Opening',
+            debit_points: 0,
+            credit_points: 0,
+            balance: 0,
+            customer_name: filters.customer?.join(', ') || 'All Customers'
+          });
+
+          (invData || []).forEach((inv: any) => {
+            const earned = Math.round(Number(inv.total_amount || 0) * 0.01 * 100) / 100; // 1 point per Rs 100
+            runningPts += earned;
+            ledgerEntries.push({
+              id: `inv-${inv.id}`,
+              date: inv.sale_date || String(inv.created_at || '').split('T')[0],
+              narration: `Sales Invoice Points Accrual (Invoice #${inv.invoice_no || `INV-${String(inv.id).padStart(4, '0')}`})`,
+              debit_points: 0,
+              credit_points: earned,
+              balance: runningPts,
+              customer_name: inv.customer_name
+            });
+          });
+
+          setReportRows(ledgerEntries);
         }
       } catch (err: any) {
         toast.error('Audit compilation trace failed: ' + err.message);
@@ -194,41 +303,62 @@ const SaleReportPrint = () => {
         }).filter(it => it.name);
       };
 
-      const columns: ExcelColumn[] = [
-        { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
-        { header: 'Document Ref #', key: 'docRef', width: 18 },
-        { header: 'Product', key: 'products', width: 45 },
-        { header: 'Customer', key: 'customerName', width: 28 },
-        ...(rType === 'sale' ? [
-          { header: 'Salesmen', key: 'salesman', width: 18 },
-          { header: 'Carrier Fleet', key: 'transport', width: 18 }
-        ] : []),
-        { header: 'Gross Matrix Amount (Rs.)', key: 'totalAmount', width: 22, type: 'currency' as const }
-      ];
+      let columns: ExcelColumn[] = [];
+      let exportData: any[] = [];
 
-      const exportData = reportRows.map((row) => {
-        const itemDetails = extractItemDetails(row);
-        const itemNames = extractItemNames(row);
-        const productsFormatted = rType === 'invoice'
-          ? itemDetails.map(it => `${it.name} | ${it.qty} ${it.uom} | Rs. ${Number(it.price).toLocaleString()}`).join('\r\n')
-          : itemNames.join(' | ');
+      if (rType === 'loyalty') {
+        columns = [
+          { header: 'Date', key: 'date', width: 16 },
+          { header: 'Narration / Activity Trace', key: 'narration', width: 45 },
+          { header: 'Debit Points', key: 'debit', width: 18 },
+          { header: 'Credit Points', key: 'credit', width: 18 },
+          { header: 'Running Balance', key: 'balance', width: 20 }
+        ];
 
-        return {
-          processingDate: row.sale_date || row.return_date || String(row.created_at || '').split('T')[0],
-          docRef: row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`),
-          products: productsFormatted,
-          customerName: row.customer_name || 'Counter Retail Buyer',
-          salesman: row.salesman || 'Direct',
-          transport: row.transport_name || 'Self Pick',
-          totalAmount: Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0)
-        };
-      });
+        exportData = reportRows.map((row: any) => ({
+          date: row.date,
+          narration: row.narration,
+          debit: Number(row.debit_points || 0).toFixed(2),
+          credit: Number(row.credit_points || 0).toFixed(2),
+          balance: Number(row.balance || 0).toFixed(2)
+        }));
+      } else {
+        columns = [
+          { header: 'Processing Date', key: 'processingDate', width: 16, type: 'date' as const },
+          { header: 'Document Ref #', key: 'docRef', width: 18 },
+          { header: 'Product', key: 'products', width: 45 },
+          { header: 'Customer', key: 'customerName', width: 28 },
+          ...(rType === 'sale' ? [
+            { header: 'Salesmen', key: 'salesman', width: 18 },
+            { header: 'Carrier Fleet', key: 'transport', width: 18 }
+          ] : []),
+          { header: 'Gross Matrix Amount (Rs.)', key: 'totalAmount', width: 22, type: 'currency' as const }
+        ];
+
+        exportData = reportRows.map((row) => {
+          const itemDetails = extractItemDetails(row);
+          const itemNames = extractItemNames(row);
+          const productsFormatted = rType === 'invoice'
+            ? itemDetails.map(it => `${it.name} | ${it.qty} ${it.uom} | Rs. ${Number(it.price).toLocaleString()}`).join('\r\n')
+            : itemNames.join(' | ');
+
+          return {
+            processingDate: row.sale_date || row.return_date || String(row.created_at || '').split('T')[0],
+            docRef: row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`),
+            products: productsFormatted,
+            customerName: row.customer_name || 'Counter Retail Buyer',
+            salesman: row.salesman || 'Direct',
+            transport: row.transport_name || 'Self Pick',
+            totalAmount: Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0)
+          };
+        });
+      }
 
       await exportToExcel({
         fileName: `Sales_Audit_Report_${rType}_${new Date().toISOString().split('T')[0]}.xlsx`,
         sheetName: `${rType.toUpperCase()} Audit`,
         companyName: businessName || 'ZOAIB ALI & COMPANY',
-        reportTitle: `Commercial ${rType === 'return' ? 'Sales Return' : 'Sales'} Audit Statement Ledger`,
+        reportTitle: rType === 'loyalty' ? 'Customer Loyalty Rewards & Accrual Statement Ledger' : `Commercial ${rType === 'return' ? 'Sales Return' : 'Sales'} Audit Statement Ledger`,
         filterSummary: filterMeta,
         columns,
         data: exportData,
@@ -284,32 +414,62 @@ const SaleReportPrint = () => {
     }).filter(it => it.name);
   };
 
+  const totalGrossAmount = reportRows.reduce((acc, row) => acc + Number(row.total_amount || 0), 0);
+  const cashAmount = reportRows.filter(r => r.payment_term === 'Cash').reduce((acc, r) => acc + Number(r.total_amount || 0), 0);
+  const creditAmount = totalGrossAmount - cashAmount;
+  const avgOrder = reportRows.length > 0 ? totalGrossAmount / reportRows.length : 0;
+
+  const handleShareWhatsApp = () => {
+    const periodText = filters.dateFrom && filters.dateTo ? `${filters.dateFrom} to ${filters.dateTo}` : 'Current Period';
+    const lines = [
+      `📊 *${businessName || 'ZOAIB ALI & COMPANY'}*`,
+      `📄 *Sales Audit Statement Summary*`,
+      `━━━━━━━━━━━━━━━━━━━━━`,
+      `📅 *Period:* ${periodText}`,
+      `📑 *Total Invoices:* ${reportRows.length}`,
+      `💰 *Total Matrix Gross:* Rs. ${totalGrossAmount.toLocaleString()}`,
+      `💵 *Cash Sales:* Rs. ${cashAmount.toLocaleString()}`,
+      `💳 *Credit Sales:* Rs. ${creditAmount.toLocaleString()}`,
+      `📈 *Average Order:* Rs. ${Math.round(avgOrder).toLocaleString()}`,
+      `━━━━━━━━━━━━━━━━━━━━━`,
+      `_Automated ERP Audit Ledger_`
+    ];
+    const text = lines.join('\n');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
   if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
   return (
-    <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:absolute print:top-0 print:left-0 print:w-screen print:h-screen print:p-0 print:m-0 print:bg-white print:text-black">
+    <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:p-0 print:m-0 print:bg-white print:text-black print:min-h-0 print:h-auto">
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
+          @page { size: auto; margin: 12mm 10mm 12mm 10mm; }
+          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; }
           body * { visibility: hidden !important; }
           .print-root-container, .print-root-container * { visibility: visible !important; }
-          .print-root-container { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; z-index: 999999 !important; background: white !important; }
-          aside, header, nav, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
+          .print-root-container { position: static !important; width: 100% !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; padding: 0 !important; margin: 0 !important; }
+          aside, header, nav, footer, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
+          table { page-break-inside: auto !important; }
+          tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+          thead { display: table-header-group !important; }
+          tfoot { display: table-footer-group !important; }
         }
       `}} />
 
-      <div className="print-root-container w-full bg-white p-4 space-y-6">
-        <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
-          <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Sales-Report`)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
-          <div className="flex items-center gap-3">
+      <div className="print-root-container w-full bg-white p-4 space-y-6 print:p-0 print:space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
+          <button type="button" onClick={() => navigate(-1)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Back to Report Filter</button>
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               disabled={exporting}
               onClick={handleExportExcel}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+              className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white py-1.5 px-3.5 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
             >
-              <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+              <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export Excel'}
             </button>
-            <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+            <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-4 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Report</button>
           </div>
         </div>
 
@@ -322,86 +482,182 @@ const SaleReportPrint = () => {
           </div>
         </div>
 
+        {/* ── VISUAL KPI STATS RIBBON ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 print-hidden-element print:hidden">
+          {rType === 'loyalty' ? (
+            <>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Target Customer</p>
+                <p className="text-sm font-black text-slate-900 font-mono mt-0.5 truncate">{filters.customer?.join(', ') || 'All Selected'}</p>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Total Points Earned</p>
+                <p className="text-sm font-black text-emerald-700 font-mono mt-0.5">{reportRows.reduce((sum, r) => sum + Number(r.credit_points || 0), 0).toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Total Points Redeemed</p>
+                <p className="text-sm font-black text-rose-700 font-mono mt-0.5">{reportRows.reduce((sum, r) => sum + Number(r.debit_points || 0), 0).toFixed(2)}</p>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Net Active Balance</p>
+                <p className="text-sm font-black text-purple-700 font-mono mt-0.5">{(reportRows[reportRows.length - 1]?.balance || 0).toFixed(2)} Pts</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Total Invoices / Records</p>
+                <p className="text-sm font-black text-slate-900 font-mono mt-0.5">{reportRows.length}</p>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Total Matrix Gross</p>
+                <p className="text-sm font-black text-emerald-700 font-mono mt-0.5">Rs. {totalGrossAmount.toLocaleString()}</p>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Cash vs Credit Split</p>
+                <p className="text-[11px] font-black font-mono mt-0.5">
+                  <span className="text-emerald-600">Rs. {cashAmount.toLocaleString()}</span> / <span className="text-blue-600">Rs. {creditAmount.toLocaleString()}</span>
+                </p>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-center shadow-2xs">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Average Ticket Value</p>
+                <p className="text-sm font-black text-purple-700 font-mono mt-0.5">Rs. {Math.round(avgOrder).toLocaleString()}</p>
+              </div>
+            </>
+          )}
+        </div>
+
 
         <div className="w-full overflow-x-auto">
-          <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans antialiased text-left print:w-full">
-            <thead>
-              <tr className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
-                <th className="p-1.5 border border-black text-center">Processing Date</th>
-                <th className="p-1.5 border border-black">Document Ref #</th>
-                <th className="p-1.5 border border-black">Product</th>
-                <th className="p-1.5 border border-black">Customer</th>
-                {rType === 'sale' && <th className="p-1.5 border border-black">Salesmen</th>}
-                {rType === 'sale' && <th className="p-1.5 border border-black">Carrier Fleet</th>}
-                <th className="p-1.5 border border-black text-right pr-3">Gross Matrix Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reportRows.length === 0 ? (
-                <tr>
-                  <td colSpan={rType === 'sale' ? 7 : 5} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">
-                    No rows fetched matching the isolated active report criteria token keys.
+          {rType === 'loyalty' ? (
+            <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans antialiased text-left print:w-full">
+              <thead>
+                <tr className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                  <th className="p-2 border border-black text-left w-32">Date</th>
+                  <th className="p-2 border border-black text-left">Narration</th>
+                  <th className="p-2 border border-black text-right w-36">Debit Points</th>
+                  <th className="p-2 border border-black text-right w-36">Credit Points</th>
+                  <th className="p-2 border border-black text-right w-36">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportRows.map((row) => (
+                  <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-mono text-xs">
+                    <td className="p-2 border border-black text-gray-700">{row.date}</td>
+                    <td className="p-2 border border-black font-sans font-medium text-black">{row.narration}</td>
+                    <td className="p-2 border border-black text-right text-rose-700 font-bold">
+                      {Number(row.debit_points || 0).toFixed(2)}
+                    </td>
+                    <td className="p-2 border border-black text-right text-emerald-700 font-bold">
+                      {Number(row.credit_points || 0).toFixed(2)}
+                    </td>
+                    <td className="p-2 border border-black text-right font-black text-slate-900">
+                      {Number(row.balance || 0).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-100 border-t border-black font-black font-mono text-xs">
+                  <td colSpan={2} className="p-2 border border-black text-left uppercase">Total:</td>
+                  <td className="p-2 border border-black text-right text-rose-700">
+                    {reportRows.reduce((sum, r) => sum + Number(r.debit_points || 0), 0).toFixed(2)}
+                  </td>
+                  <td className="p-2 border border-black text-right text-emerald-700">
+                    {reportRows.reduce((sum, r) => sum + Number(r.credit_points || 0), 0).toFixed(2)}
+                  </td>
+                  <td className="p-2 border border-black text-right font-black">
+                    {(reportRows[reportRows.length - 1]?.balance || 0).toFixed(2)}
                   </td>
                 </tr>
-              ) : (
-                reportRows.map((row) => {
-                  const displayDocPrefixId = row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`);
-                  const processingDateDisplay = row.sale_date || row.return_date || String(row.created_at || '').split('T')[0];
-                  const itemNames = extractItemNames(row);
-                  const itemDetails = extractItemDetails(row);
+                <tr className="bg-gray-50 border-t border-double border-black font-black font-mono text-xs">
+                  <td colSpan={4} className="p-2.5 border border-black text-left uppercase text-gray-800">Your Balance</td>
+                  <td className="p-2.5 border border-black text-right text-emerald-800 text-sm font-black underline decoration-double">
+                    {(reportRows[reportRows.length - 1]?.balance || 0).toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans antialiased text-left print:w-full">
+              <thead>
+                <tr className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                  <th className="p-1.5 border border-black text-center">Processing Date</th>
+                  <th className="p-1.5 border border-black">Document Ref #</th>
+                  <th className="p-1.5 border border-black">Product</th>
+                  <th className="p-1.5 border border-black">Customer</th>
+                  {rType === 'sale' && <th className="p-1.5 border border-black">Salesmen</th>}
+                  {rType === 'sale' && <th className="p-1.5 border border-black">Carrier Fleet</th>}
+                  <th className="p-1.5 border border-black text-right pr-3">Gross Matrix Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={rType === 'sale' ? 7 : 5} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">
+                      No rows fetched matching the isolated active report criteria token keys.
+                    </td>
+                  </tr>
+                ) : (
+                  reportRows.map((row) => {
+                    const displayDocPrefixId = row.invoice_no || (rType === 'return' ? `RTN-${String(row.id).padStart(4, '0')}` : `INV-${String(row.id).padStart(4, '0')}`);
+                    const processingDateDisplay = row.sale_date || row.return_date || String(row.created_at || '').split('T')[0];
+                    const itemNames = extractItemNames(row);
+                    const itemDetails = extractItemDetails(row);
 
-                  return (
-                    <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                      <td className="p-1.5 border border-black text-center text-gray-600 align-top">{processingDateDisplay}</td>
-                      <td className="p-1.5 border border-black text-primary font-black uppercase whitespace-nowrap align-top">{displayDocPrefixId}</td>
-                      <td className="p-1.5 border border-black font-sans text-black text-[11px] align-top">
-                        {rType === 'invoice' ? (
-                          itemDetails.length > 0 ? (
-                            <div className="flex flex-col gap-1 py-0.5">
-                              {itemDetails.map((item, idx) => (
-                                <div key={idx} className="flex items-center text-[11px] whitespace-nowrap">
-                                  <span className="font-semibold text-black">{item.name}</span>
-                                  <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
-                                  <span className="text-gray-700 font-mono font-bold">{item.qty} {item.uom}</span>
-                                  <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
-                                  <span className="text-gray-900 font-mono font-bold">Rs. {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                </div>
-                              ))}
-                            </div>
+                    return (
+                      <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
+                        <td className="p-1.5 border border-black text-center text-gray-600 align-top">{processingDateDisplay}</td>
+                        <td className="p-1.5 border border-black text-primary font-black uppercase whitespace-nowrap align-top">{displayDocPrefixId}</td>
+                        <td className="p-1.5 border border-black font-sans text-black text-[11px] align-top">
+                          {rType === 'invoice' ? (
+                            itemDetails.length > 0 ? (
+                              <div className="flex flex-col gap-1 py-0.5">
+                                {itemDetails.map((item, idx) => (
+                                  <div key={idx} className="flex items-center text-[11px] whitespace-nowrap">
+                                    <span className="font-semibold text-black">{item.name}</span>
+                                    <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
+                                    <span className="text-gray-700 font-mono font-bold">{item.qty} {item.uom}</span>
+                                    <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>
+                                    <span className="text-gray-900 font-mono font-bold">Rs. {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic">No Items</span>
+                            )
                           ) : (
-                            <span className="text-gray-400 italic">No Items</span>
-                          )
-                        ) : (
-                          itemNames.length > 0 ? (
-                            itemNames.map((name: string, i: number) => (
-                              <React.Fragment key={i}>
-                                {i > 0 && <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>}
-                                <span className="font-medium">{name}</span>
-                              </React.Fragment>
-                            ))
-                          ) : (
-                            <span className="text-gray-400 italic">No Items</span>
-                          )
-                        )}
-                      </td>
-                      <td className="p-1.5 border border-black text-black font-sans align-top">{row.customer_name || 'Counter Retail Buyer'}</td>
-                      {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-gray-600 align-top">{row.salesman || 'Direct'}</td>}
-                      {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-purple-700 font-bold align-top">{row.transport_name || 'Self Pick'}</td>}
-                      <td className="p-1.5 border border-black text-right pr-3 text-success font-black whitespace-nowrap align-top">Rs. {Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50 border-t border-black font-black font-mono text-xs">
-                <td colSpan={rType === 'sale' ? 6 : 4} className="p-2 border border-black text-right uppercase tracking-wider text-gray-500">Gross Sheet Aggregated Balanced Sum (PKR):</td>
-                <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm whitespace-nowrap">
-                  Rs. {reportRows.reduce((sum, r) => sum + (Number(r.total_amount || r.return_amount || r.payout_amount_paid || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+                            itemNames.length > 0 ? (
+                              itemNames.map((name: string, i: number) => (
+                                <React.Fragment key={i}>
+                                  {i > 0 && <span className="text-emerald-700 font-black text-sm px-1.5 font-mono">|</span>}
+                                  <span className="font-medium">{name}</span>
+                                </React.Fragment>
+                              ))
+                            ) : (
+                              <span className="text-gray-400 italic">No Items</span>
+                            )
+                          )}
+                        </td>
+                        <td className="p-1.5 border border-black text-black font-sans align-top">{row.customer_name || 'Counter Retail Buyer'}</td>
+                        {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-gray-600 align-top">{row.salesman || 'Direct'}</td>}
+                        {rType === 'sale' && <td className="p-1.5 border border-black font-sans text-purple-700 font-bold align-top">{row.transport_name || 'Self Pick'}</td>}
+                        <td className="p-1.5 border border-black text-right pr-3 text-success font-black whitespace-nowrap align-top">Rs. {Number(row.total_amount || row.return_amount || row.payout_amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50 border-t border-black font-black font-mono text-xs">
+                  <td colSpan={rType === 'sale' ? 6 : 4} className="p-2 border border-black text-right uppercase tracking-wider text-gray-500">Gross Sheet Aggregated Balanced Sum (PKR):</td>
+                  <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm whitespace-nowrap">
+                    Rs. {reportRows.reduce((sum, r) => sum + (Number(r.total_amount || r.return_amount || r.payout_amount_paid || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
 
         {filters.withLedgerSummary && rType === 'invoice' && (
@@ -411,21 +667,42 @@ const SaleReportPrint = () => {
           </div>
         )}
 
-        <div className="mt-20 grid grid-cols-3 gap-12 text-center text-[9px] font-sans font-black uppercase tracking-widest text-gray-400">
-          <div className="border-t border-black pt-2">Prepared By: Sales Audit Officer</div>
-          <div className="border-t border-black pt-2">Verified By: Corporate Accounts Auditor</div>
-          <div className="border-t border-black pt-2">Authorized Executive Director Seal</div>
+        {/* ✍️ Formal Multi-Level Executive Verification & Signature Block */}
+        <div className="mt-16 grid grid-cols-3 gap-10 text-center text-[10px] font-sans font-black uppercase tracking-wider text-slate-800 break-inside-avoid">
+          <div className="flex flex-col justify-end">
+            <div className="h-16"></div>
+            <div className="border-t-2 border-black pt-2">
+              <div className="text-black font-extrabold text-[10px]">PREPARED BY</div>
+              <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Sales Operations &amp; Audit Officer</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-end">
+            <div className="h-16"></div>
+            <div className="border-t-2 border-black pt-2">
+              <div className="text-black font-extrabold text-[10px]">VERIFIED BY</div>
+              <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Corporate Accounts Auditor &amp; Billing Lead</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-end">
+            <div className="h-16"></div>
+            <div className="border-t-2 border-black pt-2">
+              <div className="text-black font-extrabold text-[10px]">AUTHORIZED BY</div>
+              <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Managing Executive Director &amp; Official Seal</div>
+            </div>
+          </div>
         </div>
 
         {/* 🏢 Software & Corporate Provider Footer */}
-        <div className="mt-10 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400">
+        <div className="mt-8 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400 break-inside-avoid">
           <div className="flex items-center gap-2 font-bold">
-            <span className="text-black font-black uppercase">ZOAIB ALI & COMPANY</span>
+            <span className="text-black font-black uppercase">ZOAIB ALI &amp; COMPANY</span>
             <span className="text-gray-400">|</span>
             <span className="text-gray-700">Contact: <b className="text-black font-bold">03128039911</b></span>
           </div>
-          <div className="text-[9px] text-gray-400 font-mono">
-            System Generated Report • Zoaib Ali & Company
+          <div className="text-[9.5px] text-gray-600 font-mono font-medium">
+            Software Solution &amp; Cloud Infrastructure by <b className="text-black font-bold">NHT ENTERPRISES (Noor Horizon Technologies)</b>
           </div>
         </div>
       </div>

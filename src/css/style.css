@@ -275,38 +275,105 @@ span.flatpickr-weekday,
   animation: flyoutFadeIn 0.18s ease-out forwards !important;
 }
 
-/* Global Print Styles to Prevent Layout Breaks */
+/* Master Enterprise Print Pagination & Anti-Cutoff Engine */
 @media print {
-  /* Prevent rows from splitting across pages */
-  tr, .no-break, img, svg {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-  
-  /* Make sure table headers repeat on new pages */
-  thead {
-    display: table-header-group;
-  }
-  
-  /* Make sure table footers repeat on new pages */
-  tfoot {
-    display: table-footer-group;
-  }
-  
-  /* Standardize margins and hide backgrounds/shadows to save ink & keep it clean */
   @page {
-    margin: 1cm;
+    size: auto;
+    margin: 12mm 10mm 12mm 10mm;
   }
   
+  html, body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+    font-size: 11px !important;
+  }
+
+  /* Unconstrain all layout wrappers from single-page clipping */
+  #root, 
+  .min-h-screen, 
+  .h-screen, 
+  .overflow-hidden, 
+  .overflow-y-auto, 
+  .overflow-x-hidden, 
+  .overflow-x-auto, 
+  main, 
+  div {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* Hide navigation, headers, and UI controls */
+  aside, 
+  header, 
+  nav, 
+  footer, 
+  .print-hidden-element, 
+  .print\:hidden, 
+  button, 
+  .pointer-events-none,
+  [role="navigation"],
+  [role="banner"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Table Multi-Page Formatting */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  /* Prevent row splitting - smoothly bump entire row to next page */
+  tr, 
+  td, 
+  th, 
+  .no-break, 
+  img, 
+  svg {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  /* Keep headings from sitting alone at the bottom of a page */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  /* Print root container normalization */
+  .print-root-container {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   body, .erp-card, .glass-header {
     background: white !important;
     box-shadow: none !important;
     border-color: #000 !important;
   }
-
-  /* Keep headings from sitting alone at the bottom of a page */
-  h1, h2, h3, h4, h5, h6 {
-    page-break-after: avoid;
-    break-after: avoid;
-  }
 }
+

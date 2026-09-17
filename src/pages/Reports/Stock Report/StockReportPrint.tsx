@@ -4,6 +4,7 @@ import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
 import Spinner from '../../../ui/Spinner';
 import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
+import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
 
@@ -17,6 +18,14 @@ const StockReportPrint = () => {
 
     const config = location.state || { tab: 1, filters: {} };
     const { tab: activeTab, filters } = config;
+
+    useEffect(() => {
+        const originalTitle = document.title;
+        document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
+        return () => {
+            document.title = originalTitle;
+        };
+    }, []);
 
     useEffect(() => {
         const compileTrueDynamicStockDataset = async () => {
@@ -414,33 +423,52 @@ const StockReportPrint = () => {
         }
     };
 
+    const handleShareWhatsApp = () => {
+        const lines = [
+            `📊 *${businessName || 'ZOAIB ALI & COMPANY'}*`,
+            `📦 *Stock Valuation & Inventory Summary*`,
+            `━━━━━━━━━━━━━━━━━━━━━`,
+            `📑 *SKU Products Tracked:* ${reportRows.length}`,
+            `📅 *Generated:* ${new Date().toISOString().split('T')[0]}`,
+            `━━━━━━━━━━━━━━━━━━━━━`,
+            `_Automated ERP Inventory Ledger_`
+        ];
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
+    };
+
     if (loading) return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
 
     return (
-        <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:absolute print:top-0 print:left-0 print:w-screen print:h-screen print:p-0 print:m-0 print:bg-white print:text-black">
+        <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:p-0 print:m-0 print:bg-white print:text-black print:min-h-0 print:h-auto">
             <style dangerouslySetInnerHTML={{
                 __html: `
         @media print {
+          @page { size: auto; margin: 12mm 10mm 12mm 10mm; }
+          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; }
           body * { visibility: hidden !important; }
           .print-root-container, .print-root-container * { visibility: visible !important; }
-          .print-root-container { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; z-index: 999999 !important; background: white !important; }
-          aside, header, nav, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
+          .print-root-container { position: static !important; width: 100% !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; padding: 0 !important; margin: 0 !important; }
+          aside, header, nav, footer, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
+          table { page-break-inside: auto !important; }
+          tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+          thead { display: table-header-group !important; }
+          tfoot { display: table-footer-group !important; }
         }
       `}} />
 
-            <div className="print-root-container w-full bg-white p-4 space-y-6">
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded border print-hidden-element print:hidden">
-                    <button type="button" onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Stock-Report`)} className="flex items-center gap-2 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Return to Auditing Center</button>
-                    <div className="flex items-center gap-3">
+            <div className="print-root-container w-full bg-white p-4 space-y-6 print:p-0 print:space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-50 p-3 rounded border print-hidden-element print:hidden">
+                    <button type="button" onClick={() => navigate(-1)} className="flex items-center gap-2 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Back to Report Filter</button>
+                    <div className="flex items-center gap-2 flex-wrap">
                         <button
                             type="button"
                             disabled={exporting}
                             onClick={handleExportExcel}
-                            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-4 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+                            className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white py-1.5 px-3.5 rounded font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
                         >
-                            <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export to Excel (.xlsx)'}
+                            <MdFileDownload size={16} /> {exporting ? 'Exporting...' : 'Export Excel'}
                         </button>
-                        <button type="button" onClick={() => window.print()} className="flex items-center gap-2 bg-primary text-white py-1.5 px-5 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Workbook Report</button>
+                        <button type="button" onClick={() => window.print()} className="flex items-center gap-1.5 bg-primary text-white py-1.5 px-4 rounded font-black cursor-pointer hover:bg-opacity-90 transition shadow-sm"><MdPrint size={16} /> Print Report</button>
                     </div>
                 </div>
 
@@ -824,15 +852,42 @@ const StockReportPrint = () => {
 
 
 
+                {/* ✍️ Formal Multi-Level Executive Verification & Signature Block */}
+                <div className="mt-16 grid grid-cols-3 gap-10 text-center text-[10px] font-sans font-black uppercase tracking-wider text-slate-800 break-inside-avoid">
+                    <div className="flex flex-col justify-end">
+                        <div className="h-16"></div>
+                        <div className="border-t-2 border-black pt-2">
+                            <div className="text-black font-extrabold text-[10px]">PREPARED BY</div>
+                            <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Warehouse Inventory Controller &amp; Inward Lead</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col justify-end">
+                        <div className="h-16"></div>
+                        <div className="border-t-2 border-black pt-2">
+                            <div className="text-black font-extrabold text-[10px]">VERIFIED BY</div>
+                            <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Stock Valuation Auditor &amp; Quality Lead</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col justify-end">
+                        <div className="h-16"></div>
+                        <div className="border-t-2 border-black pt-2">
+                            <div className="text-black font-extrabold text-[10px]">AUTHORIZED BY</div>
+                            <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Managing Executive Director &amp; Official Seal</div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* 🏢 Software & Corporate Provider Footer */}
-                <div className="mt-12 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400">
+                <div className="mt-8 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400 break-inside-avoid">
                     <div className="flex items-center gap-2 font-bold">
-                        <span className="text-black font-black uppercase">ZOAIB ALI & COMPANY</span>
+                        <span className="text-black font-black uppercase">ZOAIB ALI &amp; COMPANY</span>
                         <span className="text-gray-400">|</span>
                         <span className="text-gray-700">Contact: <b className="text-black font-bold">03128039911</b></span>
                     </div>
-                    <div className="text-[9px] text-gray-400 font-mono">
-                        System Generated Report • Zoaib Ali & Company
+                    <div className="text-[9.5px] text-gray-600 font-mono font-medium">
+                        Software Solution &amp; Cloud Infrastructure by <b className="text-black font-bold">NHT ENTERPRISES (Noor Horizon Technologies)</b>
                     </div>
                 </div>
             </div>

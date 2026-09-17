@@ -45,6 +45,7 @@ const SalesReport = () => {
             saleType: base.saleType || 'All', 
             saleMethod: base.saleMethod || 'All', 
             invoiceNo: base.invoiceNo || 'All',
+            sortBy: base.sortBy || 'date_desc',
             withLedgerSummary: base.withLedgerSummary || false,
             dateFrom: location.state?.dateFrom || base.dateFrom || new Date().toISOString().split('T')[0],
             dateTo: location.state?.dateTo || base.dateTo || new Date().toISOString().split('T')[0]
@@ -239,27 +240,65 @@ const SalesReport = () => {
                                     }}
                                 />
                             </div>
-                            <div className="flex items-center gap-2 pt-5 md:col-span-2">
-                                <input type="checkbox" id="withLedgerSummary" checked={criteria.withLedgerSummary} onChange={(e) => handleInputChange('withLedgerSummary', e.target.checked)} className="h-4 w-4 rounded text-primary focus:ring-primary border-stroke cursor-pointer" />
-                                <label htmlFor="withLedgerSummary" className="font-bold text-gray-600 dark:text-white cursor-pointer select-none text-xs">With Customer Ledger Summary Master Report</label>
+                            <div className="md:col-span-2">
+                                <SearchableMultiSelect label="Filter by Customer:" placeholder="All Customers" options={customerOptions} value={criteria.customer} onChange={(val) => handleInputChange('customer', val)} />
                             </div>
                         </>
                     )}
 
-                    {reportType !== 'invoice' && (
-                        <>
-                            <div><label className="block font-bold text-gray-500 mb-1">Date From (Start):</label><input type="date" max={new Date().toISOString().split('T')[0]} value={criteria.dateFrom} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; let newDateFrom = e.target.value; if (newDateFrom > today) newDateFrom = today; handleInputChange('dateFrom', newDateFrom); if (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') { const dFrom = new Date(newDateFrom); const dTo = new Date(criteria.dateTo); const diffDays = Math.ceil(Math.abs(dTo.getTime() - dFrom.getTime()) / (1000 * 60 * 60 * 24)); if (dTo < dFrom || diffDays > 90) { const maxAllowed = new Date(dFrom.setDate(dFrom.getDate() + 90)).toISOString().split('T')[0]; handleInputChange('dateTo', maxAllowed < today ? maxAllowed : today); } } }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
-                            <div><label className="block font-bold text-gray-500 mb-1">Date To (End Date):</label><input type="date" min={criteria.dateFrom} max={criteria.dateFrom && (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], new Date().toISOString().split('T')[0]].sort()[0] : new Date().toISOString().split('T')[0]} value={criteria.dateTo} onChange={(e) => { const today = new Date().toISOString().split('T')[0]; const maxAllowed = criteria.dateFrom && (reportType === 'detailed' || reportType === 'customer' || reportType === 'product') ? [new Date(new Date(criteria.dateFrom).setDate(new Date(criteria.dateFrom).getDate() + 90)).toISOString().split('T')[0], today].sort()[0] : today; let newDateTo = e.target.value; if (newDateTo > maxAllowed) newDateTo = maxAllowed; if (newDateTo < criteria.dateFrom) newDateTo = criteria.dateFrom; handleInputChange('dateTo', newDateTo); }} className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark" /></div>
-                            <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Quick Dates:</span>
-                                <button type="button" onClick={() => { const t = new Date().toISOString().split('T')[0]; handleInputChange('dateFrom', t); handleInputChange('dateTo', t); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Today</button>
-                                <button type="button" onClick={() => { const y = new Date(); y.setDate(y.getDate() - 1); const ys = y.toISOString().split('T')[0]; handleInputChange('dateFrom', ys); handleInputChange('dateTo', ys); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Yesterday</button>
-                                <button type="button" onClick={() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); const s = new Date(d.setDate(diff)).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', new Date().toISOString().split('T')[0]); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">This Week</button>
-                                <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', new Date().toISOString().split('T')[0]); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">This Month</button>
-                                <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0]; const e = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', e); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition">Last Month</button>
-                            </div>
-                        </>
-                    )}
+                    <div>
+                        <label className="block text-gray-500 mb-1 font-bold">Sort Records By:</label>
+                        <select
+                            value={criteria.sortBy || 'date_desc'}
+                            onChange={(e) => handleInputChange('sortBy', e.target.value)}
+                            className="w-full border border-stroke dark:border-strokedark rounded p-2 bg-transparent font-semibold text-xs text-black dark:text-white dark:bg-boxdark outline-none"
+                        >
+                            <option value="date_desc">Date (Newest First)</option>
+                            <option value="date_asc">Date (Oldest First)</option>
+                            <option value="amount_desc">Gross Amount (Highest First)</option>
+                            <option value="amount_asc">Gross Amount (Lowest First)</option>
+                            <option value="invoice_asc">Document / Invoice # (A - Z)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block font-bold text-gray-500 mb-1">Date From (Start):</label>
+                        <input
+                            type="date"
+                            max={new Date().toISOString().split('T')[0]}
+                            value={criteria.dateFrom}
+                            onChange={(e) => {
+                                const today = new Date().toISOString().split('T')[0];
+                                let newDateFrom = e.target.value;
+                                if (newDateFrom > today) newDateFrom = today;
+                                handleInputChange('dateFrom', newDateFrom);
+                            }}
+                            className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark"
+                        />
+                    </div>
+                    <div>
+                        <label className="block font-bold text-gray-500 mb-1">Date To (End Date):</label>
+                        <input
+                            type="date"
+                            min={criteria.dateFrom}
+                            value={criteria.dateTo}
+                            onChange={(e) => {
+                                let newDateTo = e.target.value;
+                                if (newDateTo < criteria.dateFrom) newDateTo = criteria.dateFrom;
+                                handleInputChange('dateTo', newDateTo);
+                            }}
+                            className="w-full border border-stroke rounded p-2 bg-transparent font-semibold text-black dark:text-white text-xs outline-none dark:bg-boxdark"
+                        />
+                    </div>
+
+                    <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase mr-1">Quick Date Window:</span>
+                        <button type="button" onClick={() => { const t = new Date().toISOString().split('T')[0]; handleInputChange('dateFrom', t); handleInputChange('dateTo', t); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition cursor-pointer">Today</button>
+                        <button type="button" onClick={() => { const y = new Date(); y.setDate(y.getDate() - 1); const ys = y.toISOString().split('T')[0]; handleInputChange('dateFrom', ys); handleInputChange('dateTo', ys); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition cursor-pointer">Yesterday</button>
+                        <button type="button" onClick={() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); const s = new Date(d.setDate(diff)).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', new Date().toISOString().split('T')[0]); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition cursor-pointer">This Week</button>
+                        <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', new Date().toISOString().split('T')[0]); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition cursor-pointer">This Month</button>
+                        <button type="button" onClick={() => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0]; const e = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0]; handleInputChange('dateFrom', s); handleInputChange('dateTo', e); }} className="py-1 px-2.5 bg-gray-100 hover:bg-primary hover:text-white rounded text-[10px] font-bold transition cursor-pointer">Last Month</button>
+                    </div>
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-stroke dark:border-strokedark flex justify-end">

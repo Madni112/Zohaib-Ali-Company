@@ -81,7 +81,12 @@ const BalanceSheet: React.FC = () => {
   }, []);
 
   const handlePrint = () => {
+    const originalTitle = document.title;
+    document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   const [exporting, setExporting] = useState(false);

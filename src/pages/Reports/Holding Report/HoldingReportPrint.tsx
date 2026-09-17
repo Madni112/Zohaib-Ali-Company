@@ -31,6 +31,14 @@ const HoldingReportPrint: React.FC = () => {
 
   const { perspective, filters, rows, kpis } = stateData;
 
+  React.useEffect(() => {
+    const originalTitle = document.title;
+    document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
+    return () => {
+      document.title = originalTitle;
+    };
+  }, []);
+
   const handleExportExcel = async () => {
     try {
       setExporting(true);
@@ -206,18 +214,24 @@ const HoldingReportPrint: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:absolute print:top-0 print:left-0 print:w-screen print:h-screen print:p-0 print:m-0 print:bg-white print:text-black">
+    <div className="w-full bg-white text-black p-6 space-y-6 text-xs min-h-screen print:p-0 print:m-0 print:bg-white print:text-black print:min-h-0 print:h-auto">
       <style dangerouslySetInnerHTML={{
         __html: `
         @media print {
+          @page { size: auto; margin: 12mm 10mm 12mm 10mm; }
+          body, html { height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; }
           body * { visibility: hidden !important; }
           .print-root-container, .print-root-container * { visibility: visible !important; }
-          .print-root-container { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; z-index: 999999 !important; background: white !important; }
-          aside, header, nav, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
+          .print-root-container { position: static !important; width: 100% !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; padding: 0 !important; margin: 0 !important; }
+          aside, header, nav, footer, .print-hidden-element, button { display: none !important; visibility: hidden !important; }
+          table { page-break-inside: auto !important; }
+          tr, td, th { page-break-inside: avoid !important; break-inside: avoid !important; }
+          thead { display: table-header-group !important; }
+          tfoot { display: table-footer-group !important; }
         }
       `}} />
 
-      <div className="print-root-container w-full bg-white p-4 space-y-6">
+      <div className="print-root-container w-full bg-white p-4 space-y-6 print:p-0 print:space-y-4">
         {/* Screen Controls Header */}
         <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
           <button
@@ -516,16 +530,48 @@ const HoldingReportPrint: React.FC = () => {
           </div>
         )}
 
-        {/* Corporate Signatures */}
-        <div className="pt-12 grid grid-cols-3 gap-8 text-center text-[10px] font-bold uppercase tracking-wider font-mono">
-          <div>
-            <div className="border-t border-black pt-1">Prepared By (Logistics / Dispatch)</div>
+        {/* ✍️ Formal Multi-Level Executive Verification & Signature Block */}
+        <div className="mt-16 grid grid-cols-3 gap-10 text-center text-[10px] font-sans font-black uppercase tracking-wider text-slate-800 break-inside-avoid">
+          <div className="flex flex-col justify-end">
+            <div className="h-16 flex items-center justify-center text-[9px] text-gray-300 font-mono italic">
+              [ Signature / Seal Space ]
+            </div>
+            <div className="border-t-2 border-black pt-2">
+              <div className="text-black font-extrabold text-[10px]">PREPARED BY</div>
+              <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Logistics &amp; Gatepass Queue Controller</div>
+            </div>
           </div>
-          <div>
-            <div className="border-t border-black pt-1">Verified By (Accounts Officer)</div>
+
+          <div className="flex flex-col justify-end">
+            <div className="h-16 flex items-center justify-center text-[9px] text-gray-300 font-mono italic">
+              [ Signature / Seal Space ]
+            </div>
+            <div className="border-t-2 border-black pt-2">
+              <div className="text-black font-extrabold text-[10px]">VERIFIED BY</div>
+              <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Warehouse Operations &amp; Holding Auditor</div>
+            </div>
           </div>
-          <div>
-            <div className="border-t border-black pt-1">Approved By (Commercial Director)</div>
+
+          <div className="flex flex-col justify-end">
+            <div className="h-16 flex items-center justify-center text-[9px] text-gray-300 font-mono italic">
+              [ Signature / Seal Space ]
+            </div>
+            <div className="border-t-2 border-black pt-2">
+              <div className="text-black font-extrabold text-[10px]">AUTHORIZED BY</div>
+              <div className="text-[8.5px] font-semibold text-gray-500 normal-case">Managing Executive Director &amp; Official Seal</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 🏢 Software & Corporate Provider Footer */}
+        <div className="mt-8 pt-3 border-t border-gray-300 flex justify-between items-center text-[10px] text-gray-600 font-sans print:border-gray-400 break-inside-avoid">
+          <div className="flex items-center gap-2 font-bold">
+            <span className="text-black font-black uppercase">ZOAIB ALI &amp; COMPANY</span>
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-700">Contact: <b className="text-black font-bold">03128039911</b></span>
+          </div>
+          <div className="text-[9.5px] text-gray-600 font-mono font-medium">
+            Software Solution &amp; Cloud Infrastructure by <b className="text-black font-bold">NHT ENTERPRISES (Noor Horizon Technologies)</b>
           </div>
         </div>
       </div>
