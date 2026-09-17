@@ -291,7 +291,7 @@ span.flatpickr-weekday,
     font-size: 11px !important;
   }
 
-  /* Unconstrain all layout wrappers from single-page clipping */
+  /* Unconstrain all outer layout wrappers from single-page clipping */
   #root, 
   .min-h-screen, 
   .h-screen, 
@@ -299,13 +299,20 @@ span.flatpickr-weekday,
   .overflow-y-auto, 
   .overflow-x-hidden, 
   .overflow-x-auto, 
-  main, 
-  div {
+  main {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
     overflow: visible !important;
     position: static !important;
+  }
+
+  /* Signature & Stamp Spacer - Always Preserves Height in Print */
+  .signature-spacer {
+    height: 80px !important;
+    min-height: 80px !important;
+    display: block !important;
+    visibility: visible !important;
   }
 
   /* Hide navigation, headers, and UI controls */
