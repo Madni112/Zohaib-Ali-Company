@@ -185,6 +185,18 @@ const ALL_REPORTS: ReportItem[] = [
 
   // ── ACCOUNTS & TAXES ──
   {
+    id: 'customer-balance-detail',
+    title: 'Customer Balance Detail Report',
+    category: 'accounts',
+    description: 'Comprehensive breakdown of customer opening balances, period billing debits, recovery credits, and net closing balances filtered by customer category.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-09-18',
+    path: '/Reports/Account-Report',
+    state: { activeTab: 13 },
+    icon: MdAccountBalanceWallet
+  },
+  {
     id: 'customer-vendor-ledger',
     title: 'Customer & Vendor Account Ledgers',
     category: 'accounts',

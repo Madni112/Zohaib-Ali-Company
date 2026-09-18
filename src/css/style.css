@@ -1,6 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Alex+Brush&family=Great+Vibes&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.font-cinzel {
+  font-family: 'Cinzel', serif, ui-serif, Georgia;
+}
+.font-signature {
+  font-family: 'Great Vibes', 'Alex Brush', cursive, sans-serif;
+}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }

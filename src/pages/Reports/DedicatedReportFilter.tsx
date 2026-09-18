@@ -46,6 +46,7 @@ interface ReportConfig {
   printType: string;
   tab?: number;
   fields: Array<
+    | 'customerCategory'
     | 'invoice'
     | 'customer'
     | 'salesman'
@@ -220,6 +221,20 @@ const REPORT_REGISTRY: Record<string, ReportConfig> = {
   },
 
   // ── ACCOUNTS & TAXES ──
+  'customer-balance-detail': {
+    id: 'customer-balance-detail',
+    title: 'Customer Balance Detail Report',
+    categoryName: 'Accounts & Taxes',
+    subtitle: 'Comprehensive breakdown of customer opening balances, period billing debits, recovery credits, and net closing balances filtered by customer category.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-09-18',
+    icon: MdAccountBalanceWallet,
+    targetPrintPath: '/Reports/Account-Report/Print',
+    printType: 'account',
+    tab: 13,
+    fields: ['customerCategory', 'customer']
+  },
   'customer-vendor-ledger': {
     id: 'customer-vendor-ledger',
     title: 'Customer & Vendor Account Ledgers',
@@ -392,7 +407,7 @@ const DedicatedReportFilter: React.FC = () => {
           invRes,
           uomRes
         ] = await Promise.allSettled([
-          supabase.from('customers').select('id, customerName'),
+          supabase.from('customers').select('id, customerName, registrationType'),
           supabase.from('suppliers').select('id, supplier_name'),
           supabase.from('salesmen').select('id, name'),
           supabase.from('logistics_transportation').select('id, name'),
@@ -430,6 +445,11 @@ const DedicatedReportFilter: React.FC = () => {
   };
 
   const customerOptions = useMemo(() => customers.map((c) => c.customerName).filter(Boolean), [customers]);
+  const customerCategoryOptions = useMemo(() => {
+    const fromCust = customers.map((c: any) => c.registrationType).filter(Boolean);
+    const standard = ['Retail / General', 'Contractor / Builder', 'Wholesaler / Dealer', 'Registered Corporate'];
+    return Array.from(new Set([...standard, ...fromCust]));
+  }, [customers]);
   const supplierOptions = useMemo(() => suppliers.map((s) => s.supplier_name).filter(Boolean), [suppliers]);
   const salesmanOptions = useMemo(() => salesmen.map((s) => s.name).filter(Boolean), [salesmen]);
   const transportOptions = useMemo(() => transports.map((t) => t.name).filter(Boolean), [transports]);
@@ -654,6 +674,19 @@ const DedicatedReportFilter: React.FC = () => {
                 options={invoiceOptions}
                 value={criteria.invoiceNo === 'All' ? 'All' : criteria.invoiceNo}
                 onChange={(val) => handleInputChange('invoiceNo', val)}
+              />
+            </div>
+          )}
+
+          {/* Customer Category Field */}
+          {f.includes('customerCategory') && (
+            <div>
+              <SearchableMultiSelect
+                label="Filter by Customer Category / Type:"
+                placeholder="All Categories"
+                options={customerCategoryOptions}
+                value={criteria.customerCategory}
+                onChange={(val) => handleInputChange('customerCategory', val)}
               />
             </div>
           )}
@@ -939,6 +972,30 @@ const DedicatedReportFilter: React.FC = () => {
               Last Month
             </button>
           </div>
+
+          {/* Custom report flags */}
+          {(reportId === 'customer-balance-detail' || f.includes('customerCategory')) && (
+            <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800/80">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={criteria.showZeroValues !== false} 
+                  onChange={(e) => handleInputChange('showZeroValues', e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded border-stroke focus:ring-0 cursor-pointer accent-emerald-600"
+                />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Show Zero Values (Settled Accounts)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={!!criteria.showOnlyTransacted} 
+                  onChange={(e) => handleInputChange('showOnlyTransacted', e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded border-stroke focus:ring-0 cursor-pointer accent-emerald-600"
+                />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Show Only Customers With Transaction</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* ── ACTION BUTTON FOOTER ── */}

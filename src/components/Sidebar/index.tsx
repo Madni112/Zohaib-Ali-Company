@@ -324,17 +324,20 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
         <div className={`flex items-center justify-between gap-2 py-5 border-b border-slate-200/80 dark:border-slate-800/80 min-h-[76px] duration-300 ${sidebarOpen ? 'px-6' : 'px-0 min-[751px]:px-2 justify-center'}`} >
           {(sidebarOpen || isMobile) ? (
             <div className="flex items-center justify-between w-full">
-              <NavLink className="flex items-center gap-3 group" to="/">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-black text-base shadow-md shadow-emerald-600/20 group-hover:scale-105 transition-transform duration-200 border border-emerald-400/30">
-                  Z
+              <NavLink className="flex items-center gap-3.5 group" to="/">
+                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-800 flex items-center justify-center shadow-lg shadow-emerald-600/30 group-hover:scale-105 transition-all duration-200 border border-emerald-400/40 relative overflow-hidden select-none shrink-0">
+                  <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
+                  <span className="relative z-10 font-cinzel font-black tracking-widest text-[16px] text-white dark:text-[#111827] leading-none pl-0.5">
+                    ZAC
+                  </span>
                 </div>
                 <div className="text-left">
-                  <div className="flex items-center gap-1 leading-tight">
-                    <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">ZOAIB</span>
-                    <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">ALI</span>
+                  <div className="flex items-center gap-1.5 leading-tight">
+                    <span className="text-[20px] font-black text-emerald-600 dark:text-emerald-400 tracking-tight">ZOAIB</span>
+                    <span className="text-[20px] font-black text-slate-800 dark:text-slate-100 tracking-tight">ALI</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider">& COMPANY</span>
+                    <span className="text-[12.5px] font-bold text-slate-500 dark:text-slate-400 tracking-wider">& COMPANY</span>
                   </div>
                 </div>
               </NavLink>
@@ -358,8 +361,11 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen }: SidebarProps) => {
               }}
               title="Open Sidebar"
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white font-black text-base shadow-md shadow-emerald-600/20 hover:scale-105 transition-transform duration-200 border border-emerald-400/30">
-                Z
+              <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-800 flex items-center justify-center shadow-lg shadow-emerald-600/30 hover:scale-105 transition-all duration-200 border border-emerald-400/40 relative overflow-hidden select-none">
+                <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20 pointer-events-none" />
+                <span className="relative z-10 font-cinzel font-black tracking-widest text-[16px] text-white dark:text-[#111827] leading-none pl-0.5">
+                  ZAC
+                </span>
               </div>
             </div>
           )}

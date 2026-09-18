@@ -20,27 +20,14 @@ const AccountReportPrint = () => {
 
     useEffect(() => {
         const originalTitle = document.title;
-        document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
-
-        let originalPath = window.location.pathname + window.location.search;
-        const handleBeforePrint = () => {
-            originalPath = window.location.pathname + window.location.search;
-            window.history.replaceState(null, '', '/');
-        };
-        const handleAfterPrint = () => {
-            window.history.replaceState(null, '', originalPath);
-        };
-
-        window.addEventListener('beforeprint', handleBeforePrint);
-        window.addEventListener('afterprint', handleAfterPrint);
+        document.title = activeTab === 13 
+            ? 'Customer Balance Detail Report - ZOAIB ALI & COMPANY'
+            : 'Corporate Account Ledger - ZOAIB ALI & COMPANY';
 
         return () => {
             document.title = originalTitle;
-            window.removeEventListener('beforeprint', handleBeforePrint);
-            window.removeEventListener('afterprint', handleAfterPrint);
-            window.history.replaceState(null, '', originalPath);
         };
-    }, []);
+    }, [activeTab]);
 
     useEffect(() => {
         const compileAccountAuditingDataset = async () => {
@@ -86,7 +73,150 @@ const AccountReportPrint = () => {
                     setReportRows(finalPayload);
                 }
 
+                // --- 📊 TAB 13: CUSTOMER BALANCE DETAIL AUDIT REPORT ---
+                else if (activeTab === 13) {
+                    const [custRes, invRes, retRes, vchRes] = await Promise.all([
+                        supabase.from('customers').select('*'),
+                        supabase.from('sales_invoices').select('*').order('id', { ascending: true }),
+                        supabase.from('sales_returns').select('*'),
+                        supabase.from('financial_vouchers').select('*')
+                    ]);
 
+                    if (custRes.error) throw custRes.error;
+                    if (invRes.error) throw invRes.error;
+
+                    let allCustomers = custRes.data || [];
+                    const allInvoices = invRes.data || [];
+                    const allReturns = retRes.data || [];
+                    const allVouchers = vchRes.data || [];
+
+                    // 1. Apply Customer Category Filter
+                    if (filters.customerCategory && filters.customerCategory.length > 0 && !filters.customerCategory.includes('All')) {
+                        allCustomers = allCustomers.filter(c => filters.customerCategory.includes(c.registrationType || 'Retail / General'));
+                    }
+
+                    // 2. Apply Customer Name Filter
+                    if (filters.customer && filters.customer.length > 0 && !filters.customer.includes('All')) {
+                        allCustomers = allCustomers.filter(c => filters.customer.includes(c.customerName));
+                    }
+
+                    const startTimestamp = filters.dateFrom ? new Date(filters.dateFrom + 'T00:00:00').getTime() : 0;
+                    const endTimestamp = filters.dateTo ? new Date(filters.dateTo + 'T23:59:59').getTime() : Infinity;
+
+                    const compiledCustomerRows = allCustomers.map(cust => {
+                        const custName = (cust.customerName || '').trim();
+
+                        // Match invoices for this customer
+                        const custInvoices = allInvoices.filter(i => (i.customer_name || '').trim().toLowerCase() === custName.toLowerCase());
+
+                        // Match returns for this customer
+                        const custReturns = allReturns.filter(r => (r.customer_name || '').trim().toLowerCase() === custName.toLowerCase());
+
+                        // Match vouchers/receipts for this customer
+                        const custVouchers = allVouchers.filter(v => {
+                            const nameInVoucher = (v.customer_name || v.account_title || v.meta?.customer_name || '').trim();
+                            const isReceiptType = !v.voucher_type || v.voucher_type.toLowerCase().includes('receipt') || v.voucher_type.toLowerCase().includes('crv') || v.voucher_type.toLowerCase().includes('brv') || v.meta?.moduleSource === 'sales_receipt';
+                            return nameInVoucher.toLowerCase() === custName.toLowerCase() && isReceiptType;
+                        });
+
+                        // Calculate Prior to DateFrom (Opening Balance)
+                        let openingDebit = 0;
+                        let openingCredit = 0;
+
+                        custInvoices.forEach(inv => {
+                            const d = inv.sale_date || inv.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t < startTimestamp) {
+                                openingDebit += Number(inv.total_amount || 0);
+                                openingCredit += Number(inv.cash_amount_paid || inv.amount_paid || 0);
+                            }
+                        });
+
+                        custReturns.forEach(ret => {
+                            const d = ret.return_date || ret.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t < startTimestamp) {
+                                openingCredit += Number(ret.total_amount || 0);
+                            }
+                        });
+
+                        custVouchers.forEach(vch => {
+                            const d = vch.voucher_date || vch.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t < startTimestamp) {
+                                openingCredit += Number(vch.total_amount || vch.amount || 0);
+                            }
+                        });
+
+                        const openingBalance = openingDebit - openingCredit;
+
+                        // Calculate Within Period (DateFrom to DateTo)
+                        let periodDebit = 0;
+                        let periodCredit = 0;
+                        let txCount = 0;
+
+                        custInvoices.forEach(inv => {
+                            const d = inv.sale_date || inv.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t >= startTimestamp && t <= endTimestamp) {
+                                periodDebit += Number(inv.total_amount || 0);
+                                periodCredit += Number(inv.cash_amount_paid || inv.amount_paid || 0);
+                                txCount++;
+                            }
+                        });
+
+                        custReturns.forEach(ret => {
+                            const d = ret.return_date || ret.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t >= startTimestamp && t <= endTimestamp) {
+                                periodCredit += Number(ret.total_amount || 0);
+                                txCount++;
+                            }
+                        });
+
+                        custVouchers.forEach(vch => {
+                            const d = vch.voucher_date || vch.created_at;
+                            const t = d ? new Date(String(d).includes('T') ? String(d) : String(d) + 'T12:00:00').getTime() : 0;
+                            if (t >= startTimestamp && t <= endTimestamp) {
+                                periodCredit += Number(vch.total_amount || vch.amount || 0);
+                                txCount++;
+                            }
+                        });
+
+                        const closingBalance = openingBalance + periodDebit - periodCredit;
+
+                        return {
+                            id: cust.id,
+                            customer_name: cust.customerName,
+                            category: cust.registrationType || 'Retail / General',
+                            phone: cust.primaryPhone || '-',
+                            address: cust.address || '-',
+                            opening_balance: openingBalance,
+                            period_debit: periodDebit,
+                            period_credit: periodCredit,
+                            closing_balance: closingBalance,
+                            tx_count: txCount
+                        };
+                    });
+
+                    let finalRows = compiledCustomerRows;
+
+                    // Checkbox Filter 1: Show Zero Values toggle
+                    if (filters.showZeroValues === false) {
+                        finalRows = finalRows.filter(r => Math.abs(r.closing_balance) > 0.01);
+                    }
+
+                    // Checkbox Filter 2: Show Only Customers With Transaction toggle
+                    if (filters.showOnlyTransacted === true) {
+                        finalRows = finalRows.filter(r => r.period_debit > 0 || r.period_credit > 0 || r.tx_count > 0);
+                    }
+
+                    finalRows.sort((a, b) => a.customer_name.localeCompare(b.customer_name));
+
+                    setReportRows(finalRows);
+                }
+
+                // --- 📊 TAB 2: CUSTOMER ACCOUNT BALANCE LEDGER ---
                 else if (activeTab === 2) {
                     const { data: invoices, error: invErr } = await supabase
                         .from('sales_invoices')
@@ -125,7 +255,6 @@ const AccountReportPrint = () => {
                         });
 
                         const totalReturnedValue = matchingReturns.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
-
                         const finalAdjustedInvoiceValue = Math.max(0, Number(inv.total_amount || 0) - totalReturnedValue);
 
                         return {
@@ -207,11 +336,8 @@ const AccountReportPrint = () => {
                     setReportRows(agingRows);
                 }
 
-
-
-                // --- 📊 TABS 3 & 6: PROCUREMENT VENDOR BALANCES WITH LIVE FINANCIAL VOUCHERS INTEGRATION ---
+                // --- 📊 TABS 3 & 6: PROCUREMENT VENDOR BALANCES ---
                 else if (activeTab === 3 || activeTab === 6) {
-                    // 1. Fetch original vendor procurement invoices
                     let query = supabase
                         .from('supplier_purchases')
                         .select('*')
@@ -224,7 +350,6 @@ const AccountReportPrint = () => {
                     const { data: purchasesData, error: purchaseErr } = await query;
                     if (purchaseErr) throw purchaseErr;
 
-                    // 2. ✅ SCHEMA MATCHED: Reads strict schema variables from financial_vouchers definitions
                     const { data: vouchersData, error: voucherErr } = await supabase
                         .from('financial_vouchers')
                         .select('voucher_no, original_invoice_no, total_amount');
@@ -233,7 +358,6 @@ const AccountReportPrint = () => {
 
                     let pool = purchasesData || [];
 
-                    // Apply calendar timeline bracket filters
                     if (filters.dateFrom && filters.dateTo) {
                         const startTimestamp = new Date(filters.dateFrom).getTime();
                         const endTimestamp = new Date(filters.dateTo).getTime();
@@ -246,14 +370,10 @@ const AccountReportPrint = () => {
                         });
                     }
 
-                    // 3. ✅ THE UNIFIED ACCURATE DEBT BALANCER ENGINE
                     const calculatedVendorOutstandingRows = pool.map(p => {
                         const grossBillTotal = Number(p.total_amount || 0);
-
-                        // Capture your upfront cash payment field safely from your supplier_purchases table column variables
                         const amountPaidUpfront = Number(p.amount_paid || p.paid_amount || p.cash_amount_paid || p.cash_paid || 0);
 
-                        // Find all subsequent receipts inside financial_vouchers matching this purchase order ID reference number
                         const currentPurchaseNo = String(p.purchase_no || `PUR-0900${p.id}`).toUpperCase().trim();
                         const rawPurchaseId = String(p.id).trim();
 
@@ -261,7 +381,6 @@ const AccountReportPrint = () => {
                             const cleanVoucherNo = String(v.voucher_no || '').toUpperCase().trim();
                             const cleanInvoiceNo = String(v.original_invoice_no || '').toUpperCase().trim();
 
-                            // ✅ MULTI-COLUMN INTERCEPTOR: Scans both voucher references for matches (e.g. "PUR-090015")
                             return (
                                 cleanVoucherNo === currentPurchaseNo ||
                                 cleanVoucherNo.includes(currentPurchaseNo) ||
@@ -271,26 +390,22 @@ const AccountReportPrint = () => {
                             );
                         });
 
-                        // Aggregate all subsequent cash receipt payouts using your true total_amount column
                         const totalSubsequentReceiptsSum = subsequentReceipts.reduce((sum, v) => sum + Number(v.total_amount || 0), 0);
 
-                        // True credit debt = Gross Bill (300,000) - Upfront Cash (10,000) - Subsequent Vouchers (90,000)
                         const trueNetCreditDebtRemaining = activeTab === 6
                             ? Math.max(0, grossBillTotal - amountPaidUpfront - totalSubsequentReceiptsSum)
                             : grossBillTotal;
 
                         return {
                             ...p,
-                            total_amount: trueNetCreditDebtRemaining // Updates row to show true outstanding balance (200,000)
+                            total_amount: trueNetCreditDebtRemaining
                         };
                     });
 
                     setReportRows(calculatedVendorOutstandingRows);
                 }
 
-
-
-
+                // --- 📊 TAB 4: ENTERPRISE INCOME STATEMENT / P&L ---
                 else if (activeTab === 4) {
                     const { data: rev } = await supabase.from('sales_invoices').select('total_amount, sale_date, created_at');
                     const { data: exp } = await supabase.from('supplier_purchases').select('total_amount, purchase_date, created_at');
@@ -353,9 +468,7 @@ const AccountReportPrint = () => {
                     ]);
                 }
 
-
-
-
+                // --- 📊 TAB 5: CHART OF ACCOUNTS STRUCTURAL CATALOG ---
                 else if (activeTab === 5) {
                     let query = supabase.from('chart_of_accounts').select('*');
                     if (filters.categoryCode && filters.categoryCode !== 'All') query = query.eq('category_code', filters.categoryCode);
@@ -369,23 +482,19 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 11: GENERAL TRIAL BALANCE AUDIT WORKBOOK ---
                 else if (activeTab === 11) {
-                    const { data: sales } = await supabase.from('sales_invoices').select('total_amount, cash_amount_paid, amount_paid, payment_term, created_at, sale_date');
-                    const { data: purchases } = await supabase.from('supplier_purchases').select('total_amount, amount_paid_now, paid_amount, created_at, purchase_date');
-                    const { data: sReturns } = await supabase.from('sales_returns').select('total_amount, payout_amount_paid');
-                    const { data: pReturns } = await supabase.from('purchase_returns').select('total_amount, amount_received');
-                    const { data: vouchers } = await supabase.from('financial_vouchers').select('total_amount, voucher_type, mode_of_payment');
-                    const { data: banks } = await supabase.from('banks').select('bankName, accountTitle, openingBalance');
-                    const { data: products } = await supabase.from('products').select('product_name, retail_price, purchase_price, current_stock');
+                    const { data: sales } = await supabase.from('sales_invoices').select('*');
+                    const { data: purchases } = await supabase.from('supplier_purchases').select('*');
+                    const { data: sReturns } = await supabase.from('sales_returns').select('*');
+                    const { data: pReturns } = await supabase.from('purchase_returns').select('*');
+                    const { data: vouchers } = await supabase.from('financial_vouchers').select('*');
+                    const { data: banks } = await supabase.from('banks').select('*');
+                    const { data: products } = await supabase.from('products').select('*');
 
-                    // 1. Gross Sales & Returns
                     const grossSalesSum = (sales || []).reduce((acc, s) => acc + Number(s.total_amount || 0), 0);
                     const salesReturnsSum = (sReturns || []).reduce((acc, r) => acc + Number(r.payout_amount_paid || r.total_amount || 0), 0);
-
-                    // 2. Gross Procurements & Returns
                     const grossPurchasesSum = (purchases || []).reduce((acc, p) => acc + Number(p.total_amount || 0), 0);
                     const purchaseReturnsSum = (pReturns || []).reduce((acc, r) => acc + Number(r.amount_received || r.total_amount || 0), 0);
 
-                    // 3. Receivables & Payables
                     let totalReceivables = 0;
                     (sales || []).forEach(s => {
                         const tot = Number(s.total_amount || 0);
@@ -400,7 +509,6 @@ const AccountReportPrint = () => {
                         if (tot > paid) totalPayables += (tot - paid);
                     });
 
-                    // 4. Cash Drawer Liquidity
                     let cashInflow = 0;
                     let cashOutflow = 0;
                     (sales || []).forEach(s => { cashInflow += Number(s.cash_amount_paid || s.amount_paid || 0); });
@@ -413,10 +521,8 @@ const AccountReportPrint = () => {
                     });
                     const netCashBox = Math.max(0, cashInflow - cashOutflow);
 
-                    // 5. Bank Accounts Total
                     const totalBankLedgers = (banks || []).reduce((acc, b) => acc + Number(b.openingBalance || 0), 0);
 
-                    // 6. Inventory Valuation Asset (uses products.current_stock — formula-based source of truth)
                     let totalInventoryValue = 0;
                     (products || []).forEach(p => {
                         const qty = Number(p.current_stock || 0);
@@ -455,7 +561,6 @@ const AccountReportPrint = () => {
 
                 // --- 📊 TAB 7: CUSTOMER RECOVERY COLLECTION STATEMENT ---
                 else if (activeTab === 7) {
-                    // ✅ FIXED STRING MATCH: Matches your true database value 'Cash Receipt Voucher' perfectly
                     let query = supabase
                         .from('financial_vouchers')
                         .select('*')
@@ -471,7 +576,6 @@ const AccountReportPrint = () => {
 
                     let pool = data || [];
 
-                    // Applies your calendar timeline range parameters safely (YYYY-MM-DD)
                     if (filters.dateFrom && filters.dateTo) {
                         const startStr = filters.dateFrom;
                         const endStr = filters.dateTo;
@@ -482,7 +586,7 @@ const AccountReportPrint = () => {
 
                             const cleanRowStr = String(dateRaw).includes('T')
                                 ? String(dateRaw).split('T')[0]
-                                : String(dateRaw).split(' ')[0]; // Handles space dividers safely too
+                                : String(dateRaw).split(' ')[0];
 
                             return cleanRowStr >= startStr && cleanRowStr <= endStr;
                         });
@@ -491,9 +595,73 @@ const AccountReportPrint = () => {
                     setReportRows(pool);
                 }
 
+                // --- 📊 TAB 8: CORPORATE VOUCHER AUDIT LOG ---
+                else if (activeTab === 8) {
+                    let query = supabase
+                        .from('financial_vouchers')
+                        .select('*')
+                        .order('id', { ascending: true });
 
+                    if (filters.voucherType && filters.voucherType !== 'All') {
+                        query = query.eq('voucher_type', filters.voucherType);
+                    }
 
+                    const { data, error } = await query;
+                    if (error) throw error;
 
+                    let pool = data || [];
+
+                    if (filters.dateFrom && filters.dateTo) {
+                        const startStr = filters.dateFrom;
+                        const endStr = filters.dateTo;
+
+                        pool = pool.filter(row => {
+                            const dateRaw = row.voucher_date || row.created_at || '';
+                            if (!dateRaw) return false;
+
+                            const cleanRowStr = String(dateRaw).includes('T')
+                                ? String(dateRaw).split('T')[0]
+                                : String(dateRaw).split(' ')[0];
+
+                            return cleanRowStr >= startStr && cleanRowStr <= endStr;
+                        });
+                    }
+
+                    setReportRows(pool);
+                }
+
+                // --- 📊 TAB 9: DAILY FINANCIAL ACTIVITY STATEMENT ---
+                else if (activeTab === 9) {
+                    let query = supabase
+                        .from('financial_vouchers')
+                        .select('*')
+                        .order('id', { ascending: true });
+
+                    const { data, error } = await query;
+                    if (error) throw error;
+
+                    let pool = data || [];
+
+                    if (filters.dateFrom && filters.dateTo) {
+                        const startStr = filters.dateFrom;
+                        const endStr = filters.dateTo;
+
+                        pool = pool.filter(row => {
+                            const dateRaw = row.voucher_date || row.created_at || '';
+                            if (!dateRaw) return false;
+
+                            const cleanRowStr = String(dateRaw).includes('T')
+                                ? String(dateRaw).split('T')[0]
+                                : String(dateRaw).split(' ')[0];
+
+                            return cleanRowStr >= startStr && cleanRowStr <= endStr;
+                        });
+                    }
+
+                    setReportRows(pool);
+                }
+
+                // --- 📊 TAB 10: SALESMAN SALES & CASH COLLECTION ---
                 else if (activeTab === 10) {
                     const { data: salesData } = await supabase.from('sales_invoices').select('*');
                     const { data: vouchersData } = await supabase.from('financial_vouchers').select('*');
@@ -540,161 +708,111 @@ const AccountReportPrint = () => {
                         const endTimestamp = new Date(filters.dateTo + 'T23:59:59').getTime();
                         unifiedRows = unifiedRows.filter(r => {
                             if (!r.raw_date) return true;
-                            const ts = new Date(String(r.raw_date).includes('T') ? String(r.raw_date) : String(r.raw_date) + 'T12:00:00').getTime();
-                            return ts >= startTimestamp && ts <= endTimestamp;
+                            const t = new Date(String(r.raw_date).includes('T') ? String(r.raw_date) : String(r.raw_date) + 'T12:00:00').getTime();
+                            return t >= startTimestamp && t <= endTimestamp;
                         });
                     }
 
                     setReportRows(unifiedRows);
                 }
-
-                else if (activeTab === 8 || activeTab === 9) {
-                    let tableTarget = filters.saleType === 'Purchase' ? 'supplier_purchases' : (filters.saleType === 'Cashbook' || filters.saleType === 'Banks' || activeTab === 8) ? 'financial_vouchers' : 'sales_invoices';
-                    if (activeTab === 8) tableTarget = 'financial_vouchers';
-
-                    let query = supabase.from(tableTarget).select('*');
-                    const { data, error } = await query;
-                    if (error) throw error;
-
-                    let pool = data || [];
-                    if (activeTab === 8 && filters.voucherType && filters.voucherType !== 'All') {
-                        const vFilter = String(filters.voucherType).trim().toLowerCase();
-                        pool = pool.filter(v => {
-                            const vType = String(v.voucher_type || v.voucherType || '').trim().toLowerCase();
-                            return vType.includes(vFilter) || vFilter.includes(vType);
-                        });
-                    }
-                    if (filters.dateFrom && filters.dateTo) {
-                        const startTimestamp = new Date(filters.dateFrom + 'T00:00:00').getTime();
-                        const endTimestamp = new Date(filters.dateTo + 'T23:59:59').getTime();
-                        pool = pool.filter(v => {
-                            const rawDate = v.voucher_date || v.voucherDate || v.processing_date || v.sale_date || v.purchase_date || String(v.created_at || '').split('T')[0];
-                            if (!rawDate) return true;
-                            const ts = new Date(String(rawDate).includes('T') ? String(rawDate) : String(rawDate) + 'T12:00:00').getTime();
-                            return ts >= startTimestamp && ts <= endTimestamp;
-                        });
-                    }
-
-                    setReportRows(pool);
-                }
-
             } catch (err: any) {
-                toast.error('Financial compiling routine failure: ' + err.message);
+                console.error("Dataset Compilation Error:", err);
+                toast.error(err.message || "Failed to load audit dataset");
             } finally {
                 setLoading(false);
             }
         };
+
         compileAccountAuditingDataset();
-    }, [activeTab, filters]);
+    }, [activeTab, JSON.stringify(filters)]);
 
     const [exporting, setExporting] = useState(false);
 
     const handleExportExcel = async () => {
+        if (!reportRows || reportRows.length === 0) {
+            toast.error('No report data available to export');
+            return;
+        }
+        setExporting(true);
         try {
-            setExporting(true);
-            const tabTitles: Record<number, string> = {
-                1: 'General Ledger Audit Statement',
-                2: 'Customer Account Balance Ledger',
-                3: 'Procurement Vendor Balance Ledger',
-                4: 'Enterprise Income Statement (P&L)',
-                5: 'Chart of Accounts Hierarchy',
-                6: 'Vendor Outstanding Balances',
-                7: 'Customer Recovery Collections',
-                8: 'Corporate Voucher Audit Log',
-                9: 'Daily Financial Activity Daybook',
-                10: 'Salesman Commission & Sales Sheet',
-                11: 'General Trial Balance Workbook',
-                12: 'Account Debit Aging Matrix'
-            };
-
-            const tabTitle = tabTitles[activeTab] || 'Account Report';
-            const filterMeta = {
-                'Report Tab': tabTitle,
-                'Customer': filters.customer?.length ? filters.customer.join(', ') : 'All',
-                'Vendor': filters.vendor?.length ? filters.vendor.join(', ') : 'All',
-                'Salesman': filters.salesman?.length ? filters.salesman.join(', ') : 'All',
-                'Voucher Type': filters.voucherType || 'All',
-                'Date Window': filters.dateFrom || filters.dateTo ? `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}` : 'All Time'
-            };
-
             let columns: ExcelColumn[] = [];
             let exportData: any[] = [];
+            let filename = `Account_Report_Tab_${activeTab}`;
 
-            if (activeTab === 1) { // General Ledger
+            if (activeTab === 13) {
+                filename = `Customer_Balance_Detail_Report_${new Date().toISOString().split('T')[0]}`;
                 columns = [
-                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-                    { header: 'Voucher / Doc #', key: 'voucher_no', width: 18 },
-                    { header: 'Timeline Date', key: 'raw_date', width: 14, type: 'date' },
-                    { header: 'Audit Transaction Description', key: 'description', width: 38 },
-                    { header: 'Debit Expense (Rs.)', key: 'debit', width: 18, type: 'currency' },
-                    { header: 'Credit Revenue (Rs.)', key: 'credit', width: 18, type: 'currency' },
-                    { header: 'Cumulative Balance (Rs.)', key: 'balance', width: 22, type: 'currency' }
+                    { header: 'S#', key: 'sno', width: 8, alignment: { horizontal: 'center' } },
+                    { header: 'Customer / Business Name', key: 'customer_name', width: 30 },
+                    { header: 'Customer Category', key: 'category', width: 22 },
+                    { header: 'Contact / Phone', key: 'phone', width: 18 },
+                    { header: 'Opening Balance (PKR)', key: 'opening_balance', width: 22, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
+                    { header: 'Period Debit / Sales (PKR)', key: 'period_debit', width: 25, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
+                    { header: 'Period Credit / Receipts (PKR)', key: 'period_credit', width: 25, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
+                    { header: 'Net Closing Balance (PKR)', key: 'closing_balance', width: 24, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
+                    { header: 'Account Status', key: 'status', width: 22, alignment: { horizontal: 'center' } },
                 ];
-                exportData = reportRows.map((r, i) => ({ idx: i + 1, ...r }));
-            } else if (activeTab === 11) { // Trial Balance
+                exportData = reportRows.map((r, i) => {
+                    let status = 'Settled (0.00)';
+                    if (r.closing_balance > 0.01) status = 'Debit Due (Receivable)';
+                    else if (r.closing_balance < -0.01) status = 'Credit Advance (Payable)';
+                    return {
+                        sno: i + 1,
+                        customer_name: r.customer_name,
+                        category: r.category,
+                        phone: r.phone,
+                        opening_balance: Number(r.opening_balance || 0),
+                        period_debit: Number(r.period_debit || 0),
+                        period_credit: Number(r.period_credit || 0),
+                        closing_balance: Number(r.closing_balance || 0),
+                        status
+                    };
+                });
+            } else if (activeTab === 1) {
+                filename = `General_Ledger_${new Date().toISOString().split('T')[0]}`;
                 columns = [
-                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-                    { header: 'Account Code', key: 'code', width: 14 },
-                    { header: 'Account Classification Title', key: 'title', width: 34 },
-                    { header: 'COA Category Group', key: 'category', width: 20 },
-                    { header: 'Debit Matrix (Rs.)', key: 'debit', width: 20, type: 'currency' },
-                    { header: 'Credit Matrix (Rs.)', key: 'credit', width: 20, type: 'currency' }
-                ];
-                exportData = reportRows.map((r, i) => ({ idx: i + 1, ...r }));
-            } else if (activeTab === 8) { // Vouchers
-                columns = [
-                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-                    { header: 'Voucher No', key: 'voucher_no', width: 16 },
-                    { header: 'Type', key: 'voucher_type', width: 20 },
-                    { header: 'Date', key: 'date', width: 14, type: 'date' },
-                    { header: 'Account Title', key: 'account_title', width: 28 },
-                    { header: 'Remarks', key: 'remarks', width: 30 },
-                    { header: 'Amount (Rs.)', key: 'amount', width: 18, type: 'currency' }
+                    { header: 'Index', key: 'index', width: 8, alignment: { horizontal: 'center' } },
+                    { header: 'Date', key: 'date', width: 14, alignment: { horizontal: 'center' } },
+                    { header: 'Voucher / Doc Ref', key: 'doc_ref', width: 20 },
+                    { header: 'Account Title', key: 'account_title', width: 25 },
+                    { header: 'Customer / Party', key: 'customer_name', width: 25 },
+                    { header: 'Narration / Description', key: 'narration', width: 35 },
+                    { header: 'Debit (PKR)', key: 'debit', width: 18, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
+                    { header: 'Credit (PKR)', key: 'credit', width: 18, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
+                    { header: 'Balance (PKR)', key: 'balance', width: 18, numFmt: '#,##0.00', alignment: { horizontal: 'right' } },
                 ];
                 exportData = reportRows.map((r, i) => ({
-                    idx: i + 1,
-                    voucher_no: r.voucher_no || r.voucherNo || `VCH-${r.id}`,
-                    voucher_type: r.voucher_type || r.voucherType || 'General',
-                    date: r.voucher_date || r.voucherDate || String(r.created_at || '').split('T')[0],
-                    account_title: r.customer_name || r.customerName || r.vendor_name || 'General Account',
-                    remarks: r.remarks || '-',
-                    amount: Number(r.amount_received || r.amountReceived || r.total_amount || 0)
+                    index: i + 1,
+                    date: r.raw_date || '',
+                    doc_ref: r.doc_ref || r.voucher_no || '',
+                    account_title: r.account_title || '',
+                    customer_name: r.customer_name || '',
+                    narration: r.narration || '',
+                    debit: Number(r.debit || 0),
+                    credit: Number(r.credit || 0),
+                    balance: Number(r.balance || 0)
                 }));
             } else {
-                columns = [
-                    { header: 'S#', key: 'idx', width: 8, alignment: 'center' },
-                    { header: 'Reference / Account Title', key: 'title', width: 30 },
-                    { header: 'Date / Period', key: 'date', width: 16 },
-                    { header: 'Description / Notes', key: 'notes', width: 32 },
-                    { header: 'Debit Amount (Rs.)', key: 'debit', width: 18, type: 'currency' },
-                    { header: 'Credit Amount (Rs.)', key: 'credit', width: 18, type: 'currency' },
-                    { header: 'Net Balance (Rs.)', key: 'balance', width: 20, type: 'currency' }
-                ];
-                exportData = reportRows.map((r, i) => ({
-                    idx: i + 1,
-                    title: r.customer_name || r.supplier_name || r.account_title || r.title || r.name || 'Account',
-                    date: r.date || r.sale_date || r.purchase_date || r.raw_date || String(r.created_at || '').split('T')[0],
-                    notes: r.remarks || r.description || r.memo || '-',
-                    debit: Number(r.debit || r.total_debit || 0),
-                    credit: Number(r.credit || r.total_credit || r.total_amount || 0),
-                    balance: Number(r.balance || r.net_balance || r.outstanding_balance || 0)
+                const first = reportRows[0] || {};
+                columns = Object.keys(first).map(k => ({
+                    header: k.replace(/_/g, ' ').toUpperCase(),
+                    key: k,
+                    width: 20
                 }));
+                exportData = reportRows;
             }
 
             await exportToExcel({
-                fileName: `Financial_Report_Tab${activeTab}_${new Date().toISOString().split('T')[0]}.xlsx`,
-                sheetName: tabTitle.substring(0, 30),
-                companyName: businessName || 'ZOAIB ALI & COMPANY',
-                reportTitle: `Corporate Financial Audit - ${tabTitle}`,
-                filterSummary: filterMeta,
+                filename,
+                sheetName: 'Audit Report',
+                title: businessName || 'ZOAIB ALI & COMPANY',
+                subtitle: `Financial Ledger Audit Statement - Tab ${activeTab}`,
                 columns,
-                data: exportData,
-                theme: 'emerald'
+                data: exportData
             });
-
-            toast.success('Excel workbook exported successfully!');
+            toast.success('Report exported to Excel successfully!');
         } catch (err: any) {
-            console.error(err);
+            console.error('Export Excel failed:', err);
             toast.error('Export failed: ' + err.message);
         } finally {
             setExporting(false);
@@ -736,7 +854,13 @@ const AccountReportPrint = () => {
 
             <div className="print-root-container w-full bg-white p-4 space-y-6 print:p-0 print:space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
-                    <button type="button" onClick={() => navigate(-1)} className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"><MdArrowBack size={16} /> Back to Report Filter</button>
+                    <button 
+                        type="button" 
+                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report`, { state: { activeTab, filters } })} 
+                        className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"
+                    >
+                        <MdArrowBack size={16} /> Back to Report Filter
+                    </button>
                     <div className="flex items-center gap-2 flex-wrap">
                         <button
                             type="button"
@@ -768,6 +892,7 @@ const AccountReportPrint = () => {
                             {activeTab === 10 && 'Salesman Sales & Cash Collection Sheet'}
                             {activeTab === 11 && 'General Trial Balance Audit Workbook'}
                             {activeTab === 12 && 'Account Debit Aging Matrix Sheet'}
+                            {activeTab === 13 && 'Customer Account Balance & Outstanding Detail Report'}
                         </b></span>
                         <span>Duration Window Block: {filters.dateFrom || 'Initial'} up to {filters.dateTo || 'Today'}</span>
                     </div>
@@ -915,16 +1040,12 @@ const AccountReportPrint = () => {
                         const grossRevenueSum = incomeData.reduce((sum: number, s: any) => sum + Number(s.total_amount || 0), 0);
                         const costOfGoodsSoldSum = expenseData.reduce((sum: number, p: any) => sum + Number(p.total_amount || 0), 0);
 
-                        // 1️⃣ Sum up all initial payouts from sales_returns (payout_amount_paid or total_amount)
                         const initialReturnsCash = returnSalesData.reduce((sum: number, r: any) => sum + Number(r.payout_amount_paid || r.total_amount || 0), 0);
-
-                        // 2️⃣ Sum up all subsequent cash payouts from sales_return_receipts (amount_paid)
                         const subsequentReceiptsCash = receiptSalesData.reduce((sum: number, rc: any) => sum + Number(rc.amount_paid || 0), 0);
 
                         const salesReturnsSum = initialReturnsCash + subsequentReceiptsCash;
                         const purchaseReturnsSum = returnPurchasesData.reduce((sum: number, pr: any) => sum + Number(pr.total_amount || pr.amount_received || 0), 0);
 
-                        // Net Margin Profit = (Gross Revenue - Sales Returns) - (Cost of Goods Sold - Purchase Returns)
                         const netCorporateProfit = (grossRevenueSum - salesReturnsSum) - (costOfGoodsSoldSum - purchaseReturnsSum);
 
                         return (
@@ -934,31 +1055,26 @@ const AccountReportPrint = () => {
                                 </h4>
 
                                 <div className="space-y-4">
-                                    {/* Gross Operating Revenue */}
                                     <div className="border-b pb-1.5 border-gray-100 flex justify-between font-black text-black uppercase">
                                         <span>1. Gross Operating Revenue (Sales Logs)</span>
                                         <span className="text-success">Rs. {grossRevenueSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                     </div>
 
-                                    {/* Cost of Goods Returned */}
                                     <div className="border-b pb-1.5 border-gray-100 flex justify-between font-bold text-gray-600 uppercase pl-4">
                                         <span>Less: 3. Cost of Goods Returned (Sales Logs)</span>
                                         <span className="text-purple-600">Rs. {salesReturnsSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                     </div>
 
-                                    {/* Cost of Goods Sold */}
                                     <div className="border-b pb-1.5 border-gray-100 flex justify-between font-black text-black uppercase">
                                         <span>4. Cost of Goods Sold (Procurements)</span>
                                         <span className="text-red-600">Rs. {costOfGoodsSoldSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                     </div>
 
-                                    {/* Purchase Returns */}
                                     <div className="border-b pb-1.5 border-gray-100 flex justify-between font-bold text-gray-600 uppercase pl-4">
                                         <span>Less: 5. Cost of Goods Returned (Purchase Logs)</span>
                                         <span className="text-gray-400">Rs. {purchaseReturnsSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                     </div>
 
-                                    {/* Profit Margin Box */}
                                     <div className="bg-gray-50 border border-black p-4 rounded-sm flex justify-between items-center font-mono mt-4">
                                         <span className="text-xs font-black uppercase tracking-wide text-gray-500">Net Calculated Enterprise Margin Profit</span>
                                         <span className={`text-lg font-black ${netCorporateProfit >= 0 ? 'text-success' : 'text-danger'}`}>
@@ -969,9 +1085,6 @@ const AccountReportPrint = () => {
                             </div>
                         );
                     })()}
-
-
-
 
                     {activeTab === 5 && (
                         <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left print:w-full">
@@ -1054,7 +1167,6 @@ const AccountReportPrint = () => {
                         );
                     })()}
 
-
                     {/* --- 📊 RENDER TABLE 6: CUSTOMER RECOVERY COLLECTION STATEMENT (TAB 7) --- */}
                     {activeTab === 7 && (
                         <div className="max-w-full overflow-x-auto mt-4">
@@ -1078,46 +1190,31 @@ const AccountReportPrint = () => {
                                             </td>
                                         </tr>
                                     ) : (
-                                        reportRows.map((row, idx) => {
-                                            return (
-                                                <tr key={row.id || idx} className="hover:bg-slate-50 border-b border-gray-300 font-medium text-black">
-                                                    <td className="p-1.5 border border-black text-center font-mono">{idx + 1}</td>
-
-                                                    {/* ✅ Verified column mapping: voucher_no */}
-                                                    <td className="p-1.5 border border-black text-center font-bold text-primary tracking-wide font-mono uppercase">
-                                                        {row.voucher_no}
-                                                    </td>
-
-                                                    {/* ✅ Verified column mapping: voucher_date */}
-                                                    <td className="p-1.5 border border-black text-center text-gray-600 font-mono">
-                                                        {String(row.voucher_date || '').split('T')[0]}
-                                                    </td>
-
-                                                    {/* ✅ Verified column mapping: customer_name */}
-                                                    <td className="p-1.5 border border-black font-bold uppercase">
-                                                        {row.customer_name || row.customerName || 'Walking Client'}
-                                                    </td>
-
-                                                    {/* ✅ Verified column mapping: original_invoice_no */}
-                                                    <td className="p-1.5 border border-black font-mono text-center text-gray-600">
-                                                        {row.original_invoice_no || '-'}
-                                                    </td>
-
-                                                    {/* Narration Memo */}
-                                                    <td className="p-1.5 border border-black text-gray-500 italic text-[10px]">
-                                                        {row.narration || row.notes || 'Recovery Logged'}
-                                                    </td>
-
-                                                    {/* ✅ Verified column mapping: total_amount */}
-                                                    <td className="p-1.5 border border-black text-right font-black font-mono pr-3 text-success">
-                                                        Rs. {Number(row.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
+                                        reportRows.map((row, idx) => (
+                                            <tr key={row.id || idx} className="hover:bg-slate-50 border-b border-gray-300 font-medium text-black">
+                                                <td className="p-1.5 border border-black text-center font-mono">{idx + 1}</td>
+                                                <td className="p-1.5 border border-black text-center font-bold text-primary tracking-wide font-mono uppercase">
+                                                    {row.voucher_no}
+                                                </td>
+                                                <td className="p-1.5 border border-black text-center text-gray-600 font-mono">
+                                                    {String(row.voucher_date || '').split('T')[0]}
+                                                </td>
+                                                <td className="p-1.5 border border-black font-bold uppercase">
+                                                    {row.customer_name || row.customerName || 'Walking Client'}
+                                                </td>
+                                                <td className="p-1.5 border border-black font-mono text-center text-gray-600">
+                                                    {row.original_invoice_no || '-'}
+                                                </td>
+                                                <td className="p-1.5 border border-black text-gray-500 italic text-[10px]">
+                                                    {row.narration || row.notes || 'Recovery Logged'}
+                                                </td>
+                                                <td className="p-1.5 border border-black text-right font-black font-mono pr-3 text-success">
+                                                    Rs. {Number(row.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                        ))
                                     )}
                                 </tbody>
-
                                 {reportRows.length > 0 && (
                                     <tfoot>
                                         <tr className="bg-gray-100 font-black border-t border-black text-black font-mono">
@@ -1133,7 +1230,6 @@ const AccountReportPrint = () => {
                             </table>
                         </div>
                     )}
-
 
                     {/* --- 📊 RENDER TABLE 4: UNIFIED VOUCHERS JOURNAL SUMMARY (TABS 8, 9) --- */}
                     {(activeTab === 8 || activeTab === 9) && (
@@ -1216,6 +1312,100 @@ const AccountReportPrint = () => {
                         </table>
                     )}
 
+                    {/* --- 📊 RENDER TABLE 13: CUSTOMER BALANCE DETAIL REPORT (TAB 13) --- */}
+                    {activeTab === 13 && (
+                        <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans text-left print:w-full">
+                            <thead className="bg-gray-100 border-b border-black font-black uppercase text-black font-mono text-[10px]">
+                                <tr>
+                                    <th className="p-1.5 border border-black text-center w-10">S#</th>
+                                    <th className="p-1.5 border border-black">Customer / Business Name</th>
+                                    <th className="p-1.5 border border-black text-center w-36">Customer Category</th>
+                                    <th className="p-1.5 border border-black text-center w-28">Contact / Phone</th>
+                                    <th className="p-1.5 border border-black text-right w-36">Opening Balance (PKR)</th>
+                                    <th className="p-1.5 border border-black text-right w-36">Period Debit / Sales (PKR)</th>
+                                    <th className="p-1.5 border border-black text-right w-36">Period Credit / Receipts (PKR)</th>
+                                    <th className="p-1.5 border border-black text-right w-36">Net Closing Balance (PKR)</th>
+                                    <th className="p-1.5 border border-black text-center w-32 pr-2">Account Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {reportRows.map((row, i) => {
+                                    const openBal = Number(row.opening_balance || 0);
+                                    const pDebit = Number(row.period_debit || 0);
+                                    const pCredit = Number(row.period_credit || 0);
+                                    const closeBal = Number(row.closing_balance || 0);
+
+                                    return (
+                                        <tr key={row.id || i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
+                                            <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                            <td className="p-1.5 border border-black font-sans text-black font-bold">
+                                                <div>{row.customer_name}</div>
+                                                {row.address && row.address !== '-' && (
+                                                    <div className="text-[9px] text-gray-500 font-normal truncate max-w-xs">{row.address}</div>
+                                                )}
+                                            </td>
+                                            <td className="p-1.5 border border-black text-center font-sans">
+                                                <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                                    {row.category || 'Retail / General'}
+                                                </span>
+                                            </td>
+                                            <td className="p-1.5 border border-black text-center text-gray-600 font-mono text-[10px]">{row.phone || '-'}</td>
+                                            <td className={`p-1.5 border border-black text-right font-mono ${openBal > 0.01 ? 'text-red-600 font-bold' : openBal < -0.01 ? 'text-emerald-700 font-bold' : 'text-gray-500'}`}>
+                                                Rs. {openBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-1.5 border border-black text-right text-red-600 font-bold font-mono">
+                                                Rs. {pDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-1.5 border border-black text-right text-emerald-700 font-bold font-mono">
+                                                Rs. {pCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className={`p-1.5 border border-black text-right font-mono text-xs ${closeBal > 0.01 ? 'text-red-700 font-black' : closeBal < -0.01 ? 'text-blue-700 font-black' : 'text-gray-600 font-bold'}`}>
+                                                Rs. {closeBal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-1.5 border border-black text-center pr-2 font-sans">
+                                                {closeBal > 0.01 ? (
+                                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-black bg-red-50 text-red-700 border border-red-200">
+                                                        Debit Due (Dr)
+                                                    </span>
+                                                ) : closeBal < -0.01 ? (
+                                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                        Credit Adv (Cr)
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
+                                                        Settled (0.00)
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                            <tfoot>
+                                <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-black">
+                                        Grand Totals Summary (PKR):
+                                    </td>
+                                    <td className="p-2 border border-black text-right text-black font-black text-xs">
+                                        Rs. {reportRows.reduce((sum, r) => sum + Number(r.opening_balance || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-2 border border-black text-right text-red-700 font-black text-xs">
+                                        Rs. {reportRows.reduce((sum, r) => sum + Number(r.period_debit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-2 border border-black text-right text-emerald-700 font-black text-xs">
+                                        Rs. {reportRows.reduce((sum, r) => sum + Number(r.period_credit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-2 border border-black text-right text-primary font-black underline decoration-double text-sm">
+                                        Rs. {reportRows.reduce((sum, r) => sum + Number(r.closing_balance || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </td>
+                                    <td className="p-2 border border-black text-center text-gray-500 text-[10px] font-sans uppercase">
+                                        {reportRows.length} Accounts
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    )}
+
                     {reportRows.length === 0 && (
                         <div className="p-12 text-center border font-bold italic text-gray-400 bg-gray-50/50 rounded-sm">No structural financial transaction records discovered matching chosen selection tokens.</div>
                     )}
@@ -1263,6 +1453,5 @@ const AccountReportPrint = () => {
         </div>
     );
 };
-
 
 export default AccountReportPrint;
