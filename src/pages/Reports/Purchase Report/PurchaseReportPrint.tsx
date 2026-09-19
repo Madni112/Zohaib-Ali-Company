@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -7,6 +7,7 @@ import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import ReportPagination from '../../../components/ReportPagination';
 
 const PurchaseReportPrint = () => {
   const location = useLocation();
@@ -15,6 +16,9 @@ const PurchaseReportPrint = () => {
   const [loading, setLoading] = useState(true);
 
   const [reportRows, setReportRows] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(25);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const config = location.state || { type: 'purchase', filters: {} };
   const { type: rType, filters } = config;
@@ -23,14 +27,8 @@ const PurchaseReportPrint = () => {
     const originalTitle = document.title;
     document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
 
-    let originalPath = window.location.pathname + window.location.search;
-    const handleBeforePrint = () => {
-      originalPath = window.location.pathname + window.location.search;
-      window.history.replaceState(null, '', '/');
-    };
-    const handleAfterPrint = () => {
-      window.history.replaceState(null, '', originalPath);
-    };
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => setIsPrinting(false);
 
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
@@ -39,9 +37,20 @@ const PurchaseReportPrint = () => {
       document.title = originalTitle;
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
-      window.history.replaceState(null, '', originalPath);
     };
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [rType, JSON.stringify(filters)]);
+
+  const paginatedRows = useMemo(() => {
+    if (isPrinting || pageSize === 'all') return reportRows;
+    const start = (currentPage - 1) * pageSize;
+    return reportRows.slice(start, start + pageSize);
+  }, [reportRows, currentPage, pageSize, isPrinting]);
+
+  const startIndex = (currentPage - 1) * (pageSize === 'all' ? 0 : (pageSize as number));
 
   useEffect(() => {
     const compilePurchaseStructuredDataset = async () => {
@@ -230,6 +239,17 @@ const PurchaseReportPrint = () => {
         </div>
 
 
+        <ReportPagination
+          totalCount={reportRows.length}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+        />
+
         <div className="w-full overflow-x-auto">
           <table className="w-full table-auto border border-collapse border-black text-[11px] font-sans antialiased text-left print:w-full">
             <thead>
@@ -243,17 +263,17 @@ const PurchaseReportPrint = () => {
               </tr>
             </thead>
             <tbody>
-              {reportRows.length === 0 ? (
+              {paginatedRows.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-10 font-bold italic border border-black text-gray-400 bg-gray-50/50">No rows matching active report criteria.</td></tr>
               ) : (
-                reportRows.map((row, idx) => {
+                paginatedRows.map((row, idx) => {
                   const displayDocRef = row.purchase_no || row.return_no || `ID: ${row.id}`;
                   const displayAccountTitle = row.supplier_name || row.vendor_name || 'Generic Wholesaler';
                   const displayProcessingDate = row.purchase_date || row.return_date || String(row.created_at || '').split(' ')[0];
 
                   return (
                     <tr key={row.id} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                      <td className="p-1.5 border border-black text-center text-gray-400">{idx + 1}</td>
+                      <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + idx + 1}</td>
                       <td className="p-1.5 border border-black text-primary font-black uppercase">{displayDocRef}</td>
                       <td className="p-1.5 border border-black text-black font-sans">{displayAccountTitle}</td>
                       <td className="p-1.5 border border-black text-center text-gray-500">{displayProcessingDate}</td>
@@ -265,15 +285,40 @@ const PurchaseReportPrint = () => {
               )}
             </tbody>
             <tfoot>
-              <tr className="bg-gray-50 border-t border-black font-black font-mono text-xs">
-                <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-gray-500">Gross Procurement Balanced Sum (PKR):</td>
-                <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm">
-                  Rs. {reportRows.reduce((sum, r) => sum + (Number(r.total_amount || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {/* 📄 Page Subtotal Row */}
+              {!isPrinting && pageSize !== 'all' && (
+                <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
+                  <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-amber-900">
+                    Page {currentPage} Subtotal ({paginatedRows.length} records):
+                  </td>
+                  <td className="p-2 border border-black text-right pr-3 text-emerald-800 font-bold whitespace-nowrap">
+                    Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              )}
+              {/* 📊 Overall Grand Totals Row */}
+              <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
+                <td colSpan={5} className="p-2 border border-black text-right uppercase tracking-wider text-gray-900">
+                  Grand Total Summary (All {reportRows.length} Records):
+                </td>
+                <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm whitespace-nowrap">
+                  Rs. {reportRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
               </tr>
             </tfoot>
           </table>
         </div>
+
+        <ReportPagination
+          totalCount={reportRows.length}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+        />
 
         {/* ✍️ Formal Multi-Level Executive Verification & Signature Block */}
         <div className="mt-16 grid grid-cols-3 gap-10 text-center text-[10px] font-sans font-black uppercase tracking-wider text-slate-800 break-inside-avoid">

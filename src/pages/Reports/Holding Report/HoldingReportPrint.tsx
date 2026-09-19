@@ -1,16 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { QtyBadge } from '../../../utils/QtyBadge';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import ReportPagination from '../../../components/ReportPagination';
 
 const HoldingReportPrint: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { businessName, tenantId } = useAuth();
   const [exporting, setExporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(25);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const stateData = location.state || {
     perspective: 'detailed',
@@ -31,18 +35,12 @@ const HoldingReportPrint: React.FC = () => {
 
   const { perspective, filters, rows, kpis } = stateData;
 
-  React.useEffect(() => {
+  useEffect(() => {
     const originalTitle = document.title;
     document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
 
-    let originalPath = window.location.pathname + window.location.search;
-    const handleBeforePrint = () => {
-      originalPath = window.location.pathname + window.location.search;
-      window.history.replaceState(null, '', '/');
-    };
-    const handleAfterPrint = () => {
-      window.history.replaceState(null, '', originalPath);
-    };
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => setIsPrinting(false);
 
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
@@ -51,9 +49,20 @@ const HoldingReportPrint: React.FC = () => {
       document.title = originalTitle;
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
-      window.history.replaceState(null, '', originalPath);
     };
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [perspective, JSON.stringify(filters)]);
+
+  const paginatedRows = useMemo(() => {
+    if (isPrinting || pageSize === 'all') return rows || [];
+    const start = (currentPage - 1) * pageSize;
+    return (rows || []).slice(start, start + pageSize);
+  }, [rows, currentPage, pageSize, isPrinting]);
+
+  const startIndex = (currentPage - 1) * (pageSize === 'all' ? 0 : (pageSize as number));
 
   const handleExportExcel = async () => {
     try {
@@ -252,7 +261,7 @@ const HoldingReportPrint: React.FC = () => {
         <div className="flex justify-between items-center bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
           <button
             type="button"
-            onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Holding-Report`)}
+            onClick={() => navigate(-1)}
             className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"
           >
             <MdArrowBack size={16} /> Return to Holding Audit Center
@@ -292,6 +301,17 @@ const HoldingReportPrint: React.FC = () => {
           </div>
         </div>
 
+        <ReportPagination
+          totalCount={(rows || []).length}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+        />
+
         {/* 1. Itemized Detailed View */}
         {perspective === 'detailed' && (
           <div className="w-full overflow-x-auto">
@@ -313,16 +333,16 @@ const HoldingReportPrint: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 ? (
+                {paginatedRows.length === 0 ? (
                   <tr>
                     <td colSpan={12} className="text-center py-8 font-bold italic border border-black text-gray-400">
                       No holding records found matching parameters.
                     </td>
                   </tr>
                 ) : (
-                  rows.map((r: any, idx: number) => (
+                  paginatedRows.map((r: any, idx: number) => (
                     <tr key={idx} className="border-b border-black font-mono text-xs">
-                      <td className="p-1 border border-black text-center text-gray-500">{idx + 1}</td>
+                      <td className="p-1 border border-black text-center text-gray-500">{startIndex + idx + 1}</td>
                       <td className="p-1 border border-black font-bold">{r.gatepassNo}</td>
                       <td className="p-1 border border-black">{r.invoiceNo}</td>
                       <td className="p-1 border border-black text-center text-gray-600 font-sans text-[10px]">{r.date}</td>
@@ -345,8 +365,24 @@ const HoldingReportPrint: React.FC = () => {
               </tbody>
               {rows.length > 0 && (
                 <tfoot>
+                  {/* 📄 Page Subtotal Row */}
+                  {!isPrinting && pageSize !== 'all' && (
+                    <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
+                      <td colSpan={7} className="p-2 border border-black text-right uppercase font-sans text-amber-900">
+                        Page {currentPage} Subtotal ({paginatedRows.length} items):
+                      </td>
+                      <td className="p-2 border border-black text-center"><QtyBadge qty={paginatedRows.reduce((s: number, r: any) => s + Number(r.orderQty || 0), 0)} /></td>
+                      <td className="p-2 border border-black text-center text-emerald-700"><QtyBadge qty={paginatedRows.reduce((s: number, r: any) => s + Number(r.dispatchedQty || 0), 0)} /></td>
+                      <td className="p-2 border border-black text-center bg-amber-100 text-amber-900"><QtyBadge qty={paginatedRows.reduce((s: number, r: any) => s + Number(r.holdQty || 0), 0)} /></td>
+                      <td className="p-2 border border-black text-right">-</td>
+                      <td className="p-2 border border-black text-right pr-2 bg-emerald-50 text-emerald-900 font-bold">
+                        Rs. {paginatedRows.reduce((s: number, r: any) => s + Number(r.heldAmount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  )}
+                  {/* 📊 Overall Grand Totals Row */}
                   <tr className="bg-gray-100 border-t-2 border-black font-black text-black text-xs font-mono">
-                    <td colSpan={7} className="p-2 border border-black text-right uppercase font-sans">Summary Totals:</td>
+                    <td colSpan={7} className="p-2 border border-black text-right uppercase font-sans">Grand Total Summary (All {rows.length} Items):</td>
                     <td className="p-2 border border-black text-center"><QtyBadge qty={kpis.totalOrderQty} /></td>
                     <td className="p-2 border border-black text-center text-emerald-700"><QtyBadge qty={kpis.totalOrderQty - kpis.totalHeldQty} /></td>
                     <td className="p-2 border border-black text-center bg-amber-100 text-amber-900"><QtyBadge qty={kpis.totalHeldQty} /></td>
@@ -377,9 +413,9 @@ const HoldingReportPrint: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((s: any, idx: number) => (
+                {paginatedRows.map((s: any, idx: number) => (
                   <tr key={idx} className="border-b border-black font-mono text-xs">
-                    <td className="p-2 border border-black text-center text-gray-500">{idx + 1}</td>
+                    <td className="p-2 border border-black text-center text-gray-500">{startIndex + idx + 1}</td>
                     <td className="p-2 border border-black font-sans font-bold">{s.salesman}</td>
                     <td className="p-2 border border-black text-center">{s.customerCount ? (s.customerCount.size || s.customerCount) : 0} Clients</td>
                     <td className="p-2 border border-black text-center">{s.invoices ? (s.invoices.size || s.invoices) : 0} Invoices</td>
@@ -392,8 +428,21 @@ const HoldingReportPrint: React.FC = () => {
                 ))}
               </tbody>
               <tfoot>
+                {/* 📄 Page Subtotal Row */}
+                {!isPrinting && pageSize !== 'all' && (
+                  <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
+                    <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans text-amber-900">
+                      Page {currentPage} Subtotal ({paginatedRows.length} salesmen):
+                    </td>
+                    <td className="p-2 border border-black text-right">{paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldQty || 0), 0).toLocaleString()} Pcs</td>
+                    <td className="p-2 border border-black text-right pr-3 bg-emerald-50 text-emerald-900 font-bold">
+                      Rs. {paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldValue || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )}
+                {/* 📊 Overall Grand Totals Row */}
                 <tr className="bg-gray-100 border-t-2 border-black font-black text-black text-xs font-mono">
-                  <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans">Total Salesman Ledger:</td>
+                  <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans">Grand Total Summary (All {rows.length} Salesmen):</td>
                   <td className="p-2 border border-black text-right">{kpis.totalHeldQty.toLocaleString()} Pcs</td>
                   <td className="p-2 border border-black text-right pr-3 bg-emerald-100">
                     Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -420,9 +469,9 @@ const HoldingReportPrint: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((c: any, idx: number) => (
+                {paginatedRows.map((c: any, idx: number) => (
                   <tr key={idx} className="border-b border-black font-mono text-xs">
-                    <td className="p-2 border border-black text-center text-gray-500">{idx + 1}</td>
+                    <td className="p-2 border border-black text-center text-gray-500">{startIndex + idx + 1}</td>
                     <td className="p-2 border border-black font-sans font-bold">{c.customer}</td>
                     <td className="p-2 border border-black text-center">{c.gatepasses ? (c.gatepasses.size || c.gatepasses) : 0} GPs</td>
                     <td className="p-2 border border-black text-center">{c.invoices ? (c.invoices.size || c.invoices) : 0} Invs</td>
@@ -435,8 +484,21 @@ const HoldingReportPrint: React.FC = () => {
                 ))}
               </tbody>
               <tfoot>
+                {/* 📄 Page Subtotal Row */}
+                {!isPrinting && pageSize !== 'all' && (
+                  <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
+                    <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans text-amber-900">
+                      Page {currentPage} Subtotal ({paginatedRows.length} clients):
+                    </td>
+                    <td className="p-2 border border-black text-right">{paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldQty || 0), 0).toLocaleString()} Pcs</td>
+                    <td className="p-2 border border-black text-right pr-3 bg-emerald-50 text-emerald-900 font-bold">
+                      Rs. {paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldValue || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )}
+                {/* 📊 Overall Grand Totals Row */}
                 <tr className="bg-gray-100 border-t-2 border-black font-black text-black text-xs font-mono">
-                  <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans">Total Client Commitments:</td>
+                  <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans">Grand Total Summary (All {rows.length} Clients):</td>
                   <td className="p-2 border border-black text-right">{kpis.totalHeldQty.toLocaleString()} Pcs</td>
                   <td className="p-2 border border-black text-right pr-3 bg-emerald-100">
                     Rs. {kpis.totalHeldValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -465,9 +527,9 @@ const HoldingReportPrint: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((g: any, idx: number) => (
+                {paginatedRows.map((g: any, idx: number) => (
                   <tr key={idx} className="border-b border-black font-mono text-xs">
-                    <td className="p-2 border border-black text-center text-gray-500">{idx + 1}</td>
+                    <td className="p-2 border border-black text-center text-gray-500">{startIndex + idx + 1}</td>
                     <td className="p-2 border border-black font-bold">{g.gatepassNo}</td>
                     <td className="p-2 border border-black text-center font-sans text-[10px]">{g.date}</td>
                     <td className="p-2 border border-black font-sans font-bold">{g.customer}</td>
@@ -482,8 +544,23 @@ const HoldingReportPrint: React.FC = () => {
                 ))}
               </tbody>
               <tfoot>
+                {/* 📄 Page Subtotal Row */}
+                {!isPrinting && pageSize !== 'all' && (
+                  <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
+                    <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans text-amber-900">
+                      Page {currentPage} Subtotal ({paginatedRows.length} gatepasses):
+                    </td>
+                    <td className="p-2 border border-black text-right">{paginatedRows.reduce((s: number, r: any) => s + Number(r.totalOrderQty || 0), 0).toLocaleString()}</td>
+                    <td className="p-2 border border-black text-right text-emerald-700">{paginatedRows.reduce((s: number, r: any) => s + Number(r.totalDispatchedQty || 0), 0).toLocaleString()}</td>
+                    <td className="p-2 border border-black text-right">{paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldQty || 0), 0).toLocaleString()}</td>
+                    <td className="p-2 border border-black text-right pr-3 bg-emerald-50 text-emerald-900 font-bold">
+                      Rs. {paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldValue || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )}
+                {/* 📊 Overall Grand Totals Row */}
                 <tr className="bg-gray-100 border-t-2 border-black font-black text-black text-xs font-mono">
-                  <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans">Summary Totals:</td>
+                  <td colSpan={5} className="p-2 border border-black text-right uppercase font-sans">Grand Total Summary (All {rows.length} Gatepasses):</td>
                   <td className="p-2 border border-black text-right">{kpis.totalOrderQty.toLocaleString()}</td>
                   <td className="p-2 border border-black text-right text-emerald-700">{(kpis.totalOrderQty - kpis.totalHeldQty).toLocaleString()}</td>
                   <td className="p-2 border border-black text-right">{kpis.totalHeldQty.toLocaleString()}</td>
@@ -514,9 +591,9 @@ const HoldingReportPrint: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((inv: any, idx: number) => (
+                {paginatedRows.map((inv: any, idx: number) => (
                   <tr key={idx} className="border-b border-black font-mono text-xs">
-                    <td className="p-2 border border-black text-center text-gray-500">{idx + 1}</td>
+                    <td className="p-2 border border-black text-center text-gray-500">{startIndex + idx + 1}</td>
                     <td className="p-2 border border-black font-bold">{inv.invoiceNo}</td>
                     <td className="p-2 border border-black text-center font-sans text-[10px]">{inv.date}</td>
                     <td className="p-2 border border-black font-sans font-bold">{inv.customer}</td>
@@ -533,8 +610,22 @@ const HoldingReportPrint: React.FC = () => {
                 ))}
               </tbody>
               <tfoot>
+                {/* 📄 Page Subtotal Row */}
+                {!isPrinting && pageSize !== 'all' && (
+                  <tr className="bg-amber-50/80 border-t border-black font-bold font-mono text-xs text-amber-950">
+                    <td colSpan={6} className="p-2 border border-black text-right uppercase font-sans text-amber-900">
+                      Page {currentPage} Subtotal ({paginatedRows.length} invoices):
+                    </td>
+                    <td className="p-2 border border-black text-right">{paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldQty || 0), 0).toLocaleString()}</td>
+                    <td className="p-2 border border-black text-right">Rs. {paginatedRows.reduce((s: number, r: any) => s + Number(r.totalOrderAmount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="p-2 border border-black text-right pr-3 bg-emerald-50 text-emerald-900 font-bold">
+                      Rs. {paginatedRows.reduce((s: number, r: any) => s + Number(r.totalHeldValue || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                )}
+                {/* 📊 Overall Grand Totals Row */}
                 <tr className="bg-gray-100 border-t-2 border-black font-black text-black text-xs font-mono">
-                  <td colSpan={6} className="p-2 border border-black text-right uppercase font-sans">Total Invoices Valuation:</td>
+                  <td colSpan={6} className="p-2 border border-black text-right uppercase font-sans">Grand Total Summary (All {rows.length} Invoices):</td>
                   <td className="p-2 border border-black text-right">{kpis.totalHeldQty.toLocaleString()}</td>
                   <td className="p-2 border border-black text-right">Rs. {kpis.totalOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="p-2 border border-black text-right pr-3 bg-emerald-100">
@@ -545,6 +636,17 @@ const HoldingReportPrint: React.FC = () => {
             </table>
           </div>
         )}
+
+        <ReportPagination
+          totalCount={(rows || []).length}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+        />
 
         {/* ✍️ Formal Multi-Level Executive Verification & Signature Block */}
         <div className="mt-16 grid grid-cols-3 gap-10 text-center text-[10px] font-sans font-black uppercase tracking-wider text-slate-800 break-inside-avoid">

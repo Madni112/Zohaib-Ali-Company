@@ -80,6 +80,19 @@ const shouldShowBadge = (config: { badge?: string; badgeType?: string; createdAt
 };
 
 const REPORT_REGISTRY: Record<string, ReportConfig> = {
+  'product-sales-history': {
+    id: 'product-sales-history',
+    title: 'Product Sales History Report',
+    categoryName: 'Sales & Distribution',
+    subtitle: 'Historical sales performance of products, market trends, units sold, returns, rates, and net revenue.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-09-19',
+    icon: MdInventory,
+    targetPrintPath: '/Reports/Sales-Report/Print',
+    printType: 'product-sales-history',
+    fields: ['product', 'customer', 'salesman', 'parentCategory', 'subCategory', 'brand', 'location']
+  },
   'sale-inv-detail': {
     id: 'sale-inv-detail',
     title: 'Sales Invoice Detail Report',
@@ -112,7 +125,7 @@ const REPORT_REGISTRY: Record<string, ReportConfig> = {
     subtitle: 'Custom multi-criteria query builder by customer, salesman, date window & categories.',
     icon: MdAssessment,
     targetPrintPath: '/Reports/Sales-Report/Print',
-    printType: 'sale',
+    printType: 'sales-query',
     fields: ['customer', 'salesman', 'transport', 'parentCategory', 'subCategory', 'subSubCategory', 'product', 'brand', 'uom', 'location', 'saleType', 'saleMethod']
   },
   'sales-return-ledger': {
@@ -132,7 +145,7 @@ const REPORT_REGISTRY: Record<string, ReportConfig> = {
     subtitle: 'Customer order cycles, top purchasing accounts, and credit settlement statuses.',
     icon: MdPeople,
     targetPrintPath: '/Reports/Sales-Report/Print',
-    printType: 'sale',
+    printType: 'customer-sales',
     fields: ['customer', 'salesman', 'location', 'saleType']
   },
   'customer-loyalty-ledger': {
@@ -974,6 +987,47 @@ const DedicatedReportFilter: React.FC = () => {
           </div>
 
           {/* Custom report flags */}
+          {reportId === 'product-sales-history' && (
+            <div className="md:col-span-2 flex flex-col gap-3 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800/80">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Report Presentation Mode:</span>
+                <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('viewMode', 'summary')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                      (criteria.viewMode || 'summary') === 'summary'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    📊 Summary View (1 Row / Product)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('viewMode', 'detailed')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
+                      criteria.viewMode === 'detailed'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    }`}
+                  >
+                    📑 Detailed View (Invoice Breakdown)
+                  </button>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={criteria.showZeroSales !== false} 
+                  onChange={(e) => handleInputChange('showZeroSales', e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded border-stroke focus:ring-0 cursor-pointer accent-emerald-600"
+                />
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">Show Products With Zero Sales (Display Full Inventory Catalog)</span>
+              </label>
+            </div>
+          )}
+
           {(reportId === 'customer-balance-detail' || f.includes('customerCategory')) && (
             <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800/80">
               <label className="flex items-center gap-2 cursor-pointer select-none">

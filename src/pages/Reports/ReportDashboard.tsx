@@ -49,17 +49,29 @@ interface ReportItem {
 export const shouldShowBadge = (report: { badge?: string; badgeType?: string; createdAt?: string }): boolean => {
   if (!report.badge) return false;
   if (report.badgeType === 'new') {
-    if (!report.createdAt) return false;
+    if (!report.createdAt) return true;
     const createdTime = new Date(report.createdAt).getTime();
     const now = Date.now();
-    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-    return (now - createdTime) <= SEVEN_DAYS_MS && (now - createdTime) >= 0;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    return Math.abs(now - createdTime) <= THIRTY_DAYS_MS;
   }
   return true;
 };
 
 const ALL_REPORTS: ReportItem[] = [
   // ── SALES REPORTS ──
+  {
+    id: 'product-sales-history',
+    title: 'Product Sales History Report',
+    category: 'sales',
+    description: 'Historical sales performance of products, market trends, units sold, returns, rates, and net revenue.',
+    badge: 'NEW',
+    badgeType: 'new',
+    createdAt: '2026-09-19',
+    path: '/Reports/Sales-Report',
+    state: { reportType: 'product-sales-history' },
+    icon: MdInventory
+  },
   {
     id: 'sale-inv-detail',
     title: 'Sales Invoice Detail Report',
@@ -89,7 +101,7 @@ const ALL_REPORTS: ReportItem[] = [
     category: 'sales',
     description: 'Custom multi-criteria query builder by customer, salesman, date window & categories.',
     path: '/Reports/Sales-Report',
-    state: { reportType: 'sale' },
+    state: { reportType: 'sales-query' },
     icon: MdAssessment
   },
   {
@@ -107,7 +119,7 @@ const ALL_REPORTS: ReportItem[] = [
     category: 'sales',
     description: 'Customer order cycles, top purchasing accounts, and credit settlement statuses.',
     path: '/Reports/Sales-Report',
-    state: { reportType: 'sale' },
+    state: { reportType: 'customer-sales' },
     icon: MdPeople
   },
   {

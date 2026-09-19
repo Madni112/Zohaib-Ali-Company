@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -7,6 +7,7 @@ import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import ReportPagination from '../../../components/ReportPagination';
 
 const StockReportPrint = () => {
     const location = useLocation();
@@ -15,6 +16,9 @@ const StockReportPrint = () => {
     const [loading, setLoading] = useState(true);
 
     const [reportRows, setReportRows] = useState<any[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState<number | 'all'>(25);
+    const [isPrinting, setIsPrinting] = useState(false);
 
     const config = location.state || { tab: 1, filters: {} };
     const { tab: activeTab, filters } = config;
@@ -23,14 +27,8 @@ const StockReportPrint = () => {
         const originalTitle = document.title;
         document.title = 'NHT ENTERPRISES (Noor Horizon Technologies)';
 
-        let originalPath = window.location.pathname + window.location.search;
-        const handleBeforePrint = () => {
-            originalPath = window.location.pathname + window.location.search;
-            window.history.replaceState(null, '', '/');
-        };
-        const handleAfterPrint = () => {
-            window.history.replaceState(null, '', originalPath);
-        };
+        const handleBeforePrint = () => setIsPrinting(true);
+        const handleAfterPrint = () => setIsPrinting(false);
 
         window.addEventListener('beforeprint', handleBeforePrint);
         window.addEventListener('afterprint', handleAfterPrint);
@@ -39,9 +37,20 @@ const StockReportPrint = () => {
             document.title = originalTitle;
             window.removeEventListener('beforeprint', handleBeforePrint);
             window.removeEventListener('afterprint', handleAfterPrint);
-            window.history.replaceState(null, '', originalPath);
         };
     }, []);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, JSON.stringify(filters)]);
+
+    const paginatedRows = useMemo(() => {
+        if (isPrinting || pageSize === 'all') return reportRows;
+        const start = (currentPage - 1) * pageSize;
+        return reportRows.slice(start, start + pageSize);
+    }, [reportRows, currentPage, pageSize, isPrinting]);
+
+    const startIndex = (currentPage - 1) * (pageSize === 'all' ? 0 : (pageSize as number));
 
     useEffect(() => {
         const compileTrueDynamicStockDataset = async () => {
@@ -516,6 +525,17 @@ const StockReportPrint = () => {
                     </div>
                 </div>
 
+                <ReportPagination
+                    totalCount={reportRows.length}
+                    currentPage={currentPage}
+                    pageSize={pageSize}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                    }}
+                />
+
                 <div className="w-full overflow-x-auto">
                     {/* --- 📊 RENDER CHANNEL 1: STOCK ACTIVITY REPORT (TAB 1) --- */}
                     {activeTab === 1 && (
@@ -534,9 +554,9 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, idx) => (
+                                {paginatedRows.map((row, idx) => (
                                     <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                        <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                         <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                         <td className="p-2 border border-slate-300 uppercase">{row.uom || 'PC'}</td>
                                         <td className="p-2 border border-slate-300 font-sans"><span className="text-gray-500">{row.category || 'General'}</span></td>
@@ -551,8 +571,18 @@ const StockReportPrint = () => {
                                 ))}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
-                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Consolidated Summary:</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 text-gray-700">{paginatedRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">+{paginatedRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 text-red-700">-{paginatedRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-2 text-purple-700">{paginatedRows.reduce((s, r) => s + (r.net_activity || 0), 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                    </tr>
+                                )}
+                                <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Summary (All {reportRows.length} Records):</td>
                                     <td className="p-2 border border-slate-300 text-right pr-2 text-gray-700">{reportRows.reduce((s, r) => s + (r.computed_opening || 0), 0).toLocaleString()}</td>
                                     <td className="p-2 border border-slate-300 text-right pr-2 text-emerald-700">+{reportRows.reduce((s, r) => s + (r.period_stock_in || 0), 0).toLocaleString()}</td>
                                     <td className="p-2 border border-slate-300 text-right pr-2 text-red-700">-{reportRows.reduce((s, r) => s + (r.period_stock_out || 0), 0).toLocaleString()}</td>
@@ -577,9 +607,9 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, idx) => (
+                                {paginatedRows.map((row, idx) => (
                                     <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                        <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                         <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                         <td className="p-2 border border-slate-300 uppercase">{row.uom || 'PC'}</td>
                                         <td className="p-2 border border-slate-300 font-sans"><span className="text-purple-700 font-bold">{row.bin || 'N/A'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
@@ -588,8 +618,14 @@ const StockReportPrint = () => {
                                 ))}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Consolidated Balance Sum:</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                    </tr>
+                                )}
+                                <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Balance Sum (All {reportRows.length} Records):</td>
                                     <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                 </tr>
                             </tfoot>
@@ -610,7 +646,7 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, idx) => {
+                                {paginatedRows.map((row, idx) => {
                                     const qty = Number(row.computed_true_stock || 0);
                                     const loc = filters.location && filters.location !== 'All' ? filters.location : 'All Warehouses';
                                     let statusBadge = (
@@ -634,7 +670,7 @@ const StockReportPrint = () => {
 
                                     return (
                                         <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                             <td className="p-2 border border-slate-300 font-sans text-gray-700 font-bold">{loc}</td>
                                             <td className="p-2 border border-slate-300 font-sans"><span className="text-teal-700 font-bold">{row.bin || 'N/A'}</span> / <span className="text-gray-500">{row.category || 'General'}</span></td>
@@ -645,8 +681,14 @@ const StockReportPrint = () => {
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Available Inventory Units:</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                    </tr>
+                                )}
+                                <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
+                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Available Units (All {reportRows.length} Records):</td>
                                     <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                 </tr>
                             </tfoot>
@@ -668,13 +710,13 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((tr, idx) => {
+                                {paginatedRows.map((tr, idx) => {
                                     const itemsArray = Array.isArray(tr.items) ? tr.items : JSON.parse(tr.items || '[]');
                                     const itemSummary = itemsArray.map((i: any) => `${i.itemName || i.product_name} (${i.qty || 1} ${i.uom || ''})`).join(', ');
 
                                     return (
                                         <tr key={tr.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-primary font-sans">{tr.transfer_no || `TRF-${tr.id}`}</td>
                                             <td className="p-2 border border-slate-300">{tr.transfer_date || tr.created_at?.split('T')[0]}</td>
                                             <td className="p-2 border border-slate-300 font-sans text-red-700 font-bold">{tr.from_location}</td>
@@ -703,7 +745,7 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, idx) => {
+                                {paginatedRows.map((row, idx) => {
                                     const qty = Number(row.computed_true_stock || 0);
                                     const sPrice = Number(row.sale_price ?? row.retail_price ?? row.price ?? row.unit_price ?? row.mrp ?? row.rp ?? 0);
                                     const pPrice = Number(row.purchase_price ?? row.cost_price ?? row.buy_price ?? row.cost ?? row.tp ?? 0);
@@ -711,14 +753,14 @@ const StockReportPrint = () => {
 
                                     return (
                                         <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                             <td className="p-2 border border-slate-300 text-center text-primary font-black">{qty.toLocaleString()}</td>
                                             {filters.showSalePrice && <td className="p-2 border border-slate-300 text-right text-gray-600">Rs. {sPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                                             {filters.showPurchasePrice && <td className="p-2 border border-slate-300 text-right text-purple-700">Rs. {pPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                                             {filters.showFinalPrice && <td className="p-2 border border-slate-300 text-right text-success font-black pr-3">Rs. {netValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                                             {filters.showSpecifications && (
-                                                <td className="p-2 border border-slate-300 font-sans text-[10px] text-gray-500 whitespace-normal break-words leading-relaxed max-w-sm">
+                                                 <td className="p-2 border border-slate-300 font-sans text-[10px] text-gray-500 whitespace-normal break-words leading-relaxed max-w-sm">
                                                     {row.product_description || row.specifications || row.description || (row.hs_code ? `HS: ${row.hs_code}` : 'N/A')}
                                                 </td>
                                             )}
@@ -727,8 +769,26 @@ const StockReportPrint = () => {
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
-                                    <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Consolidated Assets Valuation:</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-slate-300 text-center text-primary font-black">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                        {filters.showSalePrice && <td className="p-2 border border-slate-300"></td>}
+                                        {filters.showPurchasePrice && <td className="p-2 border border-slate-300"></td>}
+                                        {filters.showFinalPrice && (
+                                            <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm">
+                                                Rs. {paginatedRows.reduce((s, r) => {
+                                                    const q = Number(r.computed_true_stock || 0);
+                                                    const sp = Number(r.sale_price ?? r.retail_price ?? r.price ?? r.unit_price ?? r.mrp ?? r.rp ?? 0);
+                                                    return s + (q * sp);
+                                                }, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                        )}
+                                        {filters.showSpecifications && <td className="p-2 border border-slate-300"></td>}
+                                    </tr>
+                                )}
+                                <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
+                                    <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Assets Valuation (All {reportRows.length} Records):</td>
                                     <td className="p-2 border border-slate-300 text-center text-primary font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                     {filters.showSalePrice && <td className="p-2 border border-slate-300"></td>}
                                     {filters.showPurchasePrice && <td className="p-2 border border-slate-300"></td>}
@@ -761,13 +821,13 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, idx) => {
+                                {paginatedRows.map((row, idx) => {
                                     const qty = Number(row.computed_true_stock || 0);
                                     const rate = Number(row.retail_price || row.sale_price || 0);
 
                                     return (
                                         <tr key={row.id} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
 
                                             <td className="p-2 border border-slate-300 text-center text-primary font-black">{qty.toLocaleString()}</td>
@@ -778,8 +838,20 @@ const StockReportPrint = () => {
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-50 border-t border-slate-300 font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-500">Gross Consolidated StockValue Assets Allocation Sum (PKR):</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-slate-300 text-center text-primary font-black">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300"></td>
+                                        <td className="p-2 border border-slate-300 text-right pr-4 text-success text-sm font-black">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + (r.calculated_valuation || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                )}
+                                <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
+                                    <td colSpan={2} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Gross StockValue Assets Allocation (All {reportRows.length} Records):</td>
+                                    <td className="p-2 border border-slate-300 text-center text-primary font-black">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                    <td className="p-2 border border-slate-300"></td>
                                     <td className="p-2 border border-slate-300 text-right pr-4 text-success underline decoration-double text-sm bg-success/10 font-black">
                                         Rs. {reportRows.reduce((sum, r) => sum + (r.calculated_valuation || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
@@ -804,7 +876,7 @@ const StockReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, idx) => {
+                                {paginatedRows.map((row, idx) => {
                                     const qty = Number(row.computed_true_stock || 0);
                                     const sPrice = Number(row.sale_price ?? row.retail_price ?? row.price ?? row.unit_price ?? row.mrp ?? row.rp ?? 0);
                                     const netValue = qty * sPrice;
@@ -831,7 +903,7 @@ const StockReportPrint = () => {
 
                                     return (
                                         <tr key={row.id || idx} className="border-b border-slate-300 hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{idx + 1}</td>
+                                            <td className="p-2 border border-slate-300 text-center text-gray-400">{startIndex + idx + 1}</td>
                                             <td className="p-2 border border-slate-300 font-sans font-bold text-purple-800 uppercase bg-purple-50/40">{locName}</td>
                                             <td className="p-2 border border-slate-300 font-bold text-black font-sans uppercase">{row.product_name}</td>
                                             <td className="p-2 border border-slate-300 font-sans"><span className="text-gray-700">{row.uom || 'PC'}</span> / <span className="text-purple-700 font-bold">{row.bin || 'N/A'}</span></td>
@@ -844,8 +916,23 @@ const StockReportPrint = () => {
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t border-slate-300 font-black font-mono text-xs">
-                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-700">Total Location Stock & Valuation Summary:</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-slate-300 text-center text-primary font-black text-sm">{paginatedRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
+                                        <td className="p-2 border border-slate-300"></td>
+                                        <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm bg-success/10">
+                                            Rs. {paginatedRows.reduce((sum, r) => {
+                                                const q = Number(r.computed_true_stock || 0);
+                                                const sp = Number(r.sale_price ?? r.retail_price ?? r.price ?? r.unit_price ?? r.mrp ?? r.rp ?? 0);
+                                                return sum + (q * sp);
+                                            }, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 border border-slate-300"></td>
+                                    </tr>
+                                )}
+                                <tr className="bg-slate-100 border-t-2 border-slate-400 font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-2 border border-slate-300 text-right uppercase tracking-wider text-gray-800">Grand Total Location Summary (All {reportRows.length} Records):</td>
                                     <td className="p-2 border border-slate-300 text-center text-primary font-black text-sm">{reportRows.reduce((s, r) => s + (r.computed_true_stock || 0), 0).toLocaleString()}</td>
                                     <td className="p-2 border border-slate-300"></td>
                                     <td className="p-2 border border-slate-300 text-right pr-3 text-success font-black text-sm bg-success/10">
@@ -865,6 +952,17 @@ const StockReportPrint = () => {
                         <div className="p-12 text-center border font-bold italic text-gray-400 bg-gray-50/50">No true live ledger rows discovered matching chosen criteria tokens.</div>
                     )}
                 </div>
+
+                <ReportPagination
+                    totalCount={reportRows.length}
+                    currentPage={currentPage}
+                    pageSize={pageSize}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={(newSize) => {
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                    }}
+                />
 
 
 

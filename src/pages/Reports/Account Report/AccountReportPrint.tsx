@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../Context/supabaseClient';
 import { toast } from 'react-hot-toast';
@@ -7,6 +7,7 @@ import { MdPrint, MdArrowBack, MdFileDownload } from 'react-icons/md';
 import { FaWhatsapp } from 'react-icons/fa';
 import { useAuth } from '../../../Context/Auth';
 import { exportToExcel, ExcelColumn } from '../../../utils/excelExport';
+import ReportPagination from '../../../components/ReportPagination';
 
 const AccountReportPrint = () => {
     const location = useLocation();
@@ -14,9 +15,35 @@ const AccountReportPrint = () => {
     const { businessName, tenantId } = useAuth();
     const [loading, setLoading] = useState(true);
     const [reportRows, setReportRows] = useState<any[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState<number | 'all'>(25);
+    const [isPrinting, setIsPrinting] = useState(false);
 
     const config = location.state || { tab: 1, criteria: {} };
     const { tab: activeTab, criteria: filters } = config;
+
+    useEffect(() => {
+        const handleBeforePrint = () => setIsPrinting(true);
+        const handleAfterPrint = () => setIsPrinting(false);
+        window.addEventListener('beforeprint', handleBeforePrint);
+        window.addEventListener('afterprint', handleAfterPrint);
+        return () => {
+            window.removeEventListener('beforeprint', handleBeforePrint);
+            window.removeEventListener('afterprint', handleAfterPrint);
+        };
+    }, []);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, JSON.stringify(filters)]);
+
+    const paginatedRows = useMemo(() => {
+        if (isPrinting || pageSize === 'all') return reportRows;
+        const start = (currentPage - 1) * pageSize;
+        return reportRows.slice(start, start + pageSize);
+    }, [reportRows, currentPage, pageSize, isPrinting]);
+
+    const startIndex = (currentPage - 1) * (pageSize === 'all' ? 0 : (pageSize as number));
 
     useEffect(() => {
         const originalTitle = document.title;
@@ -856,7 +883,7 @@ const AccountReportPrint = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-100 p-3 rounded border print-hidden-element print:hidden">
                     <button 
                         type="button" 
-                        onClick={() => navigate(`${tenantId ? `/${tenantId}` : ''}/Reports/Account-Report`, { state: { activeTab, filters } })} 
+                        onClick={() => navigate(-1)} 
                         className="flex items-center gap-1.5 font-bold hover:underline cursor-pointer"
                     >
                         <MdArrowBack size={16} /> Back to Report Filter
@@ -898,6 +925,19 @@ const AccountReportPrint = () => {
                     </div>
                 </div>
 
+                {activeTab !== 4 && (
+                    <ReportPagination
+                        totalCount={reportRows.length}
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setCurrentPage(1);
+                        }}
+                    />
+                )}
+
                 <div className="w-full overflow-x-auto">
                     {/* --- 📊 RENDER TABLE 1: GENERAL GENERAL LEDGER RUNNING ENTRIES (TAB 1) WITH NEW DATE COLUMN --- */}
                     {activeTab === 1 && (
@@ -914,9 +954,9 @@ const AccountReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, i) => (
+                                {paginatedRows.map((row, i) => (
                                     <tr key={i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                        <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                         <td className="p-1.5 border border-black text-center text-gray-600 font-bold whitespace-nowrap">{row.raw_date}</td>
                                         <td className="p-1.5 border border-black text-primary font-black uppercase">{row.voucher_no}</td>
                                         <td className="p-1.5 border border-black text-black font-sans">{row.description}</td>
@@ -926,6 +966,22 @@ const AccountReportPrint = () => {
                                     </tr>
                                 ))}
                             </tbody>
+                            <tfoot>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={4} className="p-1.5 border border-black text-right uppercase tracking-wider">Page Subtotal (This Page):</td>
+                                        <td className="p-1.5 border border-black text-right text-red-600">Rs. {paginatedRows.reduce((s, r) => s + Number(r.debit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-1.5 border border-black text-right text-success font-black">Rs. {paginatedRows.reduce((s, r) => s + Number(r.credit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-1.5 border border-black text-right pr-3 font-mono"></td>
+                                    </tr>
+                                )}
+                                <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
+                                    <td colSpan={4} className="p-1.5 border border-black text-right uppercase tracking-wider text-black">Grand Total Summary (All {reportRows.length} Entries):</td>
+                                    <td className="p-1.5 border border-black text-right text-red-600">Rs. {reportRows.reduce((s, r) => s + Number(r.debit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-1.5 border border-black text-right text-success font-black">Rs. {reportRows.reduce((s, r) => s + Number(r.credit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-1.5 border border-black text-right pr-3 font-mono text-primary font-black">Rs. {reportRows.length > 0 ? Number(reportRows[reportRows.length - 1].balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '0.00'}</td>
+                                </tr>
+                            </tfoot>
                         </table>
                     )}
 
@@ -943,9 +999,9 @@ const AccountReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, i) => (
+                                {paginatedRows.map((row, i) => (
                                     <tr key={row.id || i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                        <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                         <td className="p-1.5 border border-black text-primary font-black uppercase">{row.purchase_no || row.id}</td>
                                         <td className="p-1.5 border border-black text-black font-sans font-bold">{row.customer_name || row.supplier_name || 'Generic Client Agent'}</td>
                                         <td className="p-1.5 border border-black text-center text-gray-600 font-mono">
@@ -957,8 +1013,16 @@ const AccountReportPrint = () => {
                                 ))}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-gray-50 border-t border-black font-black font-mono text-xs">
-                                    <td colSpan={5} className="p-2 border border-black text-right uppercase text-gray-500">Gross Account Aggregations Net Balance Summary (PKR):</td>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={5} className="p-2 border border-black text-right uppercase">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-black text-right pr-3 text-success font-black">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                )}
+                                <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
+                                    <td colSpan={5} className="p-2 border border-black text-right uppercase text-gray-800">Gross Account Aggregations (All {reportRows.length} Records):</td>
                                     <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm font-black">
                                         Rs. {reportRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
@@ -990,9 +1054,9 @@ const AccountReportPrint = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {reportRows.map((row, i) => (
+                                    {paginatedRows.map((row, i) => (
                                         <tr key={i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs text-black">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                            <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                             <td className="p-1.5 border border-black font-sans uppercase font-bold text-black">{row.customer_name}</td>
                                             <td className="p-1.5 border border-black text-center font-bold text-gray-600">{row.invoice_count} Invoice(s)</td>
                                             <td className="p-1.5 border border-black text-right font-black text-danger">Rs. {Number(row.total_due).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -1004,9 +1068,31 @@ const AccountReportPrint = () => {
                                     ))}
                                 </tbody>
                                 <tfoot>
+                                    {!isPrinting && pageSize !== 'all' && (
+                                        <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                            <td colSpan={3} className="p-2 border border-black text-right uppercase tracking-wider">
+                                                Page Subtotal (This Page):
+                                            </td>
+                                            <td className="p-2 border border-black text-right text-danger font-black text-xs">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.total_due || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-2 border border-black text-right text-success font-black text-xs">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.days_0_30 || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-2 border border-black text-right text-yellow-600 font-black text-xs">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.days_31_60 || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-2 border border-black text-right text-orange-600 font-black text-xs">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.days_61_90 || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-2 border border-black text-right pr-3 text-red-600 font-black text-xs">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.days_90_plus || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                        </tr>
+                                    )}
                                     <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
                                         <td colSpan={3} className="p-2 border border-black text-right uppercase tracking-wider text-black">
-                                            Total Aggregated Aging Receivables (PKR):
+                                            Total Aggregated Aging Receivables (All {reportRows.length} Records):
                                         </td>
                                         <td className="p-2 border border-black text-right text-danger font-black underline decoration-double text-sm">
                                             Rs. {totalDueSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1098,9 +1184,9 @@ const AccountReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, i) => (
+                                {paginatedRows.map((row, i) => (
                                     <tr key={row.id || i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs text-black">
-                                        <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                        <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                         <td className="p-1.5 border border-black uppercase text-gray-500">{row.category_code}</td>
                                         <td className="p-1.5 border border-black uppercase text-purple-700">{row.control_code}</td>
                                         <td className="p-1.5 border border-black font-bold uppercase text-primary">{row.account_code}</td>
@@ -1130,9 +1216,9 @@ const AccountReportPrint = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {reportRows.map((row, i) => (
+                                    {paginatedRows.map((row, i) => (
                                         <tr key={i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs text-black">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                            <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                             <td className="p-1.5 border border-black font-bold text-primary">{row.code}</td>
                                             <td className="p-1.5 border border-black uppercase text-purple-700 font-bold text-[10px]">{row.category}</td>
                                             <td className="p-1.5 border border-black font-sans uppercase font-bold text-black">{row.title}</td>
@@ -1146,9 +1232,22 @@ const AccountReportPrint = () => {
                                     ))}
                                 </tbody>
                                 <tfoot>
+                                    {!isPrinting && pageSize !== 'all' && (
+                                        <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                            <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider">
+                                                Page Subtotal (This Page):
+                                            </td>
+                                            <td className="p-2 border border-black text-right font-bold">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.debit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-2 border border-black text-right pr-3 font-bold">
+                                                Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.credit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </td>
+                                        </tr>
+                                    )}
                                     <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
                                         <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-black">
-                                            Aggregated Trial Balance Audit Sum (PKR):
+                                            Aggregated Trial Balance Audit Sum (All {reportRows.length} Records):
                                         </td>
                                         <td className="p-2 border border-black text-right text-black font-black underline decoration-double text-sm">
                                             Rs. {totalDebitSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1183,16 +1282,16 @@ const AccountReportPrint = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {reportRows.length === 0 ? (
+                                    {paginatedRows.length === 0 ? (
                                         <tr>
                                             <td colSpan={7} className="text-center py-8 text-gray-400 font-medium italic">
                                                 No customer cash recovery collections logged within chosen selection parameters.
                                             </td>
                                         </tr>
                                     ) : (
-                                        reportRows.map((row, idx) => (
+                                        paginatedRows.map((row, idx) => (
                                             <tr key={row.id || idx} className="hover:bg-slate-50 border-b border-gray-300 font-medium text-black">
-                                                <td className="p-1.5 border border-black text-center font-mono">{idx + 1}</td>
+                                                <td className="p-1.5 border border-black text-center font-mono">{startIndex + idx + 1}</td>
                                                 <td className="p-1.5 border border-black text-center font-bold text-primary tracking-wide font-mono uppercase">
                                                     {row.voucher_no}
                                                 </td>
@@ -1217,11 +1316,21 @@ const AccountReportPrint = () => {
                                 </tbody>
                                 {reportRows.length > 0 && (
                                     <tfoot>
-                                        <tr className="bg-gray-100 font-black border-t border-black text-black font-mono">
+                                        {!isPrinting && pageSize !== 'all' && (
+                                            <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                                <td colSpan={6} className="p-2 border border-black text-right uppercase text-[10px]">
+                                                    Page Subtotal (This Page):
+                                                </td>
+                                                <td className="p-2 border border-black text-right pr-3 text-success text-xs font-black">
+                                                    Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        <tr className="bg-gray-100 font-black border-t-2 border-black text-black font-mono">
                                             <td colSpan={6} className="p-2 border border-black text-right uppercase text-[10px]">
-                                                Total Cash Receipts Revenue Collected Summary:
+                                                Total Cash Receipts Collected (All {reportRows.length} Records):
                                             </td>
-                                            <td className="p-2 border border-black text-right pr-3 text-success text-xs">
+                                            <td className="p-2 border border-black text-right pr-3 text-success text-xs underline decoration-double">
                                                 Rs. {reportRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                             </td>
                                         </tr>
@@ -1245,7 +1354,7 @@ const AccountReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, i) => {
+                                {paginatedRows.map((row, i) => {
                                     const displayVoucherNo = row.voucher_no || row.voucherNo || row.purchase_no || `VCH-00${row.id}`;
                                     const displayVoucherType = row.voucher_type || row.voucherType || filters.saleType || 'Voucher Entry';
                                     const displayDate = row.voucher_date || row.voucherDate || row.processing_date || row.sale_date || String(row.created_at || '').split('T')[0];
@@ -1254,7 +1363,7 @@ const AccountReportPrint = () => {
 
                                     return (
                                         <tr key={row.id || i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                            <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                             <td className="p-1.5 border border-black text-primary font-black uppercase">{displayVoucherNo}</td>
                                             <td className="p-1.5 border border-black font-sans text-purple-700 font-bold uppercase">{displayVoucherType}</td>
                                             <td className="p-1.5 border border-black text-center text-gray-500">{displayDate}</td>
@@ -1264,6 +1373,28 @@ const AccountReportPrint = () => {
                                     );
                                 })}
                             </tbody>
+                            <tfoot>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={5} className="p-2 border border-black text-right uppercase">Page Subtotal (This Page):</td>
+                                        <td className="p-2 border border-black text-right pr-3 text-success font-black">
+                                            Rs. {paginatedRows.reduce((sum, r) => {
+                                                const amt = r.total_amount || r.amount_paid || r.net_collected_amount || r.amountReceived || r.amount || 0;
+                                                return sum + Number(amt);
+                                            }, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                )}
+                                <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
+                                    <td colSpan={5} className="p-2 border border-black text-right uppercase text-gray-800">Gross Transacted Total (All {reportRows.length} Records):</td>
+                                    <td className="p-2 border border-black text-right pr-3 text-success underline decoration-double text-sm font-black">
+                                        Rs. {reportRows.reduce((sum, r) => {
+                                            const amt = r.total_amount || r.amount_paid || r.net_collected_amount || r.amountReceived || r.amount || 0;
+                                            return sum + Number(amt);
+                                        }, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     )}
 
@@ -1283,9 +1414,9 @@ const AccountReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, i) => (
+                                {paginatedRows.map((row, i) => (
                                     <tr key={row.id || i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                        <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                        <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                         <td className="p-1.5 border border-black text-primary font-black uppercase">{row.doc_ref}</td>
                                         <td className="p-1.5 border border-black text-purple-700 font-bold uppercase text-[10px]">{row.entry_type}</td>
                                         <td className="p-1.5 border border-black font-sans text-black font-bold">{row.salesman}</td>
@@ -1297,9 +1428,22 @@ const AccountReportPrint = () => {
                                 ))}
                             </tbody>
                             <tfoot>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={6} className="p-2 border border-black text-right uppercase tracking-wider">
+                                            Page Subtotal (This Page):
+                                        </td>
+                                        <td className="p-2 border border-black text-right text-black font-bold">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.sale_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 border border-black text-right pr-3 text-success font-black">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.collected_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
+                                    </tr>
+                                )}
                                 <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
                                     <td colSpan={6} className="p-2 border border-black text-right uppercase tracking-wider text-black">
-                                        Total Performance Aggregations (PKR):
+                                        Total Performance Aggregations (All {reportRows.length} Records):
                                     </td>
                                     <td className="p-2 border border-black text-right text-black font-black text-sm">
                                         Rs. {reportRows.reduce((sum, r) => sum + Number(r.sale_amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1329,7 +1473,7 @@ const AccountReportPrint = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {reportRows.map((row, i) => {
+                                {paginatedRows.map((row, i) => {
                                     const openBal = Number(row.opening_balance || 0);
                                     const pDebit = Number(row.period_debit || 0);
                                     const pCredit = Number(row.period_credit || 0);
@@ -1337,7 +1481,7 @@ const AccountReportPrint = () => {
 
                                     return (
                                         <tr key={row.id || i} className="border-b border-black hover:bg-gray-50 font-semibold font-mono text-xs">
-                                            <td className="p-1.5 border border-black text-center text-gray-400">{i + 1}</td>
+                                            <td className="p-1.5 border border-black text-center text-gray-400">{startIndex + i + 1}</td>
                                             <td className="p-1.5 border border-black font-sans text-black font-bold">
                                                 <div>{row.customer_name}</div>
                                                 {row.address && row.address !== '-' && (
@@ -1382,9 +1526,31 @@ const AccountReportPrint = () => {
                                 })}
                             </tbody>
                             <tfoot>
+                                {!isPrinting && pageSize !== 'all' && (
+                                    <tr className="bg-amber-50/80 border-t border-amber-200 font-bold font-mono text-xs text-amber-950">
+                                        <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider">
+                                            Page Subtotal (This Page):
+                                        </td>
+                                        <td className="p-2 border border-black text-right font-bold">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.opening_balance || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 border border-black text-right text-red-700 font-bold">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.period_debit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 border border-black text-right text-emerald-700 font-bold">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.period_credit || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 border border-black text-right text-primary font-bold">
+                                            Rs. {paginatedRows.reduce((sum, r) => sum + Number(r.closing_balance || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 border border-black text-center text-gray-500 text-[10px] font-sans uppercase">
+                                            {paginatedRows.length} On Page
+                                        </td>
+                                    </tr>
+                                )}
                                 <tr className="bg-gray-100 border-t-2 border-black font-black font-mono text-xs">
                                     <td colSpan={4} className="p-2 border border-black text-right uppercase tracking-wider text-black">
-                                        Grand Totals Summary (PKR):
+                                        Grand Totals Summary (All {reportRows.length} Records):
                                     </td>
                                     <td className="p-2 border border-black text-right text-black font-black text-xs">
                                         Rs. {reportRows.reduce((sum, r) => sum + Number(r.opening_balance || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1410,6 +1576,19 @@ const AccountReportPrint = () => {
                         <div className="p-12 text-center border font-bold italic text-gray-400 bg-gray-50/50 rounded-sm">No structural financial transaction records discovered matching chosen selection tokens.</div>
                     )}
                 </div>
+
+                {activeTab !== 4 && (
+                    <ReportPagination
+                        totalCount={reportRows.length}
+                        currentPage={currentPage}
+                        pageSize={pageSize}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setCurrentPage(1);
+                        }}
+                    />
+                )}
 
                 {/* ✍️ Formal Multi-Level Executive Verification & Signature Block */}
                 <div className="mt-16 grid grid-cols-3 gap-10 text-center text-[10px] font-sans font-black uppercase tracking-wider text-slate-800 break-inside-avoid">
